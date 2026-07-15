@@ -27,6 +27,8 @@ jobs:
           git diff --exit-code
       - name: lint
         run: "$(go env GOPATH)/bin/golangci-lint" run
+      - name: shellcheck
+        run: shellcheck scripts/*.sh
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       - name: codemap

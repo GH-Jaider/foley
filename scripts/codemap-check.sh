@@ -45,6 +45,7 @@ done
 # disco. Filas marcadas "pendiente" están exentas (registran trabajo futuro).
 while IFS= read -r line; do
   [[ $line == *pendiente* ]] && continue
+  # shellcheck disable=SC2016 # el backtick es literal (markdown), no expansión
   tok=$(sed -nE 's/^\| `([^`]+)`.*/\1/p' <<<"$line")
   [[ -z $tok ]] && continue
   tok=${tok%/}

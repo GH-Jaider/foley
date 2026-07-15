@@ -4,3 +4,8 @@
 *.test
 coverage.out
 .DS_Store
+
+# libghostty-vt: artefactos reproducibles via make engine-lib (ADR-010)
+internal/vtengine/ghostty/lib/
+internal/vtengine/ghostty/libbuild/zig-out/
+internal/vtengine/ghostty/libbuild/.zig-cache/

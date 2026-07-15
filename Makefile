@@ -1,6 +1,6 @@
 GOLANGCI_VERSION := 2.12.2
 
-.PHONY: build test test-race lint fmt vuln codemap fixtures e2e-linux e2e-darwin lint-version
+.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures e2e-linux e2e-darwin lint-version engine-lib
 
 build:
 	go build ./...
@@ -11,8 +11,13 @@ test:
 test-race:
 	go test -race ./...
 
-lint: lint-version
+lint: lint-version lint-sh
 	golangci-lint run
+
+# shellcheck lee el shebang de cada script y aplica el dialecto correcto
+# (engine-lib.sh es POSIX sh; codemap-check.sh es bash 3.2-compatible).
+lint-sh:
+	shellcheck scripts/*.sh
 
 fmt: lint-version
 	golangci-lint fmt
@@ -31,3 +36,6 @@ codemap:
 
 fixtures e2e-linux e2e-darwin:
 	@echo "$@: llega en milestones posteriores (ver docs/ROADMAP.md)"; exit 1
+
+engine-lib:
+	scripts/engine-lib.sh
