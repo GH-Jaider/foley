@@ -1,0 +1,6 @@
+# Artefactos de build y salida (lo privado NO va aquí: vive en .git/info/exclude)
+/foley
+/dist/
+*.test
+coverage.out
+.DS_Store

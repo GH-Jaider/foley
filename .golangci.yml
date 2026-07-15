@@ -1,0 +1,87 @@
+# Pineado a golangci-lint v2.12.2 (Makefile lo verifica; CI lo instala exacto).
+# Set curado a propósito — encender linters por volumen también es slop.
+#
+# depguard (ADR-009): reglas por ZONA, mutuamente excluyentes vía globs.
+# Semántica verificada empíricamente (2026-07-15): entre reglas distintas un
+# allow puede tragarse un deny, pero DENTRO de una regla deny > allow. Por eso
+# cada zona es autocontenida: presupuesto de deps (allow strict) + sus propias
+# prohibiciones (deny). Ningún archivo matchea dos zonas.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - revive
+    - depguard
+    - exhaustive
+    - gochecknoglobals
+    - misspell
+    - gosec
+  settings:
+    depguard:
+      rules:
+        # internal/execx: la única zona donde os/exec es legal.
+        zona-execx:
+          list-mode: strict
+          files:
+            - "**/internal/execx/**"
+          allow:
+            - $gostd
+            - github.com/GH-Jaider/foley
+            - github.com/creack/pty
+            - golang.org/x/sys
+            - golang.org/x/term
+        # internal/vtengine (contrato, conformidad y la implementación
+        # ghostty): la única zona que puede ver la cuarentena cgo.
+        zona-vtengine:
+          list-mode: strict
+          files:
+            - "**/internal/vtengine/**"
+          allow:
+            - $gostd
+            - github.com/GH-Jaider/foley
+            - github.com/creack/pty
+            - golang.org/x/sys
+            - golang.org/x/term
+          deny:
+            - pkg: os/exec
+              desc: binarios externos solo a través de internal/execx
+        # Resto del árbol (API raíz, tape, key, driver, raster, fontpack,
+        # ptyx, encode, theme, cmd): presupuesto de deps + fronteras.
+        zona-general:
+          list-mode: strict
+          files:
+            - $all
+            - "!**/internal/execx/**"
+            - "!**/internal/vtengine/**"
+          allow:
+            - $gostd
+            - github.com/GH-Jaider/foley
+            - github.com/creack/pty
+            - golang.org/x/sys
+            - golang.org/x/term
+          deny:
+            - pkg: github.com/GH-Jaider/foley/internal/vtengine/ghostty
+              desc: solo la factory internal/vtengine puede importar motores concretos (cuarentena cgo, ADR-009)
+            - pkg: os/exec
+              desc: binarios externos solo a través de internal/execx (tabla única de tools)
+    exhaustive:
+      check:
+        - switch
+        - map
+    misspell:
+      locale: US
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/GH-Jaider/foley)

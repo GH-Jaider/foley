@@ -1,11 +1,11 @@
 # Foley
 
-Record scripted, VHS-style demos of terminal apps on a **real terminal** — kitty, running off-camera — at full fidelity: kitty graphics protocol, kitty keyboard protocol, synchronized output, ligatures, emoji, 60 fps, mp4/webm/GIF.
+Render scripted, VHS-style demos of terminal apps — no terminal window, no screen capture. Your app runs on a real pty; an embedded terminal engine (libghostty-vt, the brain of Ghostty) keeps the state; Foley rasterizes every frame itself: kitty graphics protocol, real ligatures, color emoji, 60 fps, mp4/webm/GIF — byte-identical output on macOS, Linux and CI, with zero permissions.
 
-> In film, a foley artist recreates sound off-camera, with real objects instead of synthesizing it.
-> Foley records terminal demos off-screen, with a real terminal instead of simulating one.
+> In film, a foley artist recreates sound in the studio, with real objects instead of set recordings.
+> Foley recreates the terminal in the studio, with your real app instead of a screen recording.
 
-Library first (Go), CLI second. Familiar VHS-style DSL (`Type`, `Sleep`, `Wait`, `Set`, `Output`). Linux and macOS as first-class platforms: headless compositor on Linux, off-screen window on macOS. kitty-only in v1; more backends later.
+Library first (Go), CLI second. Familiar VHS-style DSL (`Type`, `Sleep`, `Wait`, `Set`, `Output`). Deterministic mode renders faster than real time; realtime mode sees every byte your app emits — no frame is ever missed.
 
 ## Status
 

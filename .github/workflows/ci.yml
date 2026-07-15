@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GOLANGCI_VERSION: v2.12.2
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: instalar golangci-lint (pineado)
+        run: curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$(go env GOPATH)/bin" "$GOLANGCI_VERSION"
+      - name: gate de formato
+        run: |
+          "$(go env GOPATH)/bin/golangci-lint" fmt
+          git diff --exit-code
+      - name: lint
+        run: "$(go env GOPATH)/bin/golangci-lint" run
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: codemap
+        run: scripts/codemap-check.sh
+      - name: tests
+        run: go test -race ./...
+
+  test-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: tests
+        run: go test -race ./...
