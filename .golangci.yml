@@ -49,12 +49,13 @@ linters:
           deny:
             - pkg: os/exec
               desc: binarios externos solo a través de internal/execx
-        # Resto del árbol (API raíz, tape, key, driver, raster, fontpack,
-        # ptyx, encode, theme, cmd): presupuesto de deps + fronteras.
+        # Resto del árbol, código de PRODUCCIÓN (API raíz, tape, key, driver,
+        # raster, fontpack, ptyx, encode, theme, cmd): presupuesto + fronteras.
         zona-general:
           list-mode: strict
           files:
             - $all
+            - "!$test"
             - "!**/internal/execx/**"
             - "!**/internal/vtengine/**"
           allow:
@@ -66,8 +67,29 @@ linters:
           deny:
             - pkg: github.com/GH-Jaider/foley/internal/vtengine/ghostty
               desc: solo la factory internal/vtengine puede importar motores concretos (cuarentena cgo, ADR-009)
+            - pkg: github.com/GH-Jaider/foley/internal/vtengine/fake
+              desc: el motor títere es solo para tests
             - pkg: os/exec
               desc: binarios externos solo a través de internal/execx (tabla única de tools)
+        # Tests fuera de execx/vtengine: igual que producción pero con el
+        # fake permitido (es su razón de existir).
+        zona-general-tests:
+          list-mode: strict
+          files:
+            - $test
+            - "!**/internal/execx/**"
+            - "!**/internal/vtengine/**"
+          allow:
+            - $gostd
+            - github.com/GH-Jaider/foley
+            - github.com/creack/pty
+            - golang.org/x/sys
+            - golang.org/x/term
+          deny:
+            - pkg: github.com/GH-Jaider/foley/internal/vtengine/ghostty
+              desc: la cuarentena cgo no se toca ni desde tests externos
+            - pkg: os/exec
+              desc: binarios externos solo a través de internal/execx
     exhaustive:
       check:
         - switch
