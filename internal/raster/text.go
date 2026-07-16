@@ -171,17 +171,24 @@ func (r *Rasterizer) mask(style faceStyle, face *font.Face, gid font.GID) *glyph
 
 	ras := vector.NewRasterizer(w, h)
 	ox, oy := float32(-left), float32(top)
+	// The explicit float32 conversions round the product BEFORE the add,
+	// which forbids the compiler from fusing `c + a*b` into a single FMA
+	// (Go spec: fusion must not discard an explicit rounding). arm64 fuses,
+	// amd64 does not — without the barrier the coverage of one glyph edge
+	// can differ by one alpha step and break cross-arch golden equality.
+	sx := func(p ot.SegmentPoint) float32 { return ox + float32(p.X*scale) }
+	sy := func(p ot.SegmentPoint) float32 { return oy - float32(p.Y*scale) }
 	for _, seg := range outline.Segments {
 		p := seg.Args
 		switch seg.Op {
 		case ot.SegmentOpMoveTo:
-			ras.MoveTo(ox+p[0].X*scale, oy-p[0].Y*scale)
+			ras.MoveTo(sx(p[0]), sy(p[0]))
 		case ot.SegmentOpLineTo:
-			ras.LineTo(ox+p[0].X*scale, oy-p[0].Y*scale)
+			ras.LineTo(sx(p[0]), sy(p[0]))
 		case ot.SegmentOpQuadTo:
-			ras.QuadTo(ox+p[0].X*scale, oy-p[0].Y*scale, ox+p[1].X*scale, oy-p[1].Y*scale)
+			ras.QuadTo(sx(p[0]), sy(p[0]), sx(p[1]), sy(p[1]))
 		case ot.SegmentOpCubeTo:
-			ras.CubeTo(ox+p[0].X*scale, oy-p[0].Y*scale, ox+p[1].X*scale, oy-p[1].Y*scale, ox+p[2].X*scale, oy-p[2].Y*scale)
+			ras.CubeTo(sx(p[0]), sy(p[0]), sx(p[1]), sy(p[1]), sx(p[2]), sy(p[2]))
 		}
 	}
 	alpha := image.NewAlpha(image.Rect(0, 0, w, h))
