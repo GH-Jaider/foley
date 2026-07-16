@@ -2,7 +2,6 @@ package vtengine
 
 import (
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/GH-Jaider/foley/key"
@@ -109,11 +108,6 @@ type Engine interface {
 	Close() error
 }
 
-// New constructs a named engine. v1 registers "ghostty" (libghostty-vt) in
-// milestone M3; tests construct fakes directly.
-func New(name string, _ Options) (Engine, error) {
-	switch name {
-	default:
-		return nil, fmt.Errorf("%w: %q", ErrUnknownEngine, name)
-	}
-}
+// Named engines are constructed by internal/vtengine/factory — a
+// subpackage on purpose: every engine imports these contract types, so a
+// factory in THIS package would be an import cycle.

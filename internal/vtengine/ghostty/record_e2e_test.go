@@ -32,7 +32,7 @@ import (
 func TestFirstRecording(t *testing.T) {
 	ctx := context.Background()
 	_, err := execx.Find(ctx, execx.FFmpeg)
-	testassets.Require(t, err, "install ffmpeg (CI runners ship it)")
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
 	pack, err := fontpack.Load(filepath.Join("..", "..", "fontpack", "fonts"))
 	testassets.Require(t, err, "make fonts")
 

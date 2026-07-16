@@ -20,7 +20,7 @@ import (
 func TestAssembleGIFAndMP4(t *testing.T) {
 	ctx := context.Background()
 	_, err := execx.Find(ctx, execx.FFmpeg)
-	testassets.Require(t, err, "install ffmpeg (CI runners ship it)")
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
 
 	dir := t.TempDir()
 	s, err := encode.NewPNGSink(encode.PNGSinkOptions{Dir: dir})

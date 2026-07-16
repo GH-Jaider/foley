@@ -48,6 +48,10 @@ jobs:
         run: make fonts
       - name: fixtures
         run: make fixtures
+      # Las imágenes de runner NO traen ffmpeg (verificado contra sus
+      # READMEs) — sin él, testassets hace FATAL los e2e de encode en CI.
+      - name: ffmpeg (encode e2e)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg
       # Untagged primero: no necesitan la .a y dan feedback minutos antes
       # cuando la lib no está cacheada.
       - name: tests
@@ -78,7 +82,7 @@ jobs:
           path: internal/vtengine/ghostty/lib/linux-amd64
           key: ${{ steps.libcache.outputs.cache-primary-key }}
       - name: tests con motor real (tagged)
-        run: CGO_ENABLED=1 go test -tags ghosttyvt -race -v ./internal/...
+        run: CGO_ENABLED=1 go test -tags ghosttyvt -race -v ./...
 
   test-macos:
     runs-on: macos-15
@@ -95,6 +99,8 @@ jobs:
           key: fonts-${{ hashFiles('scripts/fonts.sh') }}
       - name: fuentes
         run: make fonts
+      - name: ffmpeg (encode e2e)
+        run: brew install --quiet ffmpeg
       - name: tests
         # -v: los runners macOS son los más propensos a flakes de timing y
         # los logs de este job son la única vía de diagnóstico. Los tests

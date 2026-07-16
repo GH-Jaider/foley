@@ -140,6 +140,11 @@ linters:
         - map
     misspell:
       locale: US
+  # La gramática vendoreada de VHS (ADR-008) no se lintea: fidelidad
+  # bug-por-bug con upstream y diffs limpios al subir el pin.
+  exclusions:
+    paths:
+      - tape/internal/vhsgrammar
 
 formatters:
   enable:
@@ -151,3 +156,6 @@ formatters:
         - standard
         - default
         - prefix(github.com/GH-Jaider/foley)
+  exclusions:
+    paths:
+      - tape/internal/vhsgrammar
