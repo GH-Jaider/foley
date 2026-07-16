@@ -91,7 +91,7 @@ for dir in "$pkg"/lib/*/; do
   a=$dir/libghostty-vt.a
   [ -f "$a" ] || continue
   sha256 "$a" > "$a.sha256"
-  printf 'engine-lib: %s  %s\n' "$(cat "$a.sha256" | cut -c1-16)…" "$a"
+  printf 'engine-lib: %s...  %s\n' "$(cut -c1-16 <"$a.sha256")" "$a"
 done
 
 echo "engine-lib: listo"
