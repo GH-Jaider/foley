@@ -21,6 +21,9 @@ type Timeline interface {
 	Hide() error
 	Show() error
 	Screenshot(name string) error
+	// ScreenText returns the current visible screen text (the surface
+	// waits match against) — the tape DSL's .txt output and debugging.
+	ScreenText() (string, error)
 	Finish() error
 	Now() time.Duration
 }

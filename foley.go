@@ -136,8 +136,18 @@ type Options struct {
 	// Env is the exact child environment (nil = inherit).
 	Env []string
 
-	// Cols, Rows size the terminal grid. Default 80x24.
+	// Cols, Rows size the terminal grid. Default 80x24. When zero and
+	// the Pixel fields are set, the grid derives from them instead.
 	Cols, Rows int
+	// PixelWidth, PixelHeight size the recording the way VHS does — in
+	// pixels of a logical window — and PixelPadding is the inner margin
+	// that shrinks the content area (ADR-008 D6):
+	//
+	//	cols = (PixelWidth - 2*PixelPadding) / cellW
+	//
+	// Used only when Cols/Rows are zero. The visual padding itself is
+	// staged raster work; the CONTENT grid already matches VHS exactly.
+	PixelWidth, PixelHeight, PixelPadding int
 	// FontSize is the font size in logical pixels. Default 16.
 	FontSize int
 	// Scale multiplies every metric for supersampling. Default 2.
@@ -150,6 +160,13 @@ type Options struct {
 
 	// Mode selects the clock. Default Deterministic.
 	Mode Mode
+	// ModifyOtherKeys selects how modified keys WITHOUT a legacy form
+	// (Ctrl+Enter, Shift+Tab...) reach the application when it has not
+	// pushed a keyboard protocol. False — the default — matches
+	// xterm/xterm.js (and therefore VHS): Ctrl+Enter degrades to a plain
+	// Enter. True keeps xterm's modern CSI-27 encodings for apps that
+	// understand them.
+	ModifyOtherKeys bool
 	// FPS is the Realtime sampling rate. Default 60. Ignored in
 	// Deterministic mode, where frames follow state changes exactly.
 	FPS int
@@ -166,9 +183,10 @@ type Recorder struct {
 	sink      *encode.PNGSink
 	framesDir string
 
-	finished bool
-	closed   bool
-	shots    int
+	finished  bool
+	closed    bool
+	shots     int
+	finalText string
 }
 
 // New starts the demo command on a fresh pty and prepares the pipeline.
@@ -183,10 +201,10 @@ func New(opts Options) (*Recorder, error) {
 }
 
 func applyDefaults(opts *Options) {
-	if opts.Cols <= 0 {
+	if opts.Cols <= 0 && opts.PixelWidth <= 0 {
 		opts.Cols = 80
 	}
-	if opts.Rows <= 0 {
+	if opts.Rows <= 0 && opts.PixelHeight <= 0 {
 		opts.Rows = 24
 	}
 	if opts.FontSize <= 0 {
@@ -254,6 +272,28 @@ func (r *Recorder) WaitText(ctx context.Context, re *regexp.Regexp, timeout time
 	return r.timeline.WaitText(ctx, re, timeout)
 }
 
+// WaitLine blocks until the CURRENT line (the cursor's row) matches re —
+// VHS's Wait+Line semantics. Timeout and timeline behavior are the same
+// as WaitText.
+func (r *Recorder) WaitLine(ctx context.Context, re *regexp.Regexp, timeout time.Duration) error {
+	if r.finished {
+		return ErrFinished
+	}
+	return r.timeline.Wait(ctx, func(f *vtengine.Frame) bool {
+		return re.MatchString(f.RowText(f.Cursor.Y))
+	}, timeout)
+}
+
+// ScreenText returns the current visible screen text (what waits match
+// against) — the .txt output format and a debugging aid. Valid until
+// Close, including after Output.
+func (r *Recorder) ScreenText() (string, error) {
+	if r.closed {
+		return "", ErrFinished
+	}
+	return r.timeline.ScreenText()
+}
+
 // Hide suppresses frame emission; the application keeps running.
 func (r *Recorder) Hide() error {
 	if r.finished {
@@ -281,6 +321,11 @@ func (r *Recorder) Screenshot(path string) error {
 	if err := r.timeline.Screenshot(name); err != nil {
 		return err
 	}
+	if dir := filepath.Dir(path); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return fmt.Errorf("foley: %w", err)
+		}
+	}
 	src := filepath.Join(r.framesDir, "still-"+name+".png")
 	return copyFile(src, path)
 }
@@ -290,12 +335,20 @@ func (r *Recorder) Screenshot(path string) error {
 func (r *Recorder) Now() time.Duration { return r.timeline.Now() }
 
 // Output finishes the timeline (first call) and encodes the recording to
-// path; the format follows the extension: .gif, .mp4 or .webm. Multiple
-// Output calls encode the same recording to multiple formats; timeline
-// actions are invalid afterwards.
+// path; the format follows the extension: .gif, .mp4, .webm, .txt (the
+// final screen as text) — or a PNG frame sequence into a directory when
+// the path has no extension or ends in .png (VHS's frames output).
+// Multiple Output calls encode the same recording to multiple formats;
+// timeline actions are invalid afterwards.
 func (r *Recorder) Output(ctx context.Context, path string) error {
 	if err := r.finish(); err != nil {
 		return err
+	}
+	// VHS creates missing parent directories for its outputs; so do we.
+	if dir := filepath.Dir(path); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return fmt.Errorf("foley: %w", err)
+		}
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".gif":
@@ -304,9 +357,40 @@ func (r *Recorder) Output(ctx context.Context, path string) error {
 		return encode.MP4(ctx, r.framesDir, path)
 	case ".webm":
 		return encode.WebM(ctx, r.framesDir, path)
+	case ".txt", ".ascii":
+		// finish() captured the closing screen before the timeline
+		// stopped (the realtime loop cannot answer afterwards).
+		if err := os.WriteFile(path, []byte(r.finalText+"\n"), 0o644); err != nil { //nolint:gosec // caller-requested artifact
+			return fmt.Errorf("foley: %w", err)
+		}
+		return nil
+	case "", ".png":
+		return r.copyFrames(path)
 	default:
 		return fmt.Errorf("%w: %q", ErrUnsupportedOutput, filepath.Ext(path))
 	}
+}
+
+// copyFrames delivers the staged frame PNGs into dir (the VHS frames
+// output: one exact PNG per emitted state).
+func (r *Recorder) copyFrames(dir string) error {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("foley: %w", err)
+	}
+	entries, err := os.ReadDir(r.framesDir)
+	if err != nil {
+		return fmt.Errorf("foley: %w", err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, "frame-") || !strings.HasSuffix(name, ".png") {
+			continue
+		}
+		if err := copyFile(filepath.Join(r.framesDir, name), filepath.Join(dir, name)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Recorder) finish() error {
@@ -314,6 +398,11 @@ func (r *Recorder) finish() error {
 		return nil
 	}
 	r.finished = true
+	// Capture the closing screen BEFORE stopping the timeline: the
+	// realtime loop cannot answer afterwards, and .txt outputs need it.
+	if text, err := r.timeline.ScreenText(); err == nil {
+		r.finalText = text
+	}
 	// Close the sink even when Finish fails: whatever frames exist get a
 	// manifest, so a later Output reports the real error instead of a
 	// confusing missing-manifest one.
@@ -375,6 +464,15 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		return nil, err
 	}
 	cellW, cellH := ras.LogicalCellSize()
+	if opts.Cols <= 0 {
+		opts.Cols = (opts.PixelWidth - 2*opts.PixelPadding) / cellW
+	}
+	if opts.Rows <= 0 {
+		opts.Rows = (opts.PixelHeight - 2*opts.PixelPadding) / cellH
+	}
+	if opts.Cols < 1 || opts.Rows < 1 {
+		return nil, fmt.Errorf("foley: grid resolves to %dx%d — pixel size too small for the font", opts.Cols, opts.Rows)
+	}
 	geo := vtengine.Geometry{Cols: opts.Cols, Rows: opts.Rows, CellW: cellW, CellH: cellH}
 
 	proc, err := ptyx.Start(ptyx.Options{
@@ -397,6 +495,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 			KittyStorageLimit: 320 << 20,
 			Colors:            colorsFor(opts.Theme),
 			Responses:         proc,
+			ModifyOtherKeys:   opts.ModifyOtherKeys,
 		})
 		if err != nil {
 			_ = proc.Close()

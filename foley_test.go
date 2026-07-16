@@ -59,7 +59,8 @@ func TestRecorderPublicFlow(t *testing.T) {
 	if err := rec.Type(ctx, "hola", 30*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
-	shot := filepath.Join(t.TempDir(), "captura demo.png")
+	// Nested path: parent directories must be created (VHS does).
+	shot := filepath.Join(t.TempDir(), "capturas", "demo", "captura demo.png")
 	if err := rec.Screenshot(shot); err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +161,19 @@ func TestRecorderRealtimeFlow(t *testing.T) {
 	}
 	if len(g.Image) == 0 {
 		t.Fatal("realtime recording emitted no frames")
+	}
+	// .txt after Output must work in realtime too: the loop is gone, but
+	// finish() captured the closing screen first (found the hard way).
+	txt := filepath.Join(t.TempDir(), "rt.txt")
+	if err := rec.Output(ctx, txt); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(txt) //nolint:gosec // path built from TempDir
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`listo`).Match(data) {
+		t.Fatalf("realtime .txt lacks the final screen: %q", data)
 	}
 }
 

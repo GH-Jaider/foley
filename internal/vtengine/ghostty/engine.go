@@ -514,11 +514,52 @@ func grayToRGBA(raw []byte, pixels int) []byte {
 }
 
 // EncodeKey encodes an input event per the terminal's active keyboard mode.
+// EncodeKey encodes ev like a real terminal in the app's current mode,
+// with two xterm-parity adjustments (empirically pinned by conformance):
+// Shift folds out of otherwise-unencodable Ctrl/Alt+letter chords (xterm
+// sends 0x03 for Ctrl+Shift+C), and — unless Options.ModifyOtherKeys —
+// CSI-27 fallbacks degrade to the unmodified key (xterm/xterm.js send a
+// plain \r for Ctrl+Enter; a migrated tape means THAT).
 func (e *Engine) EncodeKey(ev vtengine.KeyEvent) ([]byte, error) {
+	out, err := e.encodeKeyRaw(ev)
+	if err != nil && ev.Key.Rune != 0 &&
+		ev.Key.Mods&key.ModShift != 0 && ev.Key.Mods&(key.ModCtrl|key.ModAlt) != 0 {
+		out, err = e.encodeKeyRaw(vtengine.KeyEvent{
+			Key: key.Key{Rune: ev.Key.Rune, Name: ev.Key.Name, Mods: ev.Key.Mods &^ key.ModShift}, Type: ev.Type,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !e.opts.ModifyOtherKeys && bytes.HasPrefix(out, []byte("\x1b[27;")) {
+		return e.encodeKeyRaw(vtengine.KeyEvent{
+			Key: key.Key{Rune: ev.Key.Rune, Name: ev.Key.Name}, Type: ev.Type,
+		})
+	}
+	return out, nil
+}
+
+func (e *Engine) encodeKeyRaw(ev vtengine.KeyEvent) ([]byte, error) {
 	if e.closed {
 		return nil, vtengine.ErrClosed
 	}
 	C.ghostty_key_encoder_setopt_from_terminal(e.encoder, e.term)
+	// Alt must send ESC-prefix in legacy mode — the de-facto Linux
+	// terminal default every tape assumes (VHS ran xterm.js where alt is
+	// meta). Two knobs, both reset by setopt_from_terminal (the header
+	// says so for option-as-alt): treat option AS alt, and prefix ESC.
+	optionAsAlt := C.GhosttyOptionAsAlt(C.GHOSTTY_OPTION_AS_ALT_TRUE)
+	C.ghostty_key_encoder_setopt(e.encoder,
+		C.GHOSTTY_KEY_ENCODER_OPT_MACOS_OPTION_AS_ALT, unsafe.Pointer(&optionAsAlt))
+	altEsc := C.bool(true)
+	C.ghostty_key_encoder_setopt(e.encoder,
+		C.GHOSTTY_KEY_ENCODER_OPT_ALT_ESC_PREFIX, unsafe.Pointer(&altEsc))
+	// Third knob the refresh leaves in a non-xterm state (empirically:
+	// Ctrl+Enter came out CSI-27 regardless of the app's XTMODKEYS
+	// writes): pin it to the contract's ModifyOtherKeys choice.
+	mok := C.bool(e.opts.ModifyOtherKeys)
+	C.ghostty_key_encoder_setopt(e.encoder,
+		C.GHOSTTY_KEY_ENCODER_OPT_MODIFY_OTHER_KEYS_STATE_2, unsafe.Pointer(&mok))
 
 	var action C.GhosttyKeyAction
 	switch ev.Type {
@@ -533,8 +574,11 @@ func (e *Engine) EncodeKey(ev vtengine.KeyEvent) ([]byte, error) {
 	C.ghostty_key_event_set_mods(e.keyEv, modsC(ev.Key.Mods))
 	C.ghostty_key_event_set_key(e.keyEv, keyC(ev.Key))
 
+	// The encoder needs the codepoint to build text-carrying encodings:
+	// plain/shifted runes, and alt-prefixed ones (ESC+utf8 in legacy
+	// mode). Ctrl stays keypress-only — its C0 byte derives from the key.
 	var utf8 []byte
-	if ev.Key.Rune != 0 && ev.Key.Mods&^key.ModShift == 0 {
+	if ev.Key.Rune != 0 && ev.Key.Mods&^(key.ModShift|key.ModAlt) == 0 {
 		utf8 = []byte(string(ev.Key.Rune))
 		C.ghostty_key_event_set_utf8(e.keyEv,
 			(*C.char)(unsafe.Pointer(&utf8[0])), C.size_t(len(utf8)))

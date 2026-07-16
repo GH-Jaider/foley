@@ -58,6 +58,8 @@ done
 )
 
 cp "$src/LICENSE" "$dst/LICENSE"
+# themes.json: los temas curados de VHS (Set Theme <nombre> debe migrar).
+cp "$src/themes.json" "$dst/themes.json"
 
 # Reescritura de imports: el único cambio sobre el código upstream.
 find "$dst" -name '*.go' -exec perl -pi -e \

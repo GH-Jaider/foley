@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GH-Jaider/foley/tape"
 	"github.com/GH-Jaider/foley/tape/internal/vhsgrammar/lexer"
 	"github.com/GH-Jaider/foley/tape/internal/vhsgrammar/parser"
 )
@@ -70,6 +71,14 @@ func TestVHSCorpusConformance(t *testing.T) {
 			if len(cmds) == 0 {
 				t.Fatal("tape parsed to zero commands")
 			}
+			// The TYPED layer must also swallow the whole corpus: every
+			// grammar-valid tape converts (tapes without their own
+			// Output are legal upstream — they exist to be Sourced).
+			typed, err := tape.Parse(string(data))
+			if err != nil && !strings.Contains(err.Error(), "no Output declared") {
+				t.Fatalf("typed Parse: %v", err)
+			}
+			_ = typed
 		})
 	}
 }

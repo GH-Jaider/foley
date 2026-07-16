@@ -184,6 +184,19 @@ func (r *Realtime) Screenshot(name string) error {
 	return r.do(context.Background(), func() error { return r.lp.screenshot(name) })
 }
 
+// ScreenText returns the current visible screen text.
+func (r *Realtime) ScreenText() (string, error) {
+	var text string
+	err := r.do(context.Background(), func() error {
+		if !r.lp.snapshot() {
+			return r.lp.firstErr
+		}
+		text = r.lp.frame.Text()
+		return nil
+	})
+	return text, err
+}
+
 // Finish stops sampling, flushes the trailing frame and returns the first
 // error the loop hit, if any. Idempotent.
 func (r *Realtime) Finish() error {

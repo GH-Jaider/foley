@@ -102,6 +102,17 @@ func Run(ctx context.Context, t Tool, args ...string) error {
 	return nil
 }
 
+// LookPath resolves an arbitrary program on PATH — the seam behind the
+// tape DSL's Require command and shell resolution (this package is the
+// only place allowed to touch os/exec).
+func LookPath(name string) (string, error) {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s (%v)", ErrToolMissing, name, err)
+	}
+	return path, nil
+}
+
 // tail keeps error messages honest without flooding them.
 func tail(b []byte) []byte {
 	const keep = 2048

@@ -64,6 +64,17 @@ exit 1`)
 	}
 }
 
+func TestLookPath(t *testing.T) {
+	fakeTool(t, `echo hi`) // PATH now holds only our fake ffmpeg
+	if _, err := execx.LookPath("ffmpeg"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := execx.LookPath("programa-que-no-existe")
+	if !errors.Is(err, execx.ErrToolMissing) {
+		t.Fatalf("err = %v, want ErrToolMissing", err)
+	}
+}
+
 func TestUnknownTool(t *testing.T) {
 	_, err := execx.Find(context.Background(), execx.Tool("sox"))
 	if !errors.Is(err, execx.ErrUnknownTool) {

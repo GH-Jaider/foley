@@ -242,6 +242,15 @@ func (d *Driver) Screenshot(name string) error {
 	return d.opts.Sink.Still(name, img)
 }
 
+// ScreenText snapshots and returns the visible screen text.
+func (d *Driver) ScreenText() (string, error) {
+	f, err := d.snapshot()
+	if err != nil {
+		return "", err
+	}
+	return f.Text(), nil
+}
+
 // Finish flushes the trailing frame — unlike mid-stream flushes it sends
 // the final state even with zero accumulated duration (see Sink.Add). A
 // recording that should not end abruptly declares its final pause in the

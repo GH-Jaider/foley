@@ -49,6 +49,14 @@ type Options struct {
 	// (yazi's kitty-graphics detection, for one) block waiting for
 	// them. nil discards responses.
 	Responses io.Writer
+
+	// ModifyOtherKeys selects how modified keys WITHOUT a legacy form
+	// (Ctrl+Enter, Ctrl+Shift+letter, ...) are encoded when the
+	// application has not pushed a keyboard protocol. False — the
+	// default — degrades exactly like xterm/xterm.js (Ctrl+Enter is a
+	// plain Enter; Shift folds out of Ctrl+letter): what a VHS tape
+	// meant. True keeps the modern xterm CSI-27 forms.
+	ModifyOtherKeys bool
 }
 
 // KeyEventType distinguishes taps from explicit press/release events (the

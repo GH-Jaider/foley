@@ -238,6 +238,65 @@ func RunFull(t *testing.T, factory Factory) {
 		}
 	})
 
+	// The tape DSL's Ctrl/Alt chords depend on these encodings — every
+	// migrated tape has a Ctrl+C. Default mode is xterm/xterm.js parity
+	// (what a VHS tape meant): ctrl-letter folds into C0, Shift folds out
+	// of Ctrl chords, alt prefixes ESC, and keys with no legacy form
+	// degrade to their unmodified selves instead of CSI-27 noise.
+	t.Run("key_encoder_modifiers_xterm_parity", func(t *testing.T) {
+		e := factory(t, defaultOpts())
+		defer func() { _ = e.Close() }()
+		cases := []struct {
+			name string
+			ev   vtengine.KeyEvent
+			want string
+		}{
+			{"ctrl_c", vtengine.KeyEvent{Key: key.RuneKey('c').With(key.ModCtrl)}, "\x03"},
+			{"ctrl_l", vtengine.KeyEvent{Key: key.RuneKey('l').With(key.ModCtrl)}, "\x0c"},
+			{"alt_x", vtengine.KeyEvent{Key: key.RuneKey('x').With(key.ModAlt)}, "\x1bx"},
+			{"ctrl_shift_c_folds", vtengine.KeyEvent{Key: key.RuneKey('c').With(key.ModCtrl | key.ModShift)}, "\x03"},
+			{"ctrl_left", vtengine.KeyEvent{Key: key.Named(key.NameLeft).With(key.ModCtrl)}, "\x1b[1;5D"},
+			{"shift_tab", vtengine.KeyEvent{Key: key.Named(key.NameTab).With(key.ModShift)}, "\x1b[Z"},
+			{"ctrl_enter_degrades", vtengine.KeyEvent{Key: key.Named(key.NameEnter).With(key.ModCtrl)}, "\r"},
+			{"shift_a_text", vtengine.KeyEvent{Key: key.RuneKey('A').With(key.ModShift)}, "A"},
+		}
+		for _, c := range cases {
+			got, err := e.EncodeKey(c.ev)
+			if err != nil {
+				t.Fatalf("%s: %v", c.name, err)
+			}
+			if string(got) != c.want {
+				t.Fatalf("%s = %q, want %q", c.name, got, c.want)
+			}
+		}
+	})
+
+	// Opting into ModifyOtherKeys keeps the modern CSI-27 forms.
+	t.Run("key_encoder_modify_other_keys", func(t *testing.T) {
+		opts := defaultOpts()
+		opts.ModifyOtherKeys = true
+		e := factory(t, opts)
+		defer func() { _ = e.Close() }()
+		cases := []struct {
+			name string
+			ev   vtengine.KeyEvent
+			want string
+		}{
+			{"ctrl_enter", vtengine.KeyEvent{Key: key.Named(key.NameEnter).With(key.ModCtrl)}, "\x1b[27;5;13~"},
+			{"shift_tab", vtengine.KeyEvent{Key: key.Named(key.NameTab).With(key.ModShift)}, "\x1b[27;2;9~"},
+			{"ctrl_c_still_c0", vtengine.KeyEvent{Key: key.RuneKey('c').With(key.ModCtrl)}, "\x03"},
+		}
+		for _, c := range cases {
+			got, err := e.EncodeKey(c.ev)
+			if err != nil {
+				t.Fatalf("%s: %v", c.name, err)
+			}
+			if string(got) != c.want {
+				t.Fatalf("%s = %q, want %q", c.name, got, c.want)
+			}
+		}
+	})
+
 	t.Run("capability_query_responses", func(t *testing.T) {
 		opts := defaultOpts()
 		var responses bytes.Buffer

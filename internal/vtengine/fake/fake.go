@@ -147,7 +147,14 @@ func (e *Engine) EncodeKey(ev vtengine.KeyEvent) ([]byte, error) {
 	}
 	k := ev.Key
 	if k.Rune != 0 {
-		return []byte(string(k.Rune)), nil
+		b := []byte(string(k.Rune))
+		if k.Mods&key.ModCtrl != 0 && k.Rune >= 'a' && k.Rune <= 'z' {
+			b = []byte{byte(k.Rune) & 0x1f} // legacy ctrl-letter
+		}
+		if k.Mods&key.ModAlt != 0 {
+			b = append([]byte{0x1b}, b...) // legacy alt = ESC prefix
+		}
+		return b, nil
 	}
 	switch k.Name {
 	case key.NameEnter:
