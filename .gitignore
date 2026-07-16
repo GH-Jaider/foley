@@ -9,3 +9,6 @@ coverage.out
 internal/vtengine/ghostty/lib/
 internal/vtengine/ghostty/libbuild/zig-out/
 internal/vtengine/ghostty/libbuild/.zig-cache/
+
+# fixtures compiladas (make fixtures)
+internal/vtengine/ghostty/testdata/bin/

@@ -34,7 +34,10 @@ vuln:
 codemap:
 	scripts/codemap-check.sh
 
-fixtures e2e-linux e2e-darwin:
+fixtures:
+	go build -o internal/vtengine/ghostty/testdata/bin/keyprobe ./internal/vtengine/ghostty/testdata/keyprobe
+
+e2e-linux e2e-darwin:
 	@echo "$@: llega en milestones posteriores (ver docs/ROADMAP.md)"; exit 1
 
 engine-lib:

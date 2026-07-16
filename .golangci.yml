@@ -34,6 +34,24 @@ linters:
             - github.com/creack/pty
             - golang.org/x/sys
             - golang.org/x/term
+        # internal/ptyx: segundo sitio sancionado de os/exec — spawnea EL
+        # COMANDO DEMO del usuario sobre el pty (distinto de execx, que
+        # invoca herramientas con tabla de versiones). Enmienda a ADR-009.
+        zona-ptyx:
+          list-mode: strict
+          files:
+            - "**/internal/ptyx/**"
+          allow:
+            - $gostd
+            - github.com/GH-Jaider/foley
+            - github.com/creack/pty
+            - golang.org/x/sys
+            - golang.org/x/term
+          deny:
+            - pkg: github.com/GH-Jaider/foley/internal/vtengine/ghostty
+              desc: ptyx no conoce motores — solo bytes y timestamps
+            - pkg: github.com/GH-Jaider/foley/internal/vtengine/fake
+              desc: el motor títere es solo para tests
         # internal/vtengine (contrato, conformidad y la implementación
         # ghostty): la única zona que puede ver la cuarentena cgo.
         zona-vtengine:
@@ -57,6 +75,7 @@ linters:
             - $all
             - "!$test"
             - "!**/internal/execx/**"
+            - "!**/internal/ptyx/**"
             - "!**/internal/vtengine/**"
           allow:
             - $gostd
@@ -78,6 +97,7 @@ linters:
           files:
             - $test
             - "!**/internal/execx/**"
+            - "!**/internal/ptyx/**"
             - "!**/internal/vtengine/**"
           allow:
             - $gostd
