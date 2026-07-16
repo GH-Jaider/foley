@@ -59,8 +59,11 @@ func TestEchoThroughPty(t *testing.T) {
 }
 
 func TestTimestampsAdvanceAcrossBursts(t *testing.T) {
+	// The second burst is gated on OUR input, so two separate chunks are
+	// guaranteed by construction — no scheduler luck involved (slow CI
+	// runners deschedule readers long enough to merge sleep-based bursts).
 	p, err := ptyx.Start(ptyx.Options{
-		Command: []string{"/bin/sh", "-c", "printf a; sleep 0.15; printf b"},
+		Command: []string{"/bin/sh", "-c", "stty -echo; printf a; read x; printf b"},
 		Size:    ptyx.Winsize{Cols: 80, Rows: 24},
 	})
 	if err != nil {
@@ -68,22 +71,43 @@ func TestTimestampsAdvanceAcrossBursts(t *testing.T) {
 	}
 	defer func() { _ = p.Close() }()
 
-	chunks := collect(t, p, 5*time.Second)
-	if joined(chunks) != "ab" {
-		t.Fatalf("output = %q", joined(chunks))
+	first := awaitOutput(t, p, "a", 5*time.Second)
+	pause := 120 * time.Millisecond
+	time.Sleep(pause)
+	if _, err := p.Write([]byte("\n")); err != nil {
+		t.Fatal(err)
 	}
-	if len(chunks) < 2 {
-		t.Fatalf("expected >=2 chunks (separate bursts), got %d", len(chunks))
-	}
-	gap := chunks[len(chunks)-1].Time.Sub(chunks[0].Time)
-	if gap < 100*time.Millisecond {
+	second := awaitOutput(t, p, "b", 5*time.Second)
+	if gap := second.Sub(first); gap < pause {
 		t.Fatalf("timestamps do not reflect the pause: gap=%v", gap)
+	}
+}
+
+// awaitOutput consumes chunks until the wanted text shows up, returning
+// the timestamp of the chunk that completed it.
+func awaitOutput(t *testing.T, p *ptyx.Proc, want string, timeout time.Duration) time.Time {
+	t.Helper()
+	var acc bytes.Buffer
+	deadline := time.After(timeout)
+	for {
+		select {
+		case c, ok := <-p.Chunks():
+			if !ok {
+				t.Fatalf("pty closed waiting for %q; got %q", want, acc.String())
+			}
+			acc.Write(c.Data)
+			if strings.Contains(acc.String(), want) {
+				return c.Time
+			}
+		case <-deadline:
+			t.Fatalf("timeout waiting for %q; got %q", want, acc.String())
+		}
 	}
 }
 
 func TestWriteReachesChild(t *testing.T) {
 	p, err := ptyx.Start(ptyx.Options{
-		Command: []string{"/bin/sh", "-c", `stty -echo; read x; printf "got:%s" "$x"`},
+		Command: []string{"/bin/sh", "-c", `stty -echo; printf R; read x; printf "got:%s" "$x"`},
 		Size:    ptyx.Winsize{Cols: 80, Rows: 24},
 	})
 	if err != nil {
@@ -91,7 +115,8 @@ func TestWriteReachesChild(t *testing.T) {
 	}
 	defer func() { _ = p.Close() }()
 
-	time.Sleep(100 * time.Millisecond) // let stty/read start up
+	// Readiness is signaled by the child itself — no sleep guessing.
+	awaitOutput(t, p, "R", 5*time.Second)
 	if _, err := p.Write([]byte("ping\r")); err != nil {
 		t.Fatal(err)
 	}

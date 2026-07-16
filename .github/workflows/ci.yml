@@ -45,4 +45,6 @@ jobs:
         with:
           go-version-file: go.mod
       - name: tests
-        run: go test -race ./...
+        # -v: los runners macOS son los más propensos a flakes de timing y
+        # los logs de este job son la única vía de diagnóstico.
+        run: go test -race -v ./...
