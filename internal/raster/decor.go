@@ -76,7 +76,7 @@ func (r *Rasterizer) drawCursor(dst *image.RGBA, f *vtengine.Frame) {
 		return
 	}
 	rect := r.cellRect(f.Cursor.X, f.Cursor.Y, 1)
-	fg := rgba(f.Colors.FG)
+	fg := rgba(f.Colors.Cursor)
 	th := max(1, 2*r.opts.Scale)
 	switch f.Cursor.Shape {
 	case vtengine.CursorBlock:

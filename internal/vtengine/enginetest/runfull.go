@@ -89,6 +89,31 @@ func RunFull(t *testing.T, factory Factory) {
 		}
 	})
 
+	// Colors.Cursor is ALWAYS resolved: FG when nothing set a cursor
+	// color, the OSC 12 override when the app set one, and back to the
+	// default after OSC 112.
+	t.Run("cursor_color_resolved", func(t *testing.T) {
+		opts := defaultOpts()
+		colors := vtengine.Colors{FG: vtengine.RGB{R: 200, G: 200, B: 200}}
+		opts.Colors = &colors
+		e := factory(t, opts)
+		defer func() { _ = e.Close() }()
+		f := snapshot(t, e)
+		if f.Colors.Cursor != colors.FG {
+			t.Fatalf("default cursor color = %+v, want FG %+v", f.Colors.Cursor, colors.FG)
+		}
+		mustWrite(t, e, "\x1b]12;rgb:c0/ff/ee\x07")
+		f = snapshot(t, e)
+		if f.Colors.Cursor != (vtengine.RGB{R: 0xc0, G: 0xff, B: 0xee}) {
+			t.Fatalf("OSC 12 cursor color = %+v, want c0ffee", f.Colors.Cursor)
+		}
+		mustWrite(t, e, "\x1b]112\x07")
+		f = snapshot(t, e)
+		if f.Colors.Cursor != colors.FG {
+			t.Fatalf("cursor color after OSC 112 = %+v, want FG %+v", f.Colors.Cursor, colors.FG)
+		}
+	})
+
 	t.Run("wide_graphemes", func(t *testing.T) {
 		e := factory(t, defaultOpts())
 		defer func() { _ = e.Close() }()

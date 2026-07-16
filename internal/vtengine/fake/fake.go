@@ -111,6 +111,10 @@ func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 		dst.Cursor.X = e.geo.Cols - 1
 	}
 	dst.Colors = e.colors
+	// Mimic real engines: an unset (zero) cursor color resolves to FG.
+	if dst.Colors.Cursor == (vtengine.RGB{}) {
+		dst.Colors.Cursor = dst.Colors.FG
+	}
 	dst.Dirty = e.dirty
 	dst.Graphics = vtengine.Graphics{
 		Generation: e.gfx.Generation,

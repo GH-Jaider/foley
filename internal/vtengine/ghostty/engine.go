@@ -101,6 +101,13 @@ func New(opts vtengine.Options) (*Engine, error) {
 		bg := rgbC(opts.Colors.BG)
 		C.ghostty_terminal_set(e.term, C.GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, unsafe.Pointer(&fg))
 		C.ghostty_terminal_set(e.term, C.GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, unsafe.Pointer(&bg))
+		// A zero Cursor follows FG (Colors contract); seeding the resolved
+		// value keeps OSC 112 resets landing on it as the default.
+		cur := rgbC(opts.Colors.Cursor)
+		if opts.Colors.Cursor == (vtengine.RGB{}) {
+			cur = fg
+		}
+		C.ghostty_terminal_set(e.term, C.GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, unsafe.Pointer(&cur))
 		var pal [256]C.GhosttyColorRgb
 		for i, c := range opts.Colors.Palette {
 			pal[i] = rgbC(c)
@@ -210,6 +217,16 @@ func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 		for i := range dst.Colors.Palette {
 			dst.Colors.Palette[i] = rgbGo(colors.palette[i])
 		}
+	}
+	// Cursor color via the terminal getter: unlike the render-state struct
+	// field (zero when unset — a black sentinel), it distinguishes "not
+	// configured" (GHOSTTY_NO_VALUE) so the contract's FG fallback never
+	// shadows an explicit black.
+	var cursorRGB C.GhosttyColorRgb
+	if rc := C.ghostty_terminal_get(e.term, C.GHOSTTY_TERMINAL_DATA_COLOR_CURSOR, unsafe.Pointer(&cursorRGB)); rc == C.GHOSTTY_SUCCESS {
+		dst.Colors.Cursor = rgbGo(cursorRGB)
+	} else {
+		dst.Colors.Cursor = dst.Colors.FG
 	}
 
 	// Cursor.

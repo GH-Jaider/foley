@@ -77,7 +77,12 @@ type Cursor struct {
 
 // Colors are the terminal-level colors active at snapshot time.
 type Colors struct {
-	FG, BG  RGB
+	FG, BG RGB
+	// Cursor is ALWAYS resolved by engines: it equals FG when neither the
+	// seed (Options.Colors) nor the application (OSC 12) set a cursor
+	// color, so black is a legitimate, paintable value — never a
+	// sentinel. In Options.Colors a zero Cursor means "follow FG".
+	Cursor  RGB
 	Palette [256]RGB
 }
 
