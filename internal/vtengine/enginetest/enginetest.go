@@ -153,21 +153,6 @@ func RunBasic(t *testing.T, factory Factory) {
 	})
 }
 
-// RunFull runs RunBasic plus full VT conformance: SGR styles, palette and
-// true color, wide graphemes, scrolling, kitty graphics round-trips
-// (transmit → placement geometry → pixels → generation stamps) and
-// keyboard-protocol-aware key encoding. Real engines (M3: ghostty) must
-// pass it unchanged; the cases land with the first real engine so each
-// assertion is written against observed protocol behavior, never guessed.
-func RunFull(t *testing.T, factory Factory) {
-	t.Helper()
-	RunBasic(t, factory)
-	// M3: sgr_styles, true_color_and_palette, wide_graphemes, scrollback,
-	// kitty_graphics_roundtrip, generation_stamps, key_encoder_legacy,
-	// key_encoder_kitty_csi_u, capability_query_responses (a=q reaches
-	// Options.Responses), image_pixels_straight_alpha.
-}
-
 func mustWrite(t *testing.T, e vtengine.Engine, s string) {
 	t.Helper()
 	if _, err := e.Write([]byte(s)); err != nil {

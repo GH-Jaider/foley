@@ -10,8 +10,8 @@ import (
 	"github.com/GH-Jaider/foley/internal/vtengine/ghostty"
 )
 
-func TestGhosttyConformsBasic(t *testing.T) {
-	enginetest.RunBasic(t, func(t *testing.T, opts vtengine.Options) vtengine.Engine {
+func TestGhosttyConformsFull(t *testing.T) {
+	enginetest.RunFull(t, func(t *testing.T, opts vtengine.Options) vtengine.Engine {
 		t.Helper()
 		e, err := ghostty.New(opts)
 		if err != nil {

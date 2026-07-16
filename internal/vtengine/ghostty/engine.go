@@ -269,10 +269,26 @@ func (e *Engine) snapshotCursor(dst *vtengine.Frame) {
 }
 
 func (e *Engine) snapshotCell(c *vtengine.Cell, colors *vtengine.Colors) {
+	// Width and spacer detection come from the raw cell.
+	var raw C.GhosttyCell
+	C.ghostty_render_state_row_cells_get(e.cells,
+		C.GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW, unsafe.Pointer(&raw))
+	var wide C.GhosttyCellWide
+	C.ghostty_cell_get(raw, C.GHOSTTY_CELL_DATA_WIDE, unsafe.Pointer(&wide))
+	switch wide {
+	case C.GHOSTTY_CELL_WIDE_SPACER_TAIL, C.GHOSTTY_CELL_WIDE_SPACER_HEAD:
+		return // spacer: no content, Width 0
+	case C.GHOSTTY_CELL_WIDE_WIDE:
+		c.Width = 2
+	default:
+		c.Width = 1
+	}
+
 	var glen C.uint32_t
 	C.ghostty_render_state_row_cells_get(e.cells,
 		C.GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_LEN, unsafe.Pointer(&glen))
 	if glen == 0 {
+		c.Width = 0
 		return
 	}
 	var cps [16]C.uint32_t
@@ -285,7 +301,6 @@ func (e *Engine) snapshotCell(c *vtengine.Cell, colors *vtengine.Colors) {
 	for i := 0; i < int(glen); i++ {
 		c.Runes = append(c.Runes, rune(cps[i]))
 	}
-	c.Width = 1 // TODO(M3): wide-grapheme detection when RunFull pins it.
 
 	var style C.GhosttyStyle
 	style.size = C.size_t(unsafe.Sizeof(style))
