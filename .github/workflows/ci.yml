@@ -26,7 +26,8 @@ jobs:
           "$(go env GOPATH)/bin/golangci-lint" fmt
           git diff --exit-code
       - name: lint
-        run: "$(go env GOPATH)/bin/golangci-lint" run
+        run: |
+          "$(go env GOPATH)/bin/golangci-lint" run
       - name: shellcheck
         run: shellcheck scripts/*.sh
       - name: govulncheck
