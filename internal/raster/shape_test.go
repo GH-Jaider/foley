@@ -21,6 +21,8 @@ import (
 	"github.com/go-text/typesetting/shaping"
 	"golang.org/x/image/math/fixed"
 	"golang.org/x/image/vector"
+
+	"github.com/GH-Jaider/foley/internal/testassets"
 )
 
 const fontPath = "../fontpack/fonts/JetBrainsMono-Regular.ttf"
@@ -28,9 +30,7 @@ const fontPath = "../fontpack/fonts/JetBrainsMono-Regular.ttf"
 func loadFace(t *testing.T) *font.Face {
 	t.Helper()
 	f, err := os.Open(fontPath)
-	if err != nil {
-		t.Skipf("pinned font missing (%v) — run scripts/fonts.sh", err)
-	}
+	testassets.Require(t, err, "make fonts")
 	defer func() { _ = f.Close() }()
 	face, err := font.ParseTTF(f)
 	if err != nil {

@@ -16,7 +16,7 @@ import (
 const maxKittyCacheEntries = 64
 
 // drawPlacements composites kitty-graphics placements of one layer.
-func (r *Rasterizer) drawPlacements(dst *image.RGBA, _ *vtengine.Frame, src ImageSource, ps []vtengine.Placement) error {
+func (r *Rasterizer) drawPlacements(dst *image.RGBA, src ImageSource, ps []vtengine.Placement) error {
 	for _, p := range ps {
 		img, err := r.kittyImage(src, p)
 		if err != nil {
@@ -76,11 +76,11 @@ func (r *Rasterizer) drawEmojiCell(dst *image.RGBA, f *vtengine.Frame, x, y int)
 	if img == nil {
 		return
 	}
-	span := maxi(int(cell.Width), 1)
+	span := max(int(cell.Width), 1)
 	rect := r.cellRect(x, y, span)
 	// Aspect-fit inside the cell span.
 	iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-	scale := minf(float32(rect.Dx())/float32(iw), float32(rect.Dy())/float32(ih))
+	scale := min(float32(rect.Dx())/float32(iw), float32(rect.Dy())/float32(ih))
 	w, h := int(float32(iw)*scale), int(float32(ih)*scale)
 	ox := rect.Min.X + (rect.Dx()-w)/2
 	oy := rect.Min.Y + (rect.Dy()-h)/2

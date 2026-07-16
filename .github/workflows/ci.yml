@@ -8,19 +8,24 @@ on:
 permissions:
   contents: read
 
-env:
-  GOLANGCI_VERSION: v2.12.2
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - name: instalar golangci-lint (pineado)
-        run: curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$(go env GOPATH)/bin" "$GOLANGCI_VERSION"
+      # La versión vive SOLO en el Makefile — una fuente de verdad.
+      - name: instalar golangci-lint (pineado en Makefile)
+        run: |
+          V="v$(sed -n 's/^GOLANGCI_VERSION := //p' Makefile)"
+          curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$(go env GOPATH)/bin" "$V"
       - name: gate de formato
         run: |
           "$(go env GOPATH)/bin/golangci-lint" fmt
@@ -35,7 +40,7 @@ jobs:
       - name: codemap
         run: scripts/codemap-check.sh
       - name: cache fuentes pineadas
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: internal/fontpack/fonts
           key: fonts-${{ hashFiles('scripts/fonts.sh') }}
@@ -43,28 +48,48 @@ jobs:
         run: make fonts
       - name: fixtures
         run: make fixtures
-      - name: cache libghostty-vt (linux-amd64)
-        uses: actions/cache@v5
+      # Untagged primero: no necesitan la .a y dan feedback minutos antes
+      # cuando la lib no está cacheada.
+      - name: tests
+        run: go test -race ./...
+      - name: restore libghostty-vt (linux-amd64)
+        id: libcache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: internal/vtengine/ghostty/lib/linux-amd64
           key: libghostty-linux-amd64-${{ hashFiles('internal/vtengine/ghostty/libbuild/build.zig.zon', 'scripts/engine-lib.sh') }}
       - name: libghostty-vt (linux-amd64, desde el pin)
+        if: steps.libcache.outputs.cache-hit != 'true'
+        run: scripts/engine-lib.sh linux-amd64
+      # El script regenera include/ desde el paquete verificado del pin:
+      # cualquier diff contra lo commiteado es drift headers↔pin.
+      - name: gate de drift de headers (include/ == pin)
+        if: steps.libcache.outputs.cache-hit != 'true'
         run: |
-          [ -f internal/vtengine/ghostty/lib/linux-amd64/libghostty-vt.a ] || scripts/engine-lib.sh linux-amd64
-      - name: tests
-        run: go test -race ./...
+          git diff --exit-code -- internal/vtengine/ghostty/include
+          test -z "$(git status --porcelain -- internal/vtengine/ghostty/include)"
+      # Save separado con if always(): el action combinado no guarda cache
+      # cuando el job falla, y las iteraciones sobre CI rojo no deben pagar
+      # el build de la .a (~10 min) cada vez.
+      - name: save libghostty-vt (linux-amd64)
+        if: always() && steps.libcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/linux-amd64
+          key: ${{ steps.libcache.outputs.cache-primary-key }}
       - name: tests con motor real (tagged)
         run: CGO_ENABLED=1 go test -tags ghosttyvt -race -v ./internal/...
 
   test-macos:
     runs-on: macos-15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
       - name: cache fuentes pineadas
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: internal/fontpack/fonts
           key: fonts-${{ hashFiles('scripts/fonts.sh') }}

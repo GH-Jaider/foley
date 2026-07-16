@@ -9,7 +9,7 @@ Library first (Go), CLI second. Familiar VHS-style DSL (`Type`, `Sleep`, `Wait`,
 
 ## Status
 
-Pre-alpha — design stage.
+Pre-alpha — no releases yet. The core pipeline is proven end to end: a real process on a pty, the embedded engine, and the rasterizer produce byte-identical frames across macOS and Linux, arm64 and amd64, verified in CI on every push. Recording (clocks, waits) and encoding are in progress.
 
 ## License
 

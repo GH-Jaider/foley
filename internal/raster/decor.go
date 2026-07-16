@@ -48,14 +48,14 @@ func (r *Rasterizer) drawDecorations(dst *image.RGBA, f *vtengine.Frame, x, y in
 		ul(uy + th)
 	case vtengine.UnderlineDotted:
 		for xx := x0; xx < x1; xx += 2 * th {
-			fill(image.Rect(xx, uy, mini(xx+th, x1), uy+th), ulColor)
+			fill(image.Rect(xx, uy, min(xx+th, x1), uy+th), ulColor)
 		}
 	case vtengine.UnderlineDashed:
 		dash := r.cellW / 3
 		fill(image.Rect(x0, uy, x0+dash, uy+th), ulColor)
 		fill(image.Rect(x1-dash, uy, x1, uy+th), ulColor)
 	case vtengine.UnderlineCurly:
-		amp := float64(maxi(th, 2*r.opts.Scale))
+		amp := float64(max(th, 2*r.opts.Scale))
 		for xx := x0; xx < x1; xx++ {
 			phase := 2 * math.Pi * float64(xx-x0) / float64(r.cellW)
 			yy := uy + int(math.Round(amp*math.Sin(phase)))
@@ -77,7 +77,7 @@ func (r *Rasterizer) drawCursor(dst *image.RGBA, f *vtengine.Frame) {
 	}
 	rect := r.cellRect(f.Cursor.X, f.Cursor.Y, 1)
 	fg := rgba(f.Colors.FG)
-	th := maxi(1, 2*r.opts.Scale)
+	th := max(1, 2*r.opts.Scale)
 	switch f.Cursor.Shape {
 	case vtengine.CursorBlock:
 		// v1: solid block over the glyph (glyph inversion under the block
@@ -88,17 +88,10 @@ func (r *Rasterizer) drawCursor(dst *image.RGBA, f *vtengine.Frame) {
 	case vtengine.CursorUnderline:
 		fillRect(dst, image.Rect(rect.Min.X, rect.Max.Y-th, rect.Max.X, rect.Max.Y), fg)
 	case vtengine.CursorHollowBlock:
-		s := maxi(1, r.opts.Scale)
+		s := max(1, r.opts.Scale)
 		fillRect(dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Max.X, rect.Min.Y+s), fg)
 		fillRect(dst, image.Rect(rect.Min.X, rect.Max.Y-s, rect.Max.X, rect.Max.Y), fg)
 		fillRect(dst, image.Rect(rect.Min.X, rect.Min.Y, rect.Min.X+s, rect.Max.Y), fg)
 		fillRect(dst, image.Rect(rect.Max.X-s, rect.Min.Y, rect.Max.X, rect.Max.Y), fg)
 	}
-}
-
-func mini(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

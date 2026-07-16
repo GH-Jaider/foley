@@ -10,6 +10,7 @@ import (
 
 	"github.com/GH-Jaider/foley/internal/fontpack"
 	"github.com/GH-Jaider/foley/internal/raster"
+	"github.com/GH-Jaider/foley/internal/testassets"
 	"github.com/GH-Jaider/foley/internal/vtengine"
 	"github.com/GH-Jaider/foley/internal/vtengine/fake"
 )
@@ -23,9 +24,7 @@ var updateGolden = flag.Bool("update", false, "rewrite golden files")
 // placement and the cursor — and compares the PNG byte-for-byte.
 func TestGoldenScene(t *testing.T) {
 	pack, err := fontpack.Load(filepath.Join("..", "fontpack", "fonts"))
-	if err != nil {
-		t.Skipf("fontpack: %v", err)
-	}
+	testassets.Require(t, err, "make fonts")
 	r, err := raster.New(raster.Options{Pack: pack, FontSizePx: 16, Scale: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +71,11 @@ func TestGoldenScene(t *testing.T) {
 		x = 23
 		for _, rn := range "faint" {
 			e.SetCell(x, 1, string(rn), vtengine.Style{FG: catppuccin.FG, Faint: true})
+			x++
+		}
+		x = 30
+		for _, rn := range "both" {
+			e.SetCell(x, 1, string(rn), vtengine.Style{FG: blue, Bold: true, Italic: true})
 			x++
 		}
 	}
@@ -150,9 +154,7 @@ func TestGoldenScene(t *testing.T) {
 		return
 	}
 	want, err := os.ReadFile(goldenPath) //nolint:gosec // fixed testdata path
-	if err != nil {
-		t.Skipf("golden missing (%v) — run with -update to generate it", err)
-	}
+	testassets.Require(t, err, "regenerate with go test ./internal/raster/ -update")
 	if !bytes.Equal(buf.Bytes(), want) {
 		diffPath := filepath.Join(t.TempDir(), "got.png")
 		_ = os.WriteFile(diffPath, buf.Bytes(), 0o600)
@@ -162,9 +164,7 @@ func TestGoldenScene(t *testing.T) {
 
 func BenchmarkRenderFull120x30(b *testing.B) {
 	pack, err := fontpack.Load(filepath.Join("..", "fontpack", "fonts"))
-	if err != nil {
-		b.Skip(err)
-	}
+	testassets.Require(b, err, "make fonts")
 	r, err := raster.New(raster.Options{Pack: pack, FontSizePx: 16, Scale: 2})
 	if err != nil {
 		b.Fatal(err)

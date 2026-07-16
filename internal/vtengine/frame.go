@@ -33,9 +33,12 @@ type Style struct {
 	// only these over the theme background.
 	HasBG bool
 
-	Bold          bool
-	Italic        bool
-	Faint         bool
+	Bold   bool
+	Italic bool
+	Faint  bool
+	// Blink is tracked by engines but a static frame render ignores it
+	// by design (one frame cannot blink); a realtime driver may animate
+	// it from this bit in the future.
 	Blink         bool
 	Inverse       bool
 	Invisible     bool

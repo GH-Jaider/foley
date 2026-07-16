@@ -73,6 +73,15 @@ linters:
           deny:
             - pkg: os/exec
               desc: binarios externos solo a través de internal/execx
+        # internal/testassets: infraestructura de tests — importa testing por
+        # diseño (el patrón internal/testenv de Go). Producción no puede
+        # importarla: deny explícito en zona-general.
+        zona-testassets:
+          list-mode: strict
+          files:
+            - "**/internal/testassets/**"
+          allow:
+            - $gostd
         # Resto del árbol, código de PRODUCCIÓN (API raíz, tape, key, driver,
         # raster, fontpack, ptyx, encode, theme, cmd): presupuesto + fronteras.
         zona-general:
@@ -83,6 +92,7 @@ linters:
             - "!**/internal/execx/**"
             - "!**/internal/ptyx/**"
             - "!**/internal/vtengine/**"
+            - "!**/internal/testassets/**"
           allow:
             - $gostd
             - github.com/GH-Jaider/foley
@@ -96,6 +106,10 @@ linters:
               desc: solo la factory internal/vtengine puede importar motores concretos (cuarentena cgo, ADR-009)
             - pkg: github.com/GH-Jaider/foley/internal/vtengine/fake
               desc: el motor títere es solo para tests
+            - pkg: github.com/GH-Jaider/foley/internal/testassets
+              desc: infraestructura de tests — jamás en producción
+            - pkg: testing
+              desc: producción no importa testing (arrastra el runtime de tests al binario)
             - pkg: os/exec
               desc: binarios externos solo a través de internal/execx (tabla única de tools)
         # Tests fuera de execx/vtengine: igual que producción pero con el

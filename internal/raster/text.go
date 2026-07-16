@@ -30,8 +30,8 @@ func (r *Rasterizer) computeMetrics() {
 	gap := out.LineBounds.Gap.Round()
 	r.cellH = asc + desc + gap
 	r.baseline = asc + gap/2
-	r.underline = r.baseline + maxi(2*r.opts.Scale, desc/2)
-	r.thickness = maxi(r.opts.Scale, r.sizePx/16)
+	r.underline = r.baseline + max(2*r.opts.Scale, desc/2)
+	r.thickness = max(r.opts.Scale, r.sizePx/16)
 }
 
 func (r *Rasterizer) shape(face *font.Face, runes []rune) shaping.Output {
@@ -44,6 +44,8 @@ func (r *Rasterizer) shape(face *font.Face, runes []rune) shaping.Output {
 
 func (r *Rasterizer) pickFace(st vtengine.Style) (*font.Face, faceStyle) {
 	switch {
+	case st.Bold && st.Italic:
+		return r.boldItalic, faceBoldItalic
 	case st.Bold:
 		return r.bold, faceBold
 	case st.Italic:
@@ -76,7 +78,7 @@ func (r *Rasterizer) drawText(dst *image.RGBA, f *vtengine.Frame) {
 				x++
 			case r.isEmojiCell(cell.Runes):
 				r.drawEmojiCell(dst, f, x, y)
-				x += maxi(int(cell.Width), 1)
+				x += max(int(cell.Width), 1)
 			default:
 				x = r.drawTextRun(dst, f, x, y)
 			}
@@ -106,7 +108,7 @@ func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) 
 			runes = append(runes, rn)
 			originCell = append(originCell, x)
 		}
-		x += maxi(int(c.Width), 1)
+		x += max(int(c.Width), 1)
 	}
 
 	out := r.shape(runFace, runes)
@@ -150,11 +152,11 @@ func (r *Rasterizer) mask(style faceStyle, face *font.Face, gid font.GID) *glyph
 	maxX, maxY := float32(-1e9), float32(-1e9)
 	visit := func(px, py float32) {
 		x, yy := px*scale, py*scale
-		minX, maxX = minf(minX, x), maxf(maxX, x)
-		minY, maxY = minf(minY, yy), maxf(maxY, yy)
+		minX, maxX = min(minX, x), max(maxX, x)
+		minY, maxY = min(minY, yy), max(maxY, yy)
 	}
 	for _, seg := range outline.Segments {
-		for i := range segPoints(seg) {
+		for i := 0; i < segPointCount(seg.Op); i++ {
 			p := seg.Args[i]
 			visit(p.X, p.Y)
 		}
@@ -199,16 +201,16 @@ func (r *Rasterizer) mask(style faceStyle, face *font.Face, gid font.GID) *glyph
 	return m
 }
 
-func segPoints(seg ot.Segment) []struct{} {
-	switch seg.Op {
+func segPointCount(op ot.SegmentOp) int {
+	switch op {
 	case ot.SegmentOpMoveTo, ot.SegmentOpLineTo:
-		return make([]struct{}, 1)
+		return 1
 	case ot.SegmentOpQuadTo:
-		return make([]struct{}, 2)
+		return 2
 	case ot.SegmentOpCubeTo:
-		return make([]struct{}, 3)
+		return 3
 	default:
-		return nil
+		return 0
 	}
 }
 
@@ -248,25 +250,4 @@ func mix(a, b color.RGBA) color.RGBA {
 		B: uint8((int(a.B) + int(b.B)) / 2), //nolint:gosec
 		A: 0xff,
 	}
-}
-
-func minf(a, b float32) float32 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxf(a, b float32) float32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func maxi(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

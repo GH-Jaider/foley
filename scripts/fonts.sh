@@ -27,7 +27,7 @@ fetch() {
     return 0
   fi
   echo "fonts: bajando $name"
-  curl -fsSL -o "$dst" "$url"
+  curl -fsSL --retry 3 -o "$dst" "$url"
   got=$(sha256 "$dst")
   if [ "$got" != "$want" ]; then
     echo "fonts: HASH MISMATCH en $name" >&2
@@ -48,6 +48,8 @@ fetch JetBrainsMono-Bold.ttf "$jb/JetBrainsMono-Bold.ttf" \
   5590990c82e097397517f275f430af4546e1c45cff408bde4255dad142479dcb
 fetch JetBrainsMono-Italic.ttf "$jb/JetBrainsMono-Italic.ttf" \
   9d0a1f7a708e6af183f1193b7e81d40da294f5c67682c085d8401c60aac8ded4
+fetch JetBrainsMono-BoldItalic.ttf "$jb/JetBrainsMono-BoldItalic.ttf" \
+  4039d5ce0ed225bf9c8b2c8c6436290ae2f356b7e90d70fa666227238324aa3b
 fetch NotoColorEmoji.ttf "$noto/NotoColorEmoji.ttf" \
   39ee3c587e10e89669b9ff32703261d10d5f9c4dd5ad147b6b5a1c5200591817
 

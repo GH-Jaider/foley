@@ -47,6 +47,30 @@ func RunFull(t *testing.T, factory Factory) {
 		}
 	})
 
+	// The vtengine contract (Style.UnderlineColor) promises RESOLVED
+	// values: equal to the effective FG when the app never asked for a
+	// specific underline color (SGR 58), the requested color when it did,
+	// and back to FG after SGR 59. Black underlines must stay paintable —
+	// zero is never a sentinel.
+	t.Run("underline_color_resolved", func(t *testing.T) {
+		e := factory(t, defaultOpts())
+		defer func() { _ = e.Close() }()
+		mustWrite(t, e, "\x1b[4m\x1b[38;2;10;20;30mA"+ // underline, no SGR 58
+			"\x1b[58;2;200;100;50mB"+ // explicit underline color
+			"\x1b[59mC\x1b[0m") // SGR 59: back to following FG
+		f := snapshot(t, e)
+		fg := vtengine.RGB{R: 10, G: 20, B: 30}
+		if st := f.CellAt(0, 0).Style; st.UnderlineColor != fg || st.FG != fg {
+			t.Errorf("unset underline color = %+v (FG %+v), want resolved == FG", st.UnderlineColor, st.FG)
+		}
+		if got := f.CellAt(1, 0).Style.UnderlineColor; got != (vtengine.RGB{R: 200, G: 100, B: 50}) {
+			t.Errorf("explicit underline color = %+v, want the SGR 58 value", got)
+		}
+		if got := f.CellAt(2, 0).Style.UnderlineColor; got != fg {
+			t.Errorf("underline color after SGR 59 = %+v, want FG %+v", got, fg)
+		}
+	})
+
 	t.Run("true_color_and_palette", func(t *testing.T) {
 		opts := defaultOpts()
 		colors := vtengine.Colors{FG: vtengine.RGB{R: 200, G: 200, B: 200}}

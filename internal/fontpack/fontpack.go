@@ -20,6 +20,8 @@ func pinFor(name string) string {
 		return "5590990c82e097397517f275f430af4546e1c45cff408bde4255dad142479dcb"
 	case "JetBrainsMono-Italic.ttf":
 		return "9d0a1f7a708e6af183f1193b7e81d40da294f5c67682c085d8401c60aac8ded4"
+	case "JetBrainsMono-BoldItalic.ttf":
+		return "4039d5ce0ed225bf9c8b2c8c6436290ae2f356b7e90d70fa666227238324aa3b"
 	case "NotoColorEmoji.ttf":
 		return "39ee3c587e10e89669b9ff32703261d10d5f9c4dd5ad147b6b5a1c5200591817"
 	default:
@@ -30,10 +32,11 @@ func pinFor(name string) string {
 // Pack holds the raw bytes of the pinned fonts. The rasterizer parses
 // them with its text stack; fontpack stays parser-agnostic on purpose.
 type Pack struct {
-	Text       []byte
-	TextBold   []byte
-	TextItalic []byte
-	Emoji      []byte
+	Text           []byte
+	TextBold       []byte
+	TextItalic     []byte
+	TextBoldItalic []byte
+	Emoji          []byte
 }
 
 // Load reads and hash-verifies the pinned fonts from dir. Any missing or
@@ -59,6 +62,9 @@ func Load(dir string) (*Pack, error) {
 		return nil, err
 	}
 	if p.TextItalic, err = read("JetBrainsMono-Italic.ttf"); err != nil {
+		return nil, err
+	}
+	if p.TextBoldItalic, err = read("JetBrainsMono-BoldItalic.ttf"); err != nil {
 		return nil, err
 	}
 	if p.Emoji, err = read("NotoColorEmoji.ttf"); err != nil {

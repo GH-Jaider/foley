@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"github.com/go-text/typesetting/font"
+
+	"github.com/GH-Jaider/foley/internal/testassets"
 )
 
 func TestEmojiCBDTExposed(t *testing.T) {
 	f, err := os.Open("../fontpack/fonts/NotoColorEmoji.ttf")
-	if err != nil {
-		t.Skip(err)
-	}
+	testassets.Require(t, err, "make fonts")
 	defer func() { _ = f.Close() }()
 	face, err := font.ParseTTF(f)
 	if err != nil {

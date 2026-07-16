@@ -15,6 +15,7 @@ import (
 	"github.com/GH-Jaider/foley/internal/fontpack"
 	"github.com/GH-Jaider/foley/internal/ptyx"
 	"github.com/GH-Jaider/foley/internal/raster"
+	"github.com/GH-Jaider/foley/internal/testassets"
 	"github.com/GH-Jaider/foley/internal/vtengine"
 	"github.com/GH-Jaider/foley/internal/vtengine/ghostty"
 )
@@ -25,9 +26,7 @@ import (
 // FOLEY_PHOTO_OUT to keep the PNG.
 func TestPipelinePhoto(t *testing.T) {
 	pack, err := fontpack.Load(filepath.Join("..", "..", "fontpack", "fonts"))
-	if err != nil {
-		t.Skipf("fontpack: %v", err)
-	}
+	testassets.Require(t, err, "make fonts")
 	r, err := raster.New(raster.Options{Pack: pack, FontSizePx: 16, Scale: 2})
 	if err != nil {
 		t.Fatal(err)

@@ -35,8 +35,8 @@ type Options struct {
 type Rasterizer struct {
 	opts Options
 
-	text, bold, italic *font.Face
-	emoji              *font.Face
+	text, bold, italic, boldItalic *font.Face
+	emoji                          *font.Face
 
 	sizePx    int // FontSizePx * Scale
 	cellW     int
@@ -68,6 +68,7 @@ const (
 	faceRegular faceStyle = iota
 	faceBold
 	faceItalic
+	faceBoldItalic
 )
 
 // New parses the pack's faces and computes the cell metrics that the
@@ -95,6 +96,9 @@ func New(opts Options) (*Rasterizer, error) {
 	}
 	if r.italic, err = font.ParseTTF(bytes.NewReader(opts.Pack.TextItalic)); err != nil {
 		return nil, fmt.Errorf("raster: italic face: %w", err)
+	}
+	if r.boldItalic, err = font.ParseTTF(bytes.NewReader(opts.Pack.TextBoldItalic)); err != nil {
+		return nil, fmt.Errorf("raster: bold-italic face: %w", err)
 	}
 	if r.emoji, err = font.ParseTTF(bytes.NewReader(opts.Pack.Emoji)); err != nil {
 		return nil, fmt.Errorf("raster: emoji face: %w", err)
@@ -127,16 +131,16 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 	// 1. Theme background.
 	fillRect(dst, dst.Bounds(), rgba(f.Colors.BG))
 	// 2. Below-background placements, then explicit cell backgrounds.
-	if err := r.drawPlacements(dst, f, src, placements[vtengine.LayerBelowBG]); err != nil {
+	if err := r.drawPlacements(dst, src, placements[vtengine.LayerBelowBG]); err != nil {
 		return nil, err
 	}
 	r.drawCellBackgrounds(dst, f)
 	// 3. Below-text placements, text and decorations, above-text.
-	if err := r.drawPlacements(dst, f, src, placements[vtengine.LayerBelowText]); err != nil {
+	if err := r.drawPlacements(dst, src, placements[vtengine.LayerBelowText]); err != nil {
 		return nil, err
 	}
 	r.drawText(dst, f)
-	if err := r.drawPlacements(dst, f, src, placements[vtengine.LayerAboveText]); err != nil {
+	if err := r.drawPlacements(dst, src, placements[vtengine.LayerAboveText]); err != nil {
 		return nil, err
 	}
 	// 4. Cursor on top.

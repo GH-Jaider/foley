@@ -1,6 +1,6 @@
 GOLANGCI_VERSION := 2.12.2
 
-.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures fonts e2e-linux e2e-darwin lint-version engine-lib
+.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures fonts e2e-linux e2e-darwin lint-version engine-lib engine-clean
 
 build:
 	go build ./...
@@ -42,6 +42,13 @@ e2e-linux e2e-darwin:
 
 engine-lib:
 	scripts/engine-lib.sh
+
+# Retira los artefactos Docker de engine-lib (volumen-cache de zig + imagen).
+# El cache acelera rebuilds del mismo pin; tras un bump de pin o para
+# recuperar disco, esto es todo lo que hay que borrar.
+engine-clean:
+	docker volume rm -f foley-zig-cache
+	docker rmi -f foley-engine-build
 
 fonts:
 	scripts/fonts.sh

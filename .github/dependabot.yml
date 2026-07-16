@@ -1,0 +1,13 @@
+# Mantiene frescos los pins por SHA de los actions y las deps Go: cada
+# bump llega como PR revisable (los majors nuevos incluidos) y la golden
+# suite del CI decide si entra. Nunca auto-merge.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/GH-Jaider/foley/internal/ptyx"
+	"github.com/GH-Jaider/foley/internal/testassets"
 	"github.com/GH-Jaider/foley/internal/vtengine"
 	"github.com/GH-Jaider/foley/internal/vtengine/ghostty"
 	"github.com/GH-Jaider/foley/key"
@@ -22,9 +23,8 @@ import (
 // produces CSI-u — which the fixture receives and reports back in hex.
 func TestInputEndToEnd(t *testing.T) {
 	const probe = "testdata/bin/keyprobe"
-	if _, err := os.Stat(probe); err != nil {
-		t.Skipf("fixture %s missing — run `make fixtures` first", probe)
-	}
+	_, err := os.Stat(probe)
+	testassets.Require(t, err, "make fixtures")
 
 	p, err := ptyx.Start(ptyx.Options{
 		Command: []string{probe},

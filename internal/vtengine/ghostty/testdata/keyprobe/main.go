@@ -27,8 +27,10 @@ func main() {
 	buf := make([]byte, 256)
 	for reads := 0; reads < 8; reads++ {
 		if len(acc) > 0 {
-			// Partial sequence in hand: bound the wait for the rest.
-			_ = os.Stdin.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+			// Partial sequence in hand: bound the wait for the rest. The
+			// bytes are already in flight through a local pty, so this is
+			// pure headroom — sized for heavily loaded CI runners.
+			_ = os.Stdin.SetReadDeadline(time.Now().Add(2 * time.Second))
 		}
 		n, err := os.Stdin.Read(buf)
 		acc = append(acc, buf[:n]...)
