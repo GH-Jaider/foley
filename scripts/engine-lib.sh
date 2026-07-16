@@ -1,28 +1,33 @@
 #!/bin/sh
-# Construye libghostty-vt.a PINEADA para los targets de v1 (ADR-010).
+# Construye libghostty-vt.a PINEADA (ADR-010).
 #
-# POSIX sh a propósito: este script corre en macOS (donde /bin/bash es 3.2
-# desde 2007 y jamás se actualizará — GPLv3) Y en CI Linux. Nada de
-# bashismos; shellcheck -s sh es el gate.
+# Uso: scripts/engine-lib.sh [goos-goarch ...]
+#   Sin argumentos construye los 4 targets de v1; con argumentos, solo los
+#   pedidos (p. ej. `scripts/engine-lib.sh linux-amd64` en CI).
 #
-# El pin vive en internal/vtengine/ghostty/libbuild/build.zig.zon (URL del
-# commit + hash de contenido verificado por zig). El build corre en Docker
-# porque zig 0.15.x no linka en macOS 26 (SDK). Los targets darwin salen
-# cross-compilados y se re-empacan con libtool de Apple (su ld exige una
-# alineación de miembros que el archiver de zig no produce).
+# POSIX sh a propósito: corre en macOS (bash 3.2 eterno) y en CI Linux.
+# El build corre en Docker (zig 0.15.x no linka en macOS 26); el contenedor
+# detecta su propia arquitectura para bajar el zig correcto. Los targets
+# darwin se re-empacan con libtool de Apple (alineación del archiver de
+# zig) cuando el host es macOS.
 #
-# Además regenera include/ (headers + LICENSE) DESDE EL MISMO TARBALL DEL
-# PIN, para que headers y .a no puedan divergir. Nunca editar include/ a
-# mano.
-#
-# Salida: internal/vtengine/ghostty/lib/<goos-goarch>/libghostty-vt.a (+ .sha256)
-# — gitignoradas: reproducibles desde el pin.
+# Regenera include/ (headers + LICENSE) DESDE EL MISMO TARBALL DEL PIN para
+# que headers y .a no puedan divergir. Nunca editar include/ a mano.
 set -eu
 
 cd "$(dirname "$0")/.."
 root=$(pwd)
 pkg=internal/vtengine/ghostty
 img=foley-engine-build
+wanted="$*"
+
+wants() {
+  [ -z "$wanted" ] && return 0
+  case " $wanted " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 sha256() {
   if command -v shasum >/dev/null 2>&1; then
@@ -35,8 +40,9 @@ sha256() {
 docker build -q -t "$img" - <<'EOF' >/dev/null
 FROM debian:bookworm
 RUN apt-get update -qq && apt-get install -y -qq curl xz-utils ca-certificates >/dev/null && rm -rf /var/lib/apt/lists/*
-RUN cd /opt && (curl -fsSLO https://ziglang.org/download/0.15.2/zig-aarch64-linux-0.15.2.tar.xz \
-    || curl -fsSLO https://ziglang.org/download/0.15.2/zig-linux-aarch64-0.15.2.tar.xz) \
+RUN cd /opt && arch=$(uname -m) \
+    && (curl -fsSLO "https://ziglang.org/download/0.15.2/zig-${arch}-linux-0.15.2.tar.xz" \
+        || curl -fsSLO "https://ziglang.org/download/0.15.2/zig-linux-${arch}-0.15.2.tar.xz") \
     && tar xf zig-*.tar.xz && rm zig-*.tar.xz && mv zig-* zig
 ENV PATH="/opt/zig:${PATH}"
 EOF
@@ -54,22 +60,38 @@ cp -R "$srcdir/include" "$pkg/include"
 cp "$srcdir/LICENSE" "$pkg/include/LICENSE"
 
 # --- .a por target (ABI gnu explícita: los runners de CI son glibc) ---------
-printf '%s\n' \
-  "aarch64-linux-gnu linux-arm64" \
-  "x86_64-linux-gnu linux-amd64" \
-  "aarch64-macos darwin-arm64" \
-  "x86_64-macos darwin-amd64" |
-while read -r zt out; do
+# El cliente HTTP de zig 0.15 es flaky (HttpConnectionClosing en fetches de
+# deps transitivas). El volumen persiste /root/.cache/zig entre corridas para
+# que cada reintento avance en vez de re-fetchear todo desde cero.
+build() {
+  zt=$1
+  out=$2
+  wants "$out" || return 0
   echo "engine-lib: $zt -> lib/$out"
-  docker run --rm -v "$root":/repo -w "/repo/$pkg/libbuild" "$img" \
-    zig build "-Dtarget=$zt" --prefix "zig-out/$out"
+  n=0
+  until docker run --rm -v foley-zig-cache:/root/.cache/zig \
+      -v "$root":/repo -w "/repo/$pkg/libbuild" "$img" \
+      zig build "-Dtarget=$zt" --prefix "zig-out/$out"; do
+    n=$((n + 1))
+    if [ "$n" -ge 3 ]; then
+      echo "engine-lib: $out falló tras $n intentos" >&2
+      exit 1
+    fi
+    echo "engine-lib: fetch flaky de zig — reintento $n/3"
+  done
   mkdir -p "$pkg/lib/$out"
   cp "$pkg/libbuild/zig-out/$out/lib/libghostty-vt-static.a" "$pkg/lib/$out/libghostty-vt.a"
-done
+}
+
+build aarch64-linux-gnu linux-arm64
+build x86_64-linux-gnu linux-amd64
+build aarch64-macos darwin-arm64
+build x86_64-macos darwin-amd64
 
 # --- re-empacado darwin (solo posible donde vive libtool de Apple) ----------
 if [ "$(uname -s)" = Darwin ]; then
   for out in darwin-arm64 darwin-amd64; do
+    wants "$out" || continue
     dir=$pkg/lib/$out
     [ -f "$dir/libghostty-vt.a" ] || continue
     work=$(mktemp -d)
@@ -83,12 +105,12 @@ if [ "$(uname -s)" = Darwin ]; then
     echo "engine-lib: $out re-empacada con libtool"
   done
 else
-  echo "engine-lib: AVISO — targets darwin sin re-empacar (correr en macOS o repack en CI)"
+  echo "engine-lib: AVISO — targets darwin (si se pidieron) sin re-empacar: correr en macOS"
 fi
 
 # --- checksums ---------------------------------------------------------------
 for dir in "$pkg"/lib/*/; do
-  a=$dir/libghostty-vt.a
+  a=${dir%/}/libghostty-vt.a
   [ -f "$a" ] || continue
   sha256 "$a" > "$a.sha256"
   printf 'engine-lib: %s...  %s\n' "$(cut -c1-16 <"$a.sha256")" "$a"
