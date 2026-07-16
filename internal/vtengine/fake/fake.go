@@ -183,9 +183,19 @@ func (e *Engine) Close() error {
 // SetCell writes a grapheme with a style at (x, y) and marks the frame
 // dirty.
 func (e *Engine) SetCell(x, y int, grapheme string, st vtengine.Style) {
+	e.SetGrapheme(x, y, grapheme, 1, st)
+}
+
+// SetGrapheme writes a grapheme with an explicit cell width (2 = wide,
+// leaving the following spacer cell empty), for raster tests.
+func (e *Engine) SetGrapheme(x, y int, grapheme string, width int, st vtengine.Style) {
+	// Mimic real engines: an unset (zero) underline color resolves to FG.
+	if st.UnderlineColor == (vtengine.RGB{}) {
+		st.UnderlineColor = st.FG
+	}
 	c := &e.cells[y*e.geo.Cols+x]
 	c.Runes = []rune(grapheme)
-	c.Width = 1
+	c.Width = uint8(width) //nolint:gosec // puppet control, test-sized values
 	c.Style = st
 	e.dirty = true
 }

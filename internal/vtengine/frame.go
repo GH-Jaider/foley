@@ -21,8 +21,11 @@ const (
 
 // Style is the complete resolved visual style of one cell.
 type Style struct {
-	FG             RGB
-	BG             RGB
+	FG RGB
+	BG RGB
+	// UnderlineColor is ALWAYS resolved by engines: it equals FG when the
+	// application did not request a specific underline color, so black
+	// (0,0,0) is a legitimate, paintable value — never a sentinel.
 	UnderlineColor RGB
 	Underline      UnderlineStyle
 

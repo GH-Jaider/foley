@@ -32,6 +32,8 @@ linters:
             - $gostd
             - github.com/GH-Jaider/foley
             - github.com/creack/pty
+            - github.com/go-text/typesetting
+            - golang.org/x/image
             - golang.org/x/sys
             - golang.org/x/term
         # internal/ptyx: segundo sitio sancionado de os/exec — spawnea EL
@@ -45,6 +47,8 @@ linters:
             - $gostd
             - github.com/GH-Jaider/foley
             - github.com/creack/pty
+            - github.com/go-text/typesetting
+            - golang.org/x/image
             - golang.org/x/sys
             - golang.org/x/term
           deny:
@@ -62,6 +66,8 @@ linters:
             - $gostd
             - github.com/GH-Jaider/foley
             - github.com/creack/pty
+            - github.com/go-text/typesetting
+            - golang.org/x/image
             - golang.org/x/sys
             - golang.org/x/term
           deny:
@@ -81,6 +87,8 @@ linters:
             - $gostd
             - github.com/GH-Jaider/foley
             - github.com/creack/pty
+            - github.com/go-text/typesetting
+            - golang.org/x/image
             - golang.org/x/sys
             - golang.org/x/term
           deny:
@@ -103,6 +111,8 @@ linters:
             - $gostd
             - github.com/GH-Jaider/foley
             - github.com/creack/pty
+            - github.com/go-text/typesetting
+            - golang.org/x/image
             - golang.org/x/sys
             - golang.org/x/term
           deny:

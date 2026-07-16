@@ -12,3 +12,6 @@ internal/vtengine/ghostty/libbuild/.zig-cache/
 
 # fixtures compiladas (make fixtures)
 internal/vtengine/ghostty/testdata/bin/
+
+# fuentes pineadas (scripts/fonts.sh)
+internal/fontpack/fonts/

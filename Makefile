@@ -1,6 +1,6 @@
 GOLANGCI_VERSION := 2.12.2
 
-.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures e2e-linux e2e-darwin lint-version engine-lib
+.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures fonts e2e-linux e2e-darwin lint-version engine-lib
 
 build:
 	go build ./...
@@ -42,3 +42,6 @@ e2e-linux e2e-darwin:
 
 engine-lib:
 	scripts/engine-lib.sh
+
+fonts:
+	scripts/fonts.sh
