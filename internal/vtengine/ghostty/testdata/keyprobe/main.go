@@ -1,14 +1,16 @@
 // keyprobe is a test fixture: it puts its tty in raw mode (like any real
 // TUI), enables the kitty keyboard protocol (push flags=1), announces
-// READY, then reports the first burst of bytes it reads from the tty as a
-// hex line and exits. It lets the input e2e test prove that foley's
-// engine tracks the application's keyboard mode and encodes keys
-// accordingly.
+// READY, then reads until it has a complete CSI-u sequence (terminated by
+// 'u') — tolerating kernel-split reads — reports it as a hex line and
+// exits. It lets the input e2e test prove that foley's engine tracks the
+// application's keyboard mode and encodes keys accordingly.
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -20,12 +22,21 @@ func main() {
 	}
 	_, _ = os.Stdout.WriteString("\x1b[>1u") // push kitty keyboard flags
 	_, _ = os.Stdout.WriteString("READY\r\n")
+
+	var acc []byte
 	buf := make([]byte, 256)
-	n, err := os.Stdin.Read(buf)
-	if n > 0 {
-		fmt.Printf("HEX:%x\r\n", buf[:n])
+	for reads := 0; reads < 8; reads++ {
+		if len(acc) > 0 {
+			// Partial sequence in hand: bound the wait for the rest.
+			_ = os.Stdin.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+		}
+		n, err := os.Stdin.Read(buf)
+		acc = append(acc, buf[:n]...)
+		if bytes.ContainsRune(acc, 'u') || err != nil {
+			break
+		}
 	}
-	if err != nil {
-		os.Exit(1)
+	if len(acc) > 0 {
+		fmt.Printf("HEX:%x\r\n", acc)
 	}
 }

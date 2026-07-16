@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,8 +17,10 @@ import (
 // ErrClosed is returned by operations on a closed Proc.
 var ErrClosed = errors.New("ptyx: proc is closed")
 
-// Winsize is the pty size in cells and pixels. Pixel dimensions matter:
-// kitty-graphics-aware TUIs read them (TIOCGWINSZ) to compute cell size.
+// Winsize is the pty size in cells and pixels. Pixel dimensions are NOT
+// optional for foley's use case: kitty-graphics-aware TUIs read them
+// (TIOCGWINSZ) to compute the cell size, and zeros make them misbehave or
+// disable graphics. The driver always passes Cols*CellW × Rows*CellH.
 type Winsize struct {
 	Cols, Rows int
 	XPix, YPix int
@@ -53,6 +56,7 @@ type Proc struct {
 	cmd    *exec.Cmd
 	master *os.File
 	chunks chan Chunk
+	done   chan struct{} // closed by Close; unblocks a stalled chunk send
 
 	closeOnce sync.Once
 	waitOnce  sync.Once
@@ -83,7 +87,12 @@ func Start(opts Options) (*Proc, error) {
 		return nil, fmt.Errorf("ptyx: start %q: %w", opts.Command[0], err)
 	}
 
-	p := &Proc{cmd: cmd, master: master, chunks: make(chan Chunk, 64)}
+	p := &Proc{
+		cmd:    cmd,
+		master: master,
+		chunks: make(chan Chunk, 64),
+		done:   make(chan struct{}),
+	}
 	go p.readLoop()
 	return p, nil
 }
@@ -91,7 +100,7 @@ func Start(opts Options) (*Proc, error) {
 func hasEnv(env []string, name string) bool {
 	prefix := name + "="
 	for _, kv := range env {
-		if len(kv) >= len(prefix) && kv[:len(prefix)] == prefix {
+		if strings.HasPrefix(kv, prefix) {
 			return true
 		}
 	}
@@ -99,6 +108,9 @@ func hasEnv(env []string, name string) bool {
 }
 
 func (p *Proc) readLoop() {
+	// Reap the child once output ends, even if the caller never calls
+	// Wait or Close (waitOnce makes this race-free with user Waits).
+	defer func() { _ = p.Wait() }()
 	defer close(p.chunks)
 	buf := make([]byte, 32*1024)
 	for {
@@ -106,7 +118,13 @@ func (p *Proc) readLoop() {
 		if n > 0 {
 			data := make([]byte, n)
 			copy(data, buf[:n])
-			p.chunks <- Chunk{Data: data, Time: time.Now()}
+			select {
+			case p.chunks <- Chunk{Data: data, Time: time.Now()}:
+			case <-p.done:
+				// Consumer is gone and Close was called: stop instead of
+				// blocking forever on a full channel.
+				return
+			}
 		}
 		if err != nil {
 			// EOF, or EIO once the child side is gone: normal shutdown.
@@ -173,6 +191,7 @@ func (p *Proc) Close() error {
 		p.mu.Lock()
 		p.closed = true
 		p.mu.Unlock()
+		close(p.done)
 		if p.cmd.Process != nil {
 			_ = p.cmd.Process.Kill()
 		}

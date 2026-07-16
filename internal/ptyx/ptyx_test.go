@@ -21,7 +21,7 @@ func collect(t *testing.T, p *ptyx.Proc, timeout time.Duration) []ptyx.Chunk {
 			}
 			out = append(out, c)
 		case <-deadline:
-			t.Fatalf("timeout esperando chunks (got %d)", len(out))
+			t.Fatalf("timeout waiting for chunks (got %d)", len(out))
 		}
 	}
 }
@@ -46,12 +46,12 @@ func TestEchoThroughPty(t *testing.T) {
 
 	chunks := collect(t, p, 5*time.Second)
 	got := joined(chunks)
-	// El pty aplica ONLCR: \n sale como \r\n.
+	// The pty applies ONLCR: \n comes out as \r\n.
 	if !strings.Contains(got, "hola foley\r\n") {
 		t.Fatalf("output = %q", got)
 	}
 	if len(chunks) == 0 || chunks[0].Time.IsZero() {
-		t.Fatal("chunks sin timestamp")
+		t.Fatal("chunks missing timestamps")
 	}
 	if err := p.Wait(); err != nil {
 		t.Fatalf("Wait: %v", err)
@@ -73,11 +73,11 @@ func TestTimestampsAdvanceAcrossBursts(t *testing.T) {
 		t.Fatalf("output = %q", joined(chunks))
 	}
 	if len(chunks) < 2 {
-		t.Fatalf("esperaba ≥2 chunks (ráfagas separadas), got %d", len(chunks))
+		t.Fatalf("expected >=2 chunks (separate bursts), got %d", len(chunks))
 	}
 	gap := chunks[len(chunks)-1].Time.Sub(chunks[0].Time)
 	if gap < 100*time.Millisecond {
-		t.Fatalf("timestamps no reflejan la pausa: gap=%v", gap)
+		t.Fatalf("timestamps do not reflect the pause: gap=%v", gap)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestWriteReachesChild(t *testing.T) {
 	}
 	defer func() { _ = p.Close() }()
 
-	time.Sleep(100 * time.Millisecond) // deja que stty/read arranquen
+	time.Sleep(100 * time.Millisecond) // let stty/read start up
 	if _, err := p.Write([]byte("ping\r")); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestCloseIsIdempotentAndUnblocks(t *testing.T) {
 	}
 	done := make(chan struct{})
 	go func() {
-		for range p.Chunks() { //nolint:revive // drenar hasta cierre
+		for range p.Chunks() { //nolint:revive // drain until closed
 		}
 		close(done)
 	}()
@@ -143,9 +143,9 @@ func TestCloseIsIdempotentAndUnblocks(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("el read-loop no se destrabó tras Close")
+		t.Fatal("read loop did not unblock after Close")
 	}
 	if _, err := p.Write([]byte("x")); err == nil {
-		t.Fatal("Write tras Close debe fallar")
+		t.Fatal("Write after Close must fail")
 	}
 }

@@ -23,7 +23,7 @@ import (
 func TestInputEndToEnd(t *testing.T) {
 	const probe = "testdata/bin/keyprobe"
 	if _, err := os.Stat(probe); err != nil {
-		t.Skipf("fixture %s no existe — corre `make fixtures`", probe)
+		t.Skipf("fixture %s missing — run `make fixtures` first", probe)
 	}
 
 	p, err := ptyx.Start(ptyx.Options{
@@ -53,7 +53,7 @@ func TestInputEndToEnd(t *testing.T) {
 			case c, ok := <-p.Chunks():
 				if !ok {
 					if !until() {
-						t.Fatalf("pty cerrado esperando %s; salida cruda: %q", what, raw.String())
+						t.Fatalf("pty closed while waiting for %s; raw output: %q", what, raw.String())
 					}
 					return
 				}
@@ -62,15 +62,15 @@ func TestInputEndToEnd(t *testing.T) {
 					t.Fatal(err)
 				}
 			case <-deadline:
-				t.Fatalf("timeout esperando %s; salida cruda: %q", what, raw.String())
+				t.Fatalf("timeout waiting for %s; raw output: %q", what, raw.String())
 			}
 		}
 	}
 
-	// 1. La app arranca y activa el kitty keyboard protocol.
+	// 1. The app starts and enables the kitty keyboard protocol.
 	pump(func() bool { return strings.Contains(raw.String(), "READY") }, "READY")
 
-	// 2. El motor vio el push de flags: Escape debe codificarse como CSI-u.
+	// 2. The engine saw the flag push: Escape must encode as CSI-u.
 	esc, err := e.EncodeKey(vtengine.KeyEvent{Key: key.Named(key.NameEscape)})
 	if err != nil {
 		t.Fatal(err)
@@ -79,17 +79,17 @@ func TestInputEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 3. La app reporta en hex exactamente lo que recibió.
+	// 3. The app reports exactly what it received, in hex.
 	pump(func() bool { return strings.Contains(raw.String(), "HEX:") }, "HEX")
 	m := regexp.MustCompile(`HEX:([0-9a-f]+)`).FindStringSubmatch(raw.String())
 	if m == nil {
-		t.Fatalf("sin línea HEX en %q", raw.String())
+		t.Fatalf("no HEX line in %q", raw.String())
 	}
 	got, err := hex.DecodeString(m[1])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !regexp.MustCompile(`^\x1b\[27(;\d+)?u$`).Match(got) {
-		t.Fatalf("la app recibió %q — se esperaba Escape en CSI-u (el motor debía rastrear el push de flags)", got)
+		t.Fatalf("app received %q — expected CSI-u Escape (engine must track the flag push)", got)
 	}
 }

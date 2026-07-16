@@ -77,6 +77,21 @@ func RunBasic(t *testing.T, factory Factory) {
 		}
 	})
 
+	t.Run("clean_snapshot_not_dirty", func(t *testing.T) {
+		e := factory(t, defaultOpts())
+		defer func() { _ = e.Close() }()
+		mustWrite(t, e, "x")
+		_ = snapshot(t, e) // consumes the dirty state
+		f := snapshot(t, e)
+		if f.Dirty {
+			t.Fatal("second snapshot without writes must report Dirty=false (render loops rely on it to skip frames)")
+		}
+		mustWrite(t, e, "y")
+		if f2 := snapshot(t, e); !f2.Dirty {
+			t.Fatal("snapshot after a write must report Dirty=true")
+		}
+	})
+
 	t.Run("frame_reuse", func(t *testing.T) {
 		e := factory(t, defaultOpts())
 		defer func() { _ = e.Close() }()
