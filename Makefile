@@ -16,8 +16,9 @@ lint: lint-version lint-sh
 
 # shellcheck lee el shebang de cada script y aplica el dialecto correcto
 # (engine-lib.sh es POSIX sh; codemap-check.sh es bash 3.2-compatible).
+# Los scripts de examples/ se shippean: mismo gate.
 lint-sh:
-	shellcheck scripts/*.sh
+	shellcheck scripts/*.sh examples/*/*.sh
 
 fmt: lint-version
 	golangci-lint fmt

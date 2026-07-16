@@ -7,6 +7,13 @@ Render scripted, VHS-style demos of terminal apps — no terminal window, no scr
 
 Library first (Go), CLI second. Familiar VHS-style DSL (`Type`, `Sleep`, `Wait`, `Set`, `Output`). Deterministic mode renders faster than real time; realtime mode sees every byte your app emits — no frame is ever missed.
 
+## Examples
+
+Any VHS tape runs unchanged — the entire upstream example corpus is
+vendored and conformance-tested. `examples/` adds what VHS cannot
+record, starting with a demo that transmits an image through the kitty
+graphics protocol.
+
 ## Status
 
 Pre-alpha — no releases yet. The core pipeline is proven end to end: a real process on a pty, the embedded engine, and the rasterizer produce byte-identical frames across macOS and Linux, arm64 and amd64, verified in CI on every push. Recording (clocks, waits) and encoding are in progress.

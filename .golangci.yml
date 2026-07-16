@@ -8,6 +8,12 @@
 # prohibiciones (deny). Ningún archivo matchea dos zonas.
 version: "2"
 
+run:
+  # El binding cgo y los e2e viven tras el tag: sin esto, el linter
+  # jamás los analiza (agujero descubierto en la parada de M8).
+  build-tags:
+    - ghosttyvt
+
 linters:
   default: none
   enable:

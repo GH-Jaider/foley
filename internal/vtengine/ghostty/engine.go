@@ -62,6 +62,7 @@ type Engine struct {
 	closed bool
 }
 
+//nolint:gochecknoglobals // process-wide C callback registration must happen exactly once
 var installPNGDecoder sync.Once
 
 // New creates a libghostty-vt engine.
