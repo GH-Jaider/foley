@@ -37,7 +37,7 @@ func (r *Rasterizer) drawSpriteCell(dst *image.RGBA, f *vtengine.Frame, x, y int
 	if cell.Style.Faint {
 		fg = mix(fg, bg)
 	}
-	blitMask(dst, r.spriteMask(cell.Runes[0]), x*r.cellW, y*r.cellH, fg)
+	blitMask(dst, r.spriteMask(cell.Runes[0]), r.orgX+x*r.cellW, r.orgY+y*r.cellH, fg)
 	r.drawDecorations(dst, f, x, y)
 }
 

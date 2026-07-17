@@ -115,7 +115,7 @@ func TestCLIValidate(t *testing.T) {
 	good := filepath.Join(dir, "good.tape")
 	writeFile(t, good, "Output d.gif\nType \"hi\"\nEnter\n")
 	warny := filepath.Join(dir, "warny.tape")
-	writeFile(t, warny, "Output d.gif\nSet WindowBar Colorful\nCtrl+Enter\n")
+	writeFile(t, warny, "Output d.gif\nSet CursorBlink false\nCtrl+Enter\n")
 	bad := filepath.Join(dir, "bad.tape")
 	writeFile(t, bad, "Foo bar\n")
 
@@ -130,7 +130,7 @@ func TestCLIValidate(t *testing.T) {
 		if exit != 0 {
 			t.Fatalf("exit = %d (warnings must not fail validation): %s", exit, stderr)
 		}
-		if !strings.Contains(stderr, "WindowBar") || !strings.Contains(stderr, "Ctrl+Enter") {
+		if !strings.Contains(stderr, "CursorBlink") || !strings.Contains(stderr, "Ctrl+Enter") {
 			t.Fatalf("stderr lacks the expected warnings: %s", stderr)
 		}
 		if !strings.Contains(stderr, warny+":") {

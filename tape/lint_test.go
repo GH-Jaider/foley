@@ -13,14 +13,14 @@ import (
 // and chord-degradation warnings Run emits, available before any pty
 // exists — and gated by the same options.
 func TestLintReportsStaticWarningsWithoutRunning(t *testing.T) {
-	tp, err := tape.Parse("Output d.gif\nSet WindowBar Colorful\nSet Framerate 30\nCtrl+Enter\nType \"hi\"\n")
+	tp, err := tape.Parse("Output d.gif\nSet CursorBlink false\nSet Framerate 30\nCtrl+Enter\nType \"hi\"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	det := tape.Lint(tp, tape.RunOptions{Mode: foley.Deterministic})
 	joined := strings.Join(det, "\n")
-	for _, want := range []string{"WindowBar", "Framerate", "Ctrl+Enter"} {
+	for _, want := range []string{"CursorBlink", "Framerate", "Ctrl+Enter"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("deterministic lint lacks %q:\n%s", want, joined)
 		}

@@ -73,14 +73,12 @@ Screenshot captura.png
 	if len(rep.Outputs) != 2 {
 		t.Fatalf("outputs = %v", rep.Outputs)
 	}
-	var staged bool
+	// Chrome is RENDERED since the dress round — a WindowBar warning
+	// would mean it silently regressed to staged.
 	for _, w := range rep.Warnings {
 		if strings.Contains(w, "WindowBar") {
-			staged = true
+			t.Fatalf("WindowBar warned as staged, but chrome is implemented: %v", rep.Warnings)
 		}
-	}
-	if !staged {
-		t.Fatalf("WindowBar must warn loudly; warnings = %v", rep.Warnings)
 	}
 
 	f, err := os.Open(gifPath) //nolint:gosec // path built from TempDir

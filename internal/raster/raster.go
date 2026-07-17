@@ -27,6 +27,10 @@ type Options struct {
 	FontSizePx int
 	// Scale multiplies every metric (2 = native supersampling).
 	Scale int
+	// Window configures the chrome around the grid (VHS parity: margin,
+	// window bar, padding, rounded corners). Zero value = no chrome, the
+	// canvas is exactly the grid.
+	Window Window
 }
 
 // Rasterizer turns engine frames into RGBA images. It caches parsed
@@ -51,6 +55,12 @@ type Rasterizer struct {
 	sprites map[rune]*glyphMask
 	emojis  map[font.GID]*image.RGBA
 	kitty   map[kittyKey]*image.RGBA
+
+	// orgX, orgY offset every grid drawing operation into the window
+	// canvas (scaled px). Zero without chrome.
+	orgX, orgY int
+	// marginBuf caches a canvas-scaled MarginFill image.
+	marginBuf *image.RGBA
 }
 
 type glyphKey struct {
@@ -106,6 +116,8 @@ func New(opts Options) (*Rasterizer, error) {
 		return nil, fmt.Errorf("raster: emoji face: %w", err)
 	}
 	r.computeMetrics()
+	ox, oy := opts.Window.contentOrigin()
+	r.orgX, r.orgY = ox*opts.Scale, oy*opts.Scale
 	return r, nil
 }
 
@@ -124,14 +136,22 @@ func (r *Rasterizer) LogicalCellSize() (w, h int) {
 func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA) (*image.RGBA, error) {
 	w := f.Geometry.Cols * r.cellW
 	h := f.Geometry.Rows * r.cellH
+	if win := r.opts.Window; win.enabled() {
+		w, h = win.CanvasW*r.opts.Scale, win.CanvasH*r.opts.Scale
+	}
 	if dst == nil || dst.Bounds().Dx() != w || dst.Bounds().Dy() != h {
 		dst = image.NewRGBA(image.Rect(0, 0, w, h))
 	}
 
 	placements := splitLayers(f.Graphics.Placements)
 
-	// 1. Theme background.
-	fillRect(dst, dst.Bounds(), rgba(f.Colors.BG))
+	// 1. Theme background — or the full window chrome (margin fill, bar,
+	// terminal background incl. the visual padding) when configured.
+	if r.opts.Window.enabled() {
+		r.drawChrome(dst, rgba(f.Colors.BG))
+	} else {
+		fillRect(dst, dst.Bounds(), rgba(f.Colors.BG))
+	}
 	// 2. Below-background placements, then explicit cell backgrounds.
 	if err := r.drawPlacements(dst, src, placements[vtengine.LayerBelowBG]); err != nil {
 		return nil, err
@@ -145,8 +165,10 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 	if err := r.drawPlacements(dst, src, placements[vtengine.LayerAboveText]); err != nil {
 		return nil, err
 	}
-	// 4. Cursor on top.
+	// 4. Cursor on top; rounded corners re-reveal the margin fill LAST,
+	// masking the whole window block like VHS does.
 	r.drawCursor(dst, f)
+	r.roundCorners(dst)
 	return dst, nil
 }
 
@@ -189,7 +211,8 @@ func effectiveColors(st vtengine.Style, f *vtengine.Frame) (bg, fg color.RGBA) {
 }
 
 func (r *Rasterizer) cellRect(x, y, cells int) image.Rectangle {
-	return image.Rect(x*r.cellW, y*r.cellH, (x+cells)*r.cellW, (y+1)*r.cellH)
+	return image.Rect(r.orgX+x*r.cellW, r.orgY+y*r.cellH,
+		r.orgX+(x+cells)*r.cellW, r.orgY+(y+1)*r.cellH)
 }
 
 func rgba(c vtengine.RGB) color.RGBA {

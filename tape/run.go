@@ -86,12 +86,21 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		env = append(env, k+"="+v)
 	}
 
+	bar, err := windowBarFor(t.Settings.WindowBar)
+	if err != nil {
+		return rep, err
+	}
 	rec, err := foley.New(foley.Options{
 		Command:         sh.command,
 		Env:             env,
 		PixelWidth:      t.Settings.Width,
 		PixelHeight:     t.Settings.Height,
 		PixelPadding:    t.Settings.Padding,
+		Margin:          t.Settings.Margin,
+		MarginFill:      t.Settings.MarginFill,
+		WindowBar:       bar,
+		WindowBarSize:   t.Settings.WindowBarSize,
+		BorderRadius:    t.Settings.BorderRadius,
 		FontSize:        t.Settings.FontSize,
 		Theme:           theme,
 		FontsDir:        opts.FontsDir,
@@ -192,8 +201,6 @@ func warnStaged(t *Tape, mode foley.Mode, warn func(string, ...any)) {
 			warn("Set FontFamily %q: foley pins JetBrains Mono for determinism; the requested font is ignored", t.Settings.FontFamily)
 		case "LetterSpacing", "LineHeight":
 			warn("Set %s: typographic metrics are staged raster work; the font's own metrics are used", name)
-		case "Margin", "MarginFill", "WindowBar", "WindowBarSize", "BorderRadius":
-			warn("Set %s: window chrome (margins/bar/corners) is staged raster work; the recording ships without it", name)
 		case "CursorBlink":
 			warn("Set CursorBlink: blinking is staged driver work; the cursor renders solid")
 		case "LoopOffset":
@@ -252,4 +259,22 @@ func chordName(m key.Mod) string {
 		parts = append(parts, "Shift")
 	}
 	return strings.Join(parts, "+")
+}
+
+// windowBarFor maps VHS's WindowBar names to the typed style. An
+// unknown value is a LOUD error — never a silently bare window.
+func windowBarFor(name string) (foley.WindowBarStyle, error) {
+	switch name {
+	case "":
+		return foley.WindowBarNone, nil
+	case "Colorful":
+		return foley.WindowBarColorful, nil
+	case "ColorfulRight":
+		return foley.WindowBarColorfulRight, nil
+	case "Rings":
+		return foley.WindowBarRings, nil
+	case "RingsRight":
+		return foley.WindowBarRingsRight, nil
+	}
+	return foley.WindowBarNone, fmt.Errorf("tape: Set WindowBar %q: unknown style (Colorful|ColorfulRight|Rings|RingsRight)", name)
 }

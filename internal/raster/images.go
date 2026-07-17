@@ -25,8 +25,8 @@ func (r *Rasterizer) drawPlacements(dst *image.RGBA, src ImageSource, ps []vteng
 		if img == nil {
 			continue
 		}
-		ox := int(p.Col)*r.cellW + int(p.OffX)*r.opts.Scale
-		oy := int(p.Row)*r.cellH + int(p.OffY)*r.opts.Scale
+		ox := r.orgX + int(p.Col)*r.cellW + int(p.OffX)*r.opts.Scale
+		oy := r.orgY + int(p.Row)*r.cellH + int(p.OffY)*r.opts.Scale
 		dr := image.Rect(ox, oy, ox+int(p.PixelW)*r.opts.Scale, oy+int(p.PixelH)*r.opts.Scale)
 		sr := image.Rect(int(p.SrcX), int(p.SrcY), int(p.SrcX+p.SrcW), int(p.SrcY+p.SrcH))
 		if dr.Empty() || sr.Empty() {

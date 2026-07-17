@@ -123,7 +123,7 @@ func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) 
 	}
 
 	out := r.shape(runFace, runes)
-	baselineY := y*r.cellH + r.baseline
+	baselineY := r.orgY + y*r.cellH + r.baseline
 	for _, g := range out.Glyphs {
 		cellX := originCell[g.TextIndex()]
 		st := f.CellAt(cellX, y).Style
@@ -135,7 +135,7 @@ func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) 
 		if mask == nil {
 			continue
 		}
-		penX := cellX*r.cellW + g.XOffset.Round()
+		penX := r.orgX + cellX*r.cellW + g.XOffset.Round()
 		blitMask(dst, mask, penX, baselineY-g.YOffset.Round(), fg)
 	}
 

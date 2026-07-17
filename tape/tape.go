@@ -138,6 +138,7 @@ func vhsDefaults() Settings {
 		LineHeight:    1.0,
 		Framerate:     50,
 		TypingSpeed:   50 * time.Millisecond,
+		WindowBarSize: 30,
 		PlaybackSpeed: 1.0,
 		Width:         1200,
 		Height:        600,

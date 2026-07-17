@@ -23,10 +23,14 @@
 package foley
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
+	_ "image/jpeg" // MarginFill image decoding
+	_ "image/png"  // MarginFill image decoding
 	"io"
 	"os"
 	"path/filepath"
@@ -100,6 +104,19 @@ func DefaultTheme() Theme {
 	}
 }
 
+// WindowBarStyle selects VHS's window bar variants.
+type WindowBarStyle uint8
+
+// The window bar styles (VHS names: "Colorful", "ColorfulRight",
+// "Rings", "RingsRight").
+const (
+	WindowBarNone WindowBarStyle = iota
+	WindowBarColorful
+	WindowBarColorfulRight
+	WindowBarRings
+	WindowBarRingsRight
+)
+
 // Mode selects the recording clock.
 type Mode uint8
 
@@ -145,9 +162,22 @@ type Options struct {
 	//
 	//	cols = (PixelWidth - 2*PixelPadding) / cellW
 	//
-	// Used only when Cols/Rows are zero. The visual padding itself is
-	// staged raster work; the CONTENT grid already matches VHS exactly.
+	// Used only when Cols/Rows are zero — and with the Pixel fields set,
+	// the output canvas is EXACTLY PixelWidth x PixelHeight (times
+	// Scale), padding border included, like VHS.
 	PixelWidth, PixelHeight, PixelPadding int
+	// Window chrome (VHS parity), all in logical pixels of the canvas.
+	// Margin is the band outside the window block, painted MarginFill —
+	// a hex color ("#6B50FF", "#fff") or an image file path; empty means
+	// the theme background. WindowBar draws VHS's title bar (BarSize
+	// defaults to 30; WindowBarColor hex, empty = theme background).
+	// BorderRadius rounds the window block, revealing MarginFill.
+	Margin         int
+	MarginFill     string
+	WindowBar      WindowBarStyle
+	WindowBarSize  int
+	WindowBarColor string
+	BorderRadius   int
 	// FontSize is the font size in logical pixels. Default 16.
 	FontSize int
 	// Scale multiplies every metric for supersampling. Default 2.
@@ -235,6 +265,67 @@ func colorsFor(t Theme) *vtengine.Colors {
 	}
 	colors := theme.Resolve(conv(t.Foreground), conv(t.Background), conv(t.Cursor), ansi)
 	return &colors
+}
+
+// defaultWindowBarSize is VHS's bar height (style.go of the pin).
+const defaultWindowBarSize = 30
+
+// parseVHSHex parses VHS's accepted hex color forms: #RGB, RGB, #RRGGBB,
+// RRGGBB (draw.go parseHexColor of the pin) — but errors LOUDLY instead
+// of silently falling back to near-black.
+func parseVHSHex(s string) (color.RGBA, error) {
+	c := color.RGBA{A: 0xff}
+	var err error
+	switch len(s) {
+	case 7:
+		_, err = fmt.Sscanf(s, "#%02x%02x%02x", &c.R, &c.G, &c.B)
+	case 6:
+		_, err = fmt.Sscanf(s, "%02x%02x%02x", &c.R, &c.G, &c.B)
+	case 4:
+		_, err = fmt.Sscanf(s, "#%1x%1x%1x", &c.R, &c.G, &c.B)
+		c.R *= 17
+		c.G *= 17
+		c.B *= 17
+	case 3:
+		_, err = fmt.Sscanf(s, "%1x%1x%1x", &c.R, &c.G, &c.B)
+		c.R *= 17
+		c.G *= 17
+		c.B *= 17
+	default:
+		err = fmt.Errorf("hex color %q has invalid length", s)
+	}
+	if err != nil {
+		return color.RGBA{}, fmt.Errorf("invalid hex color %q", s)
+	}
+	return c, nil
+}
+
+// resolveFill turns Options.MarginFill into a raster fill. VHS's rule
+// disambiguates: a "#" prefix is a color, anything else is an image file
+// (video.go marginFillIsColor of the pin). Empty means the theme
+// background. Errors are LOUD — a recording with the wrong wallpaper is
+// worse than an error.
+func resolveFill(spec string, themeBG color.RGBA) (raster.Fill, error) {
+	switch {
+	case spec == "":
+		return raster.Fill{Color: themeBG}, nil
+	case strings.HasPrefix(spec, "#"):
+		c, err := parseVHSHex(spec)
+		if err != nil {
+			return raster.Fill{}, fmt.Errorf("foley: MarginFill: %w", err)
+		}
+		return raster.Fill{Color: c}, nil
+	default:
+		raw, err := os.ReadFile(spec) //nolint:gosec // the fill path is caller-provided configuration
+		if err != nil {
+			return raster.Fill{}, fmt.Errorf("foley: MarginFill: %w", err)
+		}
+		img, _, err := image.Decode(bytes.NewReader(raw))
+		if err != nil {
+			return raster.Fill{}, fmt.Errorf("foley: MarginFill %s: %w", spec, err)
+		}
+		return raster.Fill{Image: img}, nil
+	}
 }
 
 // Type presses each rune of s, spacing keystrokes by perKey.
@@ -466,19 +557,80 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("foley: fonts: %w (run scripts/fonts.sh and set FontsDir or $FOLEY_FONTS)", err)
 	}
-	ras, err := raster.New(raster.Options{Pack: pack, FontSizePx: opts.FontSize, Scale: opts.Scale})
+	// Chrome arithmetic is VHS's: margin and window bar EAT space from
+	// the terminal area; Width/Height stay the final canvas.
+	if opts.WindowBar != WindowBarNone && opts.WindowBarSize <= 0 {
+		opts.WindowBarSize = defaultWindowBarSize
+	}
+	barH := 0
+	if opts.WindowBar != WindowBarNone {
+		barH = opts.WindowBarSize
+	}
+
+	// Metrics need a probe rasterizer before the real one (cell size
+	// decides the grid, the grid decides the window geometry).
+	probe, err := raster.New(raster.Options{Pack: pack, FontSizePx: opts.FontSize, Scale: opts.Scale})
 	if err != nil {
 		return nil, err
 	}
-	cellW, cellH := ras.LogicalCellSize()
+	cellW, cellH := probe.LogicalCellSize()
+	pixelPath := opts.Cols <= 0 && opts.Rows <= 0 && opts.PixelWidth > 0
 	if opts.Cols <= 0 {
-		opts.Cols = (opts.PixelWidth - 2*opts.PixelPadding) / cellW
+		opts.Cols = (opts.PixelWidth - 2*opts.Margin - 2*opts.PixelPadding) / cellW
 	}
 	if opts.Rows <= 0 {
-		opts.Rows = (opts.PixelHeight - 2*opts.PixelPadding) / cellH
+		opts.Rows = (opts.PixelHeight - 2*opts.Margin - barH - 2*opts.PixelPadding) / cellH
 	}
 	if opts.Cols < 1 || opts.Rows < 1 {
-		return nil, fmt.Errorf("foley: grid resolves to %dx%d — pixel size too small for the font", opts.Cols, opts.Rows)
+		return nil, fmt.Errorf("foley: grid resolves to %dx%d — pixel size too small for the font (after margin/bar/padding)", opts.Cols, opts.Rows)
+	}
+
+	win := raster.Window{}
+	chromeWanted := opts.PixelPadding > 0 || opts.Margin > 0 || barH > 0 || opts.BorderRadius > 0
+	if pixelPath {
+		// Pixel path: the canvas is EXACTLY the declared size, always.
+		win.CanvasW, win.CanvasH = opts.PixelWidth, opts.PixelHeight
+	} else if chromeWanted {
+		// Grid path with chrome: the canvas grows around the grid.
+		win.CanvasW = opts.Cols*cellW + 2*(opts.Margin+opts.PixelPadding)
+		win.CanvasH = opts.Rows*cellH + 2*(opts.Margin+opts.PixelPadding) + barH
+	}
+	if win.CanvasW > 0 {
+		win.Padding = opts.PixelPadding
+		win.Margin = opts.Margin
+		win.BarSize = opts.WindowBarSize
+		win.Radius = opts.BorderRadius
+		switch opts.WindowBar {
+		case WindowBarNone:
+			win.Bar = raster.BarNone
+		case WindowBarColorful:
+			win.Bar = raster.BarColorful
+		case WindowBarColorfulRight:
+			win.Bar = raster.BarColorfulRight
+		case WindowBarRings:
+			win.Bar = raster.BarRings
+		case WindowBarRingsRight:
+			win.Bar = raster.BarRingsRight
+		}
+		bg := opts.Theme.Background
+		bgRGBA := color.RGBA{R: bg.R, G: bg.G, B: bg.B, A: 0xff}
+		win.MarginFill, err = resolveFill(opts.MarginFill, bgRGBA)
+		if err != nil {
+			return nil, err
+		}
+		win.BarColor = bgRGBA
+		if opts.WindowBarColor != "" {
+			c, err := parseVHSHex(opts.WindowBarColor)
+			if err != nil {
+				return nil, fmt.Errorf("foley: WindowBarColor: %w", err)
+			}
+			win.BarColor = c
+		}
+	}
+
+	ras, err := raster.New(raster.Options{Pack: pack, FontSizePx: opts.FontSize, Scale: opts.Scale, Window: win})
+	if err != nil {
+		return nil, err
 	}
 	geo := vtengine.Geometry{Cols: opts.Cols, Rows: opts.Rows, CellW: cellW, CellH: cellH}
 

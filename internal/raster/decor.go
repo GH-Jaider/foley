@@ -29,7 +29,7 @@ func (r *Rasterizer) drawDecorations(dst *image.RGBA, f *vtengine.Frame, x, y in
 		fill(image.Rect(x0, yy, x1, yy+th), fg)
 	}
 
-	uy := y*r.cellH + r.underline
+	uy := r.orgY + y*r.cellH + r.underline
 	// The contract guarantees UnderlineColor is resolved (== FG when the
 	// app did not set one), so it is used unconditionally — except under
 	// inverse video, where decorations follow the effective foreground.
@@ -64,10 +64,10 @@ func (r *Rasterizer) drawDecorations(dst *image.RGBA, f *vtengine.Frame, x, y in
 	}
 
 	if st.Strikethrough {
-		hline(y*r.cellH + r.baseline - r.sizePx/3)
+		hline(r.orgY + y*r.cellH + r.baseline - r.sizePx/3)
 	}
 	if st.Overline {
-		hline(y*r.cellH + th)
+		hline(r.orgY + y*r.cellH + th)
 	}
 }
 
