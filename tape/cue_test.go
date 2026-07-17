@@ -46,6 +46,10 @@ func TestCueScanner(t *testing.T) {
 			{"# foley: dress {\"windowBar\": \"Colorfull\"}", "windowBar"},
 			{"# foley: dress {\"padding\": -1}", "negative"},
 			{"# foley: dress {\"marginFill\": \"#12345\"}", "hex"},
+			{"# foley: dress {\"theme\": \"NoSuchTheme\"}", "unknown theme"},
+			{"# foley: dress {\"theme\": 42}", "curated name string"},
+			{"# foley: dress {\"theme\": {\"background\": \"#12345\"}}", "background"},
+			{"# foley: dress {\"fontSize\": 0}", "fontSize"},
 			{"Type \"x\" # foley: dress warp", "own line"},
 			{"Type \"x\" # foley: dross warp", "own line"},
 		}
@@ -119,6 +123,71 @@ func TestDressPrecedence(t *testing.T) {
 	if tp.Settings != before {
 		t.Fatal("effectiveSettings MUTATED the parsed tape — parse once, run many must hold")
 	}
+}
+
+// TestDressPaintFields: theme and fontSize are dress-able paint
+// (ADR-014 v2) — they land where the tape stayed silent and lose to
+// explicit Sets, like every other dress field.
+func TestDressPaintFields(t *testing.T) {
+	dress := `{"theme": "Dracula", "fontSize": 18}`
+	t.Run("dress_fills_silence", func(t *testing.T) {
+		tp, err := tape.Parse("Output d.gif\n# foley: dress " + dress + "\nType \"x\"\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.Theme.Name != "Dracula" {
+			t.Fatalf("Theme = %+v, want the dress's Dracula", settings.Theme)
+		}
+		if settings.FontSize != 18 {
+			t.Fatalf("FontSize = %d, want the dress's 18", settings.FontSize)
+		}
+	})
+	t.Run("explicit_sets_win", func(t *testing.T) {
+		src := "Output d.gif\n# foley: dress " + dress +
+			"\nSet Theme \"Catppuccin Mocha\"\nSet FontSize 30\nType \"x\"\n"
+		tp, err := tape.Parse(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.Theme.Name != "Catppuccin Mocha" {
+			t.Fatalf("Theme = %+v — the tape's explicit Set Theme must beat the dress", settings.Theme)
+		}
+		if settings.FontSize != 30 {
+			t.Fatalf("FontSize = %d — the tape's explicit Set FontSize must beat the dress", settings.FontSize)
+		}
+	})
+	t.Run("inline_palette_form", func(t *testing.T) {
+		tp, err := tape.Parse("Output d.gif\n# foley: dress {\"theme\": {\"background\": \"#101010\"}}\nType \"x\"\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(settings.Theme.JSON, "#101010") {
+			t.Fatalf("Theme = %+v, want the inline palette", settings.Theme)
+		}
+	})
+	t.Run("expansion_prints_paint", func(t *testing.T) {
+		size := 18
+		d := tape.Dress{
+			Theme:    &tape.DressTheme{Ref: tape.ThemeRef{Name: "Dracula"}},
+			FontSize: &size,
+		}
+		exp := strings.Join(d.Expansion(), "\n")
+		if !strings.Contains(exp, `Set Theme "Dracula"`) || !strings.Contains(exp, "Set FontSize 18") {
+			t.Fatalf("expansion lacks the paint fields:\n%s", exp)
+		}
+	})
 }
 
 // TestBuiltinWardrobe: every embedded dress parses (a broken preset is a

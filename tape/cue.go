@@ -162,6 +162,16 @@ func parseDressJSON(raw []byte) (Dress, error) {
 // validateDress rejects values the record stage would choke on — the
 // error must blame the DRESS, not a Set the tape never wrote.
 func validateDress(d Dress) error {
+	if d.Theme != nil {
+		// Resolve NOW: a typo'd theme name or a malformed palette must
+		// die in `foley validate`, never at record time.
+		if _, err := resolveTheme(d.Theme.Ref); err != nil {
+			return fmt.Errorf("theme: %w", err)
+		}
+	}
+	if d.FontSize != nil && *d.FontSize <= 0 {
+		return fmt.Errorf("fontSize %d: must be positive", *d.FontSize)
+	}
 	if d.WindowBar != nil {
 		switch *d.WindowBar {
 		case "", "Colorful", "ColorfulRight", "Rings", "RingsRight", "LinuxControls", "GnomeCSD":

@@ -59,8 +59,10 @@ func Themes() ([]string, error) {
 	return names, nil
 }
 
-// resolveTheme turns a tape's ThemeRef into a foley.Theme: by curated
-// name, by inline JSON literal, or the foley default when unset.
+// resolveTheme turns a ThemeRef into a foley.Theme: by curated name,
+// by inline JSON literal, or the foley default when unset. Errors are
+// UNFRAMED — each caller blames its own knob (a tape's Set Theme vs a
+// dress's theme field), never a knob the user did not write.
 func resolveTheme(ref ThemeRef) (foley.Theme, error) {
 	switch {
 	case ref.IsZero():
@@ -68,20 +70,20 @@ func resolveTheme(ref ThemeRef) (foley.Theme, error) {
 	case ref.JSON != "":
 		var vt vhsTheme
 		if err := json.Unmarshal([]byte(ref.JSON), &vt); err != nil {
-			return foley.Theme{}, fmt.Errorf("tape: Set Theme JSON: %w", err)
+			return foley.Theme{}, fmt.Errorf("palette JSON: %w", err)
 		}
 		return themeFromVHS(vt)
 	default:
 		var all []vhsTheme
 		if err := json.Unmarshal(themesJSON, &all); err != nil {
-			return foley.Theme{}, fmt.Errorf("tape: vendored themes.json: %w", err)
+			return foley.Theme{}, fmt.Errorf("vendored themes.json (build defect): %w", err)
 		}
 		for _, vt := range all {
 			if vt.Name == ref.Name {
 				return themeFromVHS(vt)
 			}
 		}
-		return foley.Theme{}, fmt.Errorf("tape: unknown theme %q (curated list vendored from VHS)", ref.Name)
+		return foley.Theme{}, fmt.Errorf("unknown theme %q (`foley themes` lists the curated set)", ref.Name)
 	}
 }
 
@@ -101,7 +103,7 @@ func themeFromVHS(vt vhsTheme) (foley.Theme, error) {
 		var c foley.RGB
 		c, err = parseHexColor(hexs)
 		if err != nil {
-			err = fmt.Errorf("tape: theme %s %s: %w", vt.Name, field, err)
+			err = fmt.Errorf("theme %s %s: %w", vt.Name, field, err)
 			return
 		}
 		*dst = c

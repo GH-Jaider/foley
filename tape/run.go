@@ -86,9 +86,11 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if _, err := execx.LookPath(sh.command[0]); err != nil {
 		return rep, fmt.Errorf("tape: Set Shell %s: %w", settings.Shell, err)
 	}
+	// Neutral frame: the effective ThemeRef may come from Set Theme OR a
+	// dress (though dress themes were already validated at parse).
 	theme, err := resolveTheme(settings.Theme)
 	if err != nil {
-		return rep, err
+		return rep, fmt.Errorf("tape: theme: %w", err)
 	}
 
 	env := append(os.Environ(), sh.env...)

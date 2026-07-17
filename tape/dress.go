@@ -2,6 +2,7 @@ package tape
 
 import (
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -17,17 +18,52 @@ import (
 // Pointer fields distinguish "not part of this dress" from an explicit
 // zero (a dress may force Padding 0). The JSON shape is public API.
 type Dress struct {
-	Margin         *int    `json:"margin,omitempty"`
-	MarginFill     *string `json:"marginFill,omitempty"`
-	WindowBar      *string `json:"windowBar,omitempty"`
-	WindowBarSize  *int    `json:"windowBarSize,omitempty"`
-	WindowBarColor *string `json:"windowBarColor,omitempty"`
-	BorderRadius   *int    `json:"borderRadius,omitempty"`
-	Padding        *int    `json:"padding,omitempty"`
+	// Paint doctrine (ADR-014 v2): a dress may change everything about
+	// how the footage is PAINTED — palette, typography, chrome — and
+	// nothing about what happened (grid size, shell, timing).
+	Theme          *DressTheme `json:"theme,omitempty"`
+	FontSize       *int        `json:"fontSize,omitempty"`
+	Margin         *int        `json:"margin,omitempty"`
+	MarginFill     *string     `json:"marginFill,omitempty"`
+	WindowBar      *string     `json:"windowBar,omitempty"`
+	WindowBarSize  *int        `json:"windowBarSize,omitempty"`
+	WindowBarColor *string     `json:"windowBarColor,omitempty"`
+	BorderRadius   *int        `json:"borderRadius,omitempty"`
+	Padding        *int        `json:"padding,omitempty"`
 	// Foley-only primitives (no VHS Set exists for them): static bar
 	// title and its alignment ("center" default, or "left").
 	WindowTitle *string `json:"windowTitle,omitempty"`
 	TitleAlign  *string `json:"titleAlign,omitempty"`
+}
+
+// DressTheme accepts the two `Set Theme` forms inside dress JSON: a
+// curated theme name ("Catppuccin Mocha") or an inline palette object.
+type DressTheme struct {
+	Ref ThemeRef
+}
+
+// UnmarshalJSON classifies the value by shape — anything else is a
+// loud error naming both accepted forms.
+func (t *DressTheme) UnmarshalJSON(raw []byte) error {
+	trimmed := strings.TrimSpace(string(raw))
+	if strings.HasPrefix(trimmed, "{") {
+		t.Ref = ThemeRef{JSON: trimmed}
+		return nil
+	}
+	var name string
+	if err := json.Unmarshal(raw, &name); err != nil {
+		return errors.New("theme must be a curated name string or an inline palette object")
+	}
+	t.Ref = ThemeRef{Name: name}
+	return nil
+}
+
+// MarshalJSON round-trips the same two forms.
+func (t DressTheme) MarshalJSON() ([]byte, error) {
+	if t.Ref.JSON != "" {
+		return []byte(t.Ref.JSON), nil
+	}
+	return json.Marshal(t.Ref.Name)
 }
 
 // dressesFS embeds the built-in wardrobe. The presets are foley's own
@@ -107,6 +143,12 @@ func ResolveDress(ref DressRef) (Dress, error) {
 // defaults < dress < explicit Sets (ADR-014). It writes into the given
 // COPY of the settings; the parsed Tape itself is never mutated.
 func applyDress(s *Settings, explicit map[string]bool, d Dress) {
+	if d.Theme != nil && !explicit["Theme"] {
+		s.Theme = d.Theme.Ref
+	}
+	if d.FontSize != nil && !explicit["FontSize"] {
+		s.FontSize = *d.FontSize
+	}
 	if d.Margin != nil && !explicit["Margin"] {
 		s.Margin = *d.Margin
 	}
@@ -141,6 +183,17 @@ func applyDress(s *Settings, explicit map[string]bool, d Dress) {
 // wardrobe's spotting view (`foley wardrobe <name>`).
 func (d Dress) Expansion() []string {
 	var out []string
+	// The outfit's base layer first: palette, then type, then chrome.
+	if d.Theme != nil {
+		if d.Theme.Ref.JSON != "" {
+			out = append(out, "Set Theme "+d.Theme.Ref.JSON)
+		} else {
+			out = append(out, "Set Theme "+strconv.Quote(d.Theme.Ref.Name))
+		}
+	}
+	if d.FontSize != nil {
+		out = append(out, "Set FontSize "+strconv.Itoa(*d.FontSize))
+	}
 	if d.WindowBar != nil {
 		out = append(out, "Set WindowBar "+*d.WindowBar)
 	}
