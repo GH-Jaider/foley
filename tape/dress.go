@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,15 +22,19 @@ type Dress struct {
 	// Paint doctrine (ADR-014 v2): a dress may change everything about
 	// how the footage is PAINTED — palette, typography, chrome — and
 	// nothing about what happened (grid size, shell, timing).
-	Theme          *DressTheme `json:"theme,omitempty"`
-	FontSize       *int        `json:"fontSize,omitempty"`
-	Margin         *int        `json:"margin,omitempty"`
-	MarginFill     *string     `json:"marginFill,omitempty"`
-	WindowBar      *string     `json:"windowBar,omitempty"`
-	WindowBarSize  *int        `json:"windowBarSize,omitempty"`
-	WindowBarColor *string     `json:"windowBarColor,omitempty"`
-	BorderRadius   *int        `json:"borderRadius,omitempty"`
-	Padding        *int        `json:"padding,omitempty"`
+	Theme    *DressTheme `json:"theme,omitempty"`
+	FontSize *int        `json:"fontSize,omitempty"`
+	// Font is a .ttf/.otf path, a pinned catalog family name, or a
+	// per-style family object (ADR-015) — it fills FontFamily/
+	// FontFiles, so an explicit Set FontFamily beats it.
+	Font           *DressFont `json:"font,omitempty"`
+	Margin         *int       `json:"margin,omitempty"`
+	MarginFill     *string    `json:"marginFill,omitempty"`
+	WindowBar      *string    `json:"windowBar,omitempty"`
+	WindowBarSize  *int       `json:"windowBarSize,omitempty"`
+	WindowBarColor *string    `json:"windowBarColor,omitempty"`
+	BorderRadius   *int       `json:"borderRadius,omitempty"`
+	Padding        *int       `json:"padding,omitempty"`
 	// Foley-only primitives (no VHS Set exists for them): static bar
 	// title and its alignment ("center" default, or "left").
 	WindowTitle *string `json:"windowTitle,omitempty"`
@@ -64,6 +69,55 @@ func (t DressTheme) MarshalJSON() ([]byte, error) {
 		return []byte(t.Ref.JSON), nil
 	}
 	return json.Marshal(t.Ref.Name)
+}
+
+// FontFiles names a user font family, one file per style. Regular is
+// required (metrics derive from it); absent styles render with the
+// regular face.
+type FontFiles struct {
+	Regular    string `json:"regular"`
+	Bold       string `json:"bold,omitempty"`
+	Italic     string `json:"italic,omitempty"`
+	BoldItalic string `json:"boldItalic,omitempty"`
+}
+
+// IsZero reports an absent family.
+func (f FontFiles) IsZero() bool {
+	return f.Regular == "" && f.Bold == "" && f.Italic == "" && f.BoldItalic == ""
+}
+
+// DressFont is the dress `font` field: a string (a .ttf/.otf path or a
+// pinned catalog family name) or a per-style family object. Exactly
+// one of Single/Files is set.
+type DressFont struct {
+	Single string
+	Files  FontFiles
+}
+
+// UnmarshalJSON classifies the value by shape; the family object is
+// strict — a typo'd style key must never be a silent no-op.
+func (f *DressFont) UnmarshalJSON(raw []byte) error {
+	trimmed := strings.TrimSpace(string(raw))
+	if strings.HasPrefix(trimmed, "{") {
+		dec := json.NewDecoder(strings.NewReader(trimmed))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&f.Files); err != nil {
+			return fmt.Errorf("font family: %w", err)
+		}
+		return nil
+	}
+	if err := json.Unmarshal(raw, &f.Single); err != nil {
+		return errors.New("font must be a ./file.ttf path, a catalog family name, or a per-style object")
+	}
+	return nil
+}
+
+// MarshalJSON round-trips the same two forms.
+func (f DressFont) MarshalJSON() ([]byte, error) {
+	if f.Single != "" {
+		return json.Marshal(f.Single)
+	}
+	return json.Marshal(f.Files)
 }
 
 // dressesFS embeds the built-in wardrobe. The presets are foley's own
@@ -134,7 +188,34 @@ func ResolveDress(ref DressRef) (Dress, error) {
 		if err != nil {
 			return Dress{}, fmt.Errorf("tape: dress %s: %w", ref.Path, err)
 		}
+		d.rebase(filepath.Dir(ref.Path))
 		return d, nil
+	}
+}
+
+// rebase resolves the dress's OWN relative paths (font files, a margin
+// image) against the dress file's directory — the kit travels together
+// (parada F3): `dresses/brand.json` finds `dresses/brand.ttf` no matter
+// where foley runs. Names and absolute paths pass through; inline and
+// built-in dresses never reach here.
+func (d *Dress) rebase(dir string) {
+	join := func(p string) string {
+		if p == "" || filepath.IsAbs(p) {
+			return p
+		}
+		return filepath.Join(dir, p)
+	}
+	if d.Font != nil {
+		if d.Font.Single != "" && isFontPath(d.Font.Single) {
+			d.Font.Single = join(d.Font.Single)
+		}
+		d.Font.Files.Regular = join(d.Font.Files.Regular)
+		d.Font.Files.Bold = join(d.Font.Files.Bold)
+		d.Font.Files.Italic = join(d.Font.Files.Italic)
+		d.Font.Files.BoldItalic = join(d.Font.Files.BoldItalic)
+	}
+	if d.MarginFill != nil && !strings.HasPrefix(*d.MarginFill, "#") {
+		*d.MarginFill = join(*d.MarginFill)
 	}
 }
 
@@ -148,6 +229,14 @@ func applyDress(s *Settings, explicit map[string]bool, d Dress) {
 	}
 	if d.FontSize != nil && !explicit["FontSize"] {
 		s.FontSize = *d.FontSize
+	}
+	if d.Font != nil && !explicit["FontFamily"] {
+		if d.Font.Single != "" {
+			s.FontFamily = d.Font.Single
+			s.FontFiles = FontFiles{}
+		} else {
+			s.FontFiles = d.Font.Files
+		}
 	}
 	if d.Margin != nil && !explicit["Margin"] {
 		s.Margin = *d.Margin
@@ -193,6 +282,16 @@ func (d Dress) Expansion() []string {
 	}
 	if d.FontSize != nil {
 		out = append(out, "Set FontSize "+strconv.Itoa(*d.FontSize))
+	}
+	if d.Font != nil {
+		if d.Font.Single != "" {
+			out = append(out, "Set FontFamily "+strconv.Quote(d.Font.Single))
+		} else {
+			// The family form has no single Set; marked like the other
+			// foley-only primitives.
+			raw, _ := json.Marshal(d.Font.Files) //nolint:errchkjson // plain strings cannot fail
+			out = append(out, "(foley) Font "+string(raw))
+		}
 	}
 	if d.WindowBar != nil {
 		out = append(out, "Set WindowBar "+*d.WindowBar)

@@ -20,9 +20,29 @@ type ImageSource interface {
 	ImagePixels(id uint32) (vtengine.ImageData, error)
 }
 
+// UserFonts is a user-supplied primary font (ADR-015). A single file
+// fills Regular and serves every style; a family gives styles their
+// own files — absent styles fall back to the Regular face, keeping the
+// grid metrics whole. The primary drives cell metrics and titles the
+// window bar; the pack stays as per-cell coverage fallback, emoji stay
+// Noto, and block sprites stay synthesized.
+type UserFonts struct {
+	// Label names the font in errors and warnings (a file path or a
+	// catalog family name).
+	Label                             string
+	Regular, Bold, Italic, BoldItalic []byte
+}
+
+func (u UserFonts) empty() bool {
+	return len(u.Regular) == 0 && len(u.Bold) == 0 &&
+		len(u.Italic) == 0 && len(u.BoldItalic) == 0
+}
+
 // Options configures a Rasterizer.
 type Options struct {
 	Pack *fontpack.Pack
+	// UserFonts loads a user primary font over the pack (ADR-015).
+	UserFonts UserFonts
 	// FontSizePx is the glyph size in pixels at Scale 1.
 	FontSizePx int
 	// Scale multiplies every metric (2 = native supersampling).
@@ -41,6 +61,13 @@ type Rasterizer struct {
 
 	text, bold, italic, boldItalic *font.Face
 	emoji                          *font.Face
+	// user holds the primary faces per style slot (styleIdx order:
+	// regular, bold, italic, bold-italic); all nil without a user font,
+	// and absent family styles alias the user regular face.
+	user [4]*font.Face
+	// warnings collects assembly findings (e.g. a proportional user
+	// font) — the recorder surfaces them; the raster never prints.
+	warnings []string
 
 	sizePx    int // FontSizePx * Scale
 	cellW     int
@@ -67,24 +94,18 @@ type Rasterizer struct {
 	titleFG   color.RGBA
 }
 
+// glyphKey caches masks per FACE — the GID space belongs to a face, so
+// keying by anything less (a style enum) would blit wrong glyphs the
+// moment two faces share a key.
 type glyphKey struct {
-	style faceStyle
-	gid   font.GID
+	face *font.Face
+	gid  font.GID
 }
 
 type kittyKey struct {
 	id  uint32
 	gen uint64
 }
-
-type faceStyle uint8
-
-const (
-	faceRegular faceStyle = iota
-	faceBold
-	faceItalic
-	faceBoldItalic
-)
 
 // New parses the pack's faces and computes the cell metrics that the
 // engine geometry must match (Geometry.CellW/CellH = CellSize()).
@@ -119,10 +140,98 @@ func New(opts Options) (*Rasterizer, error) {
 	if r.emoji, err = font.ParseTTF(bytes.NewReader(opts.Pack.Emoji)); err != nil {
 		return nil, fmt.Errorf("raster: emoji face: %w", err)
 	}
+	if !opts.UserFonts.empty() {
+		if len(opts.UserFonts.Regular) == 0 {
+			return nil, fmt.Errorf("raster: user font %s: a family needs its regular face (metrics derive from it)", opts.UserFonts.Label)
+		}
+		parse := func(b []byte, style string) (*font.Face, error) {
+			if len(b) == 0 {
+				return nil, nil
+			}
+			f, perr := font.ParseTTF(bytes.NewReader(b))
+			if perr != nil {
+				return nil, fmt.Errorf("raster: user font %s (%s): %w", opts.UserFonts.Label, style, perr)
+			}
+			return f, nil
+		}
+		slots := [4][]byte{opts.UserFonts.Regular, opts.UserFonts.Bold, opts.UserFonts.Italic, opts.UserFonts.BoldItalic}
+		for i, b := range slots {
+			if r.user[i], err = parse(b, styleNames[i]); err != nil {
+				return nil, err
+			}
+		}
+		// Absent family styles alias the regular face: the weight is
+		// lost, the metrics are not.
+		for i := 1; i < 4; i++ {
+			if r.user[i] == nil {
+				r.user[i] = r.user[0]
+			}
+		}
+	}
 	r.computeMetrics()
+	r.checkUserFont()
 	ox, oy := opts.Window.contentOrigin()
 	r.orgX, r.orgY = ox*opts.Scale, oy*opts.Scale
 	return r, nil
+}
+
+// Warnings reports assembly findings for the recorder to surface. The
+// slice is a copy — callers cannot corrupt the rasterizer's record.
+func (r *Rasterizer) Warnings() []string {
+	return append([]string(nil), r.warnings...)
+}
+
+// styleNames labels the style slots in warnings, styleIdx order.
+var styleNames = [4]string{"regular", "bold", "italic", "bold-italic"} //nolint:gochecknoglobals // immutable label table
+
+// checkUserFont warns — never errors — on user fonts that will not
+// look like the user expects (ADR-015): missing basic latin (the grid
+// falls back to the pack for metrics and coverage), proportional
+// advances, or a family style whose advance disagrees with regular
+// (both make a ragged grid — almost always an accident, possibly an
+// artistic choice).
+func (r *Rasterizer) checkUserFont() {
+	if r.user[0] == nil {
+		return
+	}
+	if _, ok := r.user[0].NominalGlyph('M'); !ok {
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"user font %s lacks basic latin coverage; grid metrics and uncovered text fall back to the pinned pack",
+			r.opts.UserFonts.Label))
+		return
+	}
+	adv := -1
+	for _, rn := range []rune{'i', 'l', '1', '.', 'M', 'W', '@'} {
+		if _, ok := r.user[0].NominalGlyph(rn); !ok {
+			continue
+		}
+		a := r.shape(r.user[0], []rune{rn}).Glyphs[0].Advance.Round()
+		if adv < 0 {
+			adv = a
+			continue
+		}
+		if a != adv {
+			r.warnings = append(r.warnings, fmt.Sprintf(
+				"user font %s is not monospace (advances differ); the grid will look ragged",
+				r.opts.UserFonts.Label))
+			return
+		}
+	}
+	// A family style with a different 'M' advance breaks the grid the
+	// same way (real terminal families keep one advance across styles).
+	for i := 1; i < 4; i++ {
+		if r.user[i] == r.user[0] {
+			continue
+		}
+		if _, ok := r.user[i].NominalGlyph('M'); !ok {
+			continue
+		}
+		if r.shape(r.user[i], []rune{'M'}).Glyphs[0].Advance.Round() != adv {
+			r.warnings = append(r.warnings, fmt.Sprintf(
+				"user font %s: the %s face advance differs from regular; the grid will look ragged",
+				r.opts.UserFonts.Label, styleNames[i]))
+		}
+	}
 }
 
 // CellSize returns the cell size in output pixels (already scaled).

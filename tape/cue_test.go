@@ -2,6 +2,7 @@ package tape_test
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,6 +51,10 @@ func TestCueScanner(t *testing.T) {
 			{"# foley: dress {\"theme\": 42}", "curated name string"},
 			{"# foley: dress {\"theme\": {\"background\": \"#12345\"}}", "background"},
 			{"# foley: dress {\"fontSize\": 0}", "fontSize"},
+			{"# foley: dress {\"font\": \"Comic Sans\"}", "pinned catalog"},
+			{"# foley: dress {\"font\": {\"bold\": \"./b.ttf\"}}", "regular is required"},
+			{"# foley: dress {\"font\": {\"regular\": \"Fira Code\"}}", "not a font file path"},
+			{"# foley: dress {\"font\": {\"regulr\": \"./r.ttf\"}}", "regulr"},
 			{"Type \"x\" # foley: dress warp", "own line"},
 			{"Type \"x\" # foley: dross warp", "own line"},
 		}
@@ -182,12 +187,103 @@ func TestDressPaintFields(t *testing.T) {
 		d := tape.Dress{
 			Theme:    &tape.DressTheme{Ref: tape.ThemeRef{Name: "Dracula"}},
 			FontSize: &size,
+			Font:     &tape.DressFont{Single: "./brand.ttf"},
 		}
 		exp := strings.Join(d.Expansion(), "\n")
-		if !strings.Contains(exp, `Set Theme "Dracula"`) || !strings.Contains(exp, "Set FontSize 18") {
-			t.Fatalf("expansion lacks the paint fields:\n%s", exp)
+		for _, want := range []string{`Set Theme "Dracula"`, "Set FontSize 18", `Set FontFamily "./brand.ttf"`} {
+			if !strings.Contains(exp, want) {
+				t.Fatalf("expansion lacks %q:\n%s", want, exp)
+			}
 		}
 	})
+	t.Run("font_forms", func(t *testing.T) {
+		tp, err := tape.Parse("Output d.gif\n# foley: dress {\"font\": \"Fira Code\"}\nType \"x\"\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.FontFamily != "Fira Code" {
+			t.Fatalf("FontFamily = %q, want the catalog name Fira Code", settings.FontFamily)
+		}
+		tp, err = tape.Parse("Output d.gif\n# foley: dress {\"font\": {\"regular\": \"./r.ttf\", \"bold\": \"./b.ttf\"}}\nType \"x\"\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings, err = tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.FontFiles.Regular != "./r.ttf" || settings.FontFiles.Bold != "./b.ttf" {
+			t.Fatalf("FontFiles = %+v, want the family's ./r.ttf and ./b.ttf", settings.FontFiles)
+		}
+	})
+	t.Run("font_file_precedence", func(t *testing.T) {
+		tp, err := tape.Parse("Output d.gif\n# foley: dress {\"font\": \"./brand.ttf\"}\nType \"x\"\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.FontFamily != "./brand.ttf" {
+			t.Fatalf("FontFamily = %q, want the dress's ./brand.ttf", settings.FontFamily)
+		}
+		src := "Output d.gif\n# foley: dress {\"font\": \"./brand.ttf\"}\nSet FontFamily \"./mine.otf\"\nType \"x\"\n"
+		tp, err = tape.Parse(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings, err = tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.FontFamily != "./mine.otf" {
+			t.Fatalf("FontFamily = %q — the tape's explicit Set FontFamily must beat the dress", settings.FontFamily)
+		}
+	})
+}
+
+// TestDressRebase: paths INSIDE a dress file resolve against the dress
+// file's own directory — the kit travels together (parada F3). Catalog
+// names and hex fills pass through untouched.
+func TestDressRebase(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "dresses")
+	if err := os.MkdirAll(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	dress := `{"font": {"regular": "./brand.ttf"}, "marginFill": "bg.png"}`
+	path := filepath.Join(sub, "brand.json")
+	if err := os.WriteFile(path, []byte(dress), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := tape.ResolveDress(tape.DressRef{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(sub, "brand.ttf"); d.Font.Files.Regular != want {
+		t.Fatalf("font = %q, want rebased %q", d.Font.Files.Regular, want)
+	}
+	if want := filepath.Join(sub, "bg.png"); *d.MarginFill != want {
+		t.Fatalf("marginFill = %q, want rebased %q", *d.MarginFill, want)
+	}
+
+	named := `{"font": "Fira Code", "marginFill": "#101010"}`
+	path2 := filepath.Join(sub, "named.json")
+	if err := os.WriteFile(path2, []byte(named), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err = tape.ResolveDress(tape.DressRef{Path: path2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Font.Single != "Fira Code" || *d.MarginFill != "#101010" {
+		t.Fatalf("catalog name / hex fill must not rebase, got %q %q", d.Font.Single, *d.MarginFill)
+	}
 }
 
 // TestBuiltinWardrobe: every embedded dress parses (a broken preset is a

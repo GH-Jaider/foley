@@ -117,6 +117,12 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		WindowTitleLeft: settings.TitleAlign == "left",
 		BorderRadius:    settings.BorderRadius,
 		FontSize:        settings.FontSize,
+		FontFamily:      fontFamilyFor(settings.FontFamily),
+		FontFile:        fontFileFor(settings.FontFamily),
+		FontFiles: foley.FontFiles{
+			Regular: settings.FontFiles.Regular, Bold: settings.FontFiles.Bold,
+			Italic: settings.FontFiles.Italic, BoldItalic: settings.FontFiles.BoldItalic,
+		},
 		Theme:           theme,
 		FontsDir:        opts.FontsDir,
 		Mode:            opts.Mode,
@@ -127,6 +133,9 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return rep, err
 	}
 	defer func() { _ = rec.Close() }()
+	for _, w := range rec.AssemblyWarnings() {
+		warn("%s", w)
+	}
 
 	// PlaybackSpeed scales the recording: speed 2 halves every declared
 	// duration (the video plays twice as fast). Wall-clock waits are
@@ -232,13 +241,33 @@ func effectiveSettings(t *Tape, opts RunOptions) (Settings, error) {
 	return settings, nil
 }
 
+// fontFileFor maps the effective FontFamily to the recorder's FontFile:
+// the PATH form (ADR-015) loads that file.
+func fontFileFor(family string) string {
+	if isFontPath(family) {
+		return family
+	}
+	return ""
+}
+
+// fontFamilyFor maps the effective FontFamily to the recorder's
+// catalog lookup: the NAME form resolves against the pinned catalog
+// (an unknown name is a loud assembly warning, never a system font).
+func fontFamilyFor(family string) string {
+	if family == "" || isFontPath(family) {
+		return ""
+	}
+	return family
+}
+
 // warnStaged emits the ADR-008 tier-2/3 warnings — only for settings the
 // tape explicitly asked for.
 func warnStaged(t *Tape, mode foley.Mode, warn func(string, ...any)) {
 	for _, name := range t.Explicit {
 		switch name {
-		case "FontFamily":
-			warn("Set FontFamily %q: foley pins JetBrains Mono for determinism; the requested font is ignored", t.Settings.FontFamily)
+		// FontFamily no longer warns here: the PATH form loads that
+		// file and the NAME form resolves against the pinned catalog —
+		// an unknown name warns at assembly, catalog listed (ADR-015).
 		case "LetterSpacing", "LineHeight":
 			warn("Set %s: typographic metrics are staged raster work; the font's own metrics are used", name)
 		case "CursorBlink":

@@ -196,6 +196,23 @@ type Options struct {
 	// FontsDir holds the pinned fonts (see scripts/fonts.sh). Empty
 	// falls back to $FOLEY_FONTS, then "fonts".
 	FontsDir string
+	// FontFamily selects a font family by NAME from foley's pinned
+	// catalog (ADR-015; `foley fonts` lists it) — NEVER from the
+	// system: an unknown name is a loud assembly warning and the
+	// default family renders. Asking for the default by name is a
+	// no-op. Ignored when FontFile or FontFiles is set.
+	FontFamily string
+	// FontFile loads ONE user font file as the primary face (ADR-015):
+	// a CWD-relative .ttf/.otf that drives the cell metrics, titles
+	// the window bar and serves all four style slots. The pinned pack
+	// stays for coverage fallback, emoji stay Noto, block sprites stay
+	// synthesized. Determinism is parametrized: same tape + same font
+	// bytes → same frames. Empty = the pinned default.
+	FontFile string
+	// FontFiles loads a user font FAMILY, one file per style —
+	// Regular is required (metrics derive from it); absent styles
+	// render with the Regular face. Takes precedence over FontFile.
+	FontFiles FontFiles
 
 	// Mode selects the clock. Default Deterministic.
 	Mode Mode
@@ -226,6 +243,17 @@ type Recorder struct {
 	closed    bool
 	shots     int
 	finalText string
+
+	// assemblyWarnings surfaces raster findings (e.g. a proportional
+	// user font) — nothing in the pipeline is allowed to stay silent.
+	assemblyWarnings []string
+}
+
+// AssemblyWarnings reports findings from recorder assembly (ADR-015:
+// e.g. a proportional user font). The caller decides how to print them;
+// the slice is a copy.
+func (r *Recorder) AssemblyWarnings() []string {
+	return append([]string(nil), r.assemblyWarnings...)
 }
 
 // New starts the demo command on a fresh pty and prepares the pipeline.
@@ -558,6 +586,80 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
+// DefaultFontFamily is the pinned family recordings use unless a tape
+// asks otherwise.
+const DefaultFontFamily = fontpack.DefaultFamily
+
+// FontFamilies lists the pinned name catalog, sorted — the names
+// `Set FontFamily` resolves without touching the system (ADR-015).
+func FontFamilies() []string { return fontpack.Families() }
+
+// KnownFontFamily reports whether a name resolves in the catalog
+// (case- and spacing-insensitive).
+func KnownFontFamily(name string) bool { return fontpack.HasFamily(name) }
+
+// FontFiles names a user font family, one file per style (ADR-015).
+type FontFiles struct {
+	Regular, Bold, Italic, BoldItalic string
+}
+
+func (f FontFiles) empty() bool {
+	return f.Regular == "" && f.Bold == "" && f.Italic == "" && f.BoldItalic == ""
+}
+
+// resolveUserFonts turns the font options into the raster's user font:
+// FontFiles > FontFile > FontFamily (pinned catalog) > none. Explicit
+// file paths fail HARD on error (a typo'd path must not record); an
+// unknown catalog NAME degrades to the default with a loud warning —
+// the tape still records, like every VHS-parity degradation.
+func resolveUserFonts(opts Options) (raster.UserFonts, []string, error) {
+	var uf raster.UserFonts
+	switch {
+	case !opts.FontFiles.empty():
+		uf.Label = opts.FontFiles.Regular
+		for _, s := range []struct {
+			dst  *[]byte
+			path string
+		}{
+			{&uf.Regular, opts.FontFiles.Regular},
+			{&uf.Bold, opts.FontFiles.Bold},
+			{&uf.Italic, opts.FontFiles.Italic},
+			{&uf.BoldItalic, opts.FontFiles.BoldItalic},
+		} {
+			if s.path == "" {
+				continue
+			}
+			b, err := fontpack.LoadFile(s.path)
+			if err != nil {
+				return raster.UserFonts{}, nil, fmt.Errorf("foley: %w", err)
+			}
+			*s.dst = b
+		}
+	case opts.FontFile != "":
+		b, err := fontpack.LoadFile(opts.FontFile)
+		if err != nil {
+			return raster.UserFonts{}, nil, fmt.Errorf("foley: %w", err)
+		}
+		uf = raster.UserFonts{Label: opts.FontFile, Regular: b}
+	case opts.FontFamily != "":
+		fam, err := fontpack.LoadFamily(opts.FontsDir, opts.FontFamily)
+		if errors.Is(err, fontpack.ErrUnknownFamily) {
+			return raster.UserFonts{}, []string{err.Error()}, nil
+		}
+		if err != nil {
+			return raster.UserFonts{}, nil, fmt.Errorf("foley: fonts: %w (run scripts/fonts.sh and set FontsDir or $FOLEY_FONTS)", err)
+		}
+		if fam.Name == fontpack.DefaultFamily {
+			return raster.UserFonts{}, nil, nil // the pack IS this family
+		}
+		uf = raster.UserFonts{
+			Label: fam.Name, Regular: fam.Regular, Bold: fam.Bold,
+			Italic: fam.Italic, BoldItalic: fam.BoldItalic,
+		}
+	}
+	return uf, nil, nil
+}
+
 // assembleRecorder wires pty, engine, rasterizer, driver and sink. The
 // engine argument lets tests substitute the fake; New passes nil to get
 // the real one.
@@ -565,6 +667,10 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	pack, err := fontpack.Load(opts.FontsDir)
 	if err != nil {
 		return nil, fmt.Errorf("foley: fonts: %w (run scripts/fonts.sh and set FontsDir or $FOLEY_FONTS)", err)
+	}
+	userFonts, fontWarnings, err := resolveUserFonts(opts)
+	if err != nil {
+		return nil, err
 	}
 	// Chrome arithmetic is VHS's: margin and window bar EAT space from
 	// the terminal area; Width/Height stay the final canvas.
@@ -578,7 +684,10 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 
 	// Metrics need a probe rasterizer before the real one (cell size
 	// decides the grid, the grid decides the window geometry).
-	probe, err := raster.New(raster.Options{Pack: pack, FontSizePx: opts.FontSize, Scale: opts.Scale})
+	probe, err := raster.New(raster.Options{
+		Pack: pack, UserFonts: userFonts,
+		FontSizePx: opts.FontSize, Scale: opts.Scale,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -649,7 +758,10 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		}
 	}
 
-	ras, err := raster.New(raster.Options{Pack: pack, FontSizePx: opts.FontSize, Scale: opts.Scale, Window: win})
+	ras, err := raster.New(raster.Options{
+		Pack: pack, UserFonts: userFonts,
+		FontSizePx: opts.FontSize, Scale: opts.Scale, Window: win,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -728,10 +840,11 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	}
 
 	return &Recorder{
-		timeline:  timeline,
-		proc:      proc,
-		engine:    eng,
-		sink:      sink,
-		framesDir: framesDir,
+		timeline:         timeline,
+		proc:             proc,
+		engine:           eng,
+		sink:             sink,
+		framesDir:        framesDir,
+		assemblyWarnings: append(fontWarnings, ras.Warnings()...),
 	}, nil
 }

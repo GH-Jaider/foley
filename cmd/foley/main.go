@@ -93,6 +93,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runNew(args[1:], stdout, stderr)
 		case "wardrobe":
 			return runWardrobe(args[1:], stdout, stderr)
+		case "fonts":
+			return runFonts(args[1:], stdout, stderr)
 		}
 	}
 
@@ -553,6 +555,23 @@ func runWardrobe(args []string, stdout, stderr io.Writer) int {
 }
 
 // runThemes lists the vendored theme catalog, one name per line.
+// runFonts lists the pinned font family catalog — the names a
+// `Set FontFamily` (or a dress `font`) resolves without touching the
+// system (ADR-015). Your own fonts travel as ./file.ttf paths.
+func runFonts(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 0 {
+		_, _ = fmt.Fprintln(stderr, "usage: foley fonts")
+		return 2
+	}
+	for _, n := range foley.FontFamilies() {
+		if n == foley.DefaultFontFamily {
+			n += " (default)"
+		}
+		_, _ = fmt.Fprintln(stdout, n)
+	}
+	return 0
+}
+
 func runThemes(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 0 {
 		_, _ = fmt.Fprintln(stderr, "usage: foley themes")

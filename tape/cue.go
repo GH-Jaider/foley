@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/GH-Jaider/foley"
 )
 
 // Cue is one `# foley:` post-production line (ADR-014). VHS ignores
@@ -168,9 +170,25 @@ func validateDress(d Dress) error {
 		if _, err := resolveTheme(d.Theme.Ref); err != nil {
 			return fmt.Errorf("theme: %w", err)
 		}
+		// Inside a DRESS the palette is strict: Set Theme {json} drops
+		// unknown keys bug-for-bug with VHS (ADR'd parity), but our own
+		// namespace never swallows a typo'd field silently.
+		if d.Theme.Ref.JSON != "" {
+			dec := json.NewDecoder(strings.NewReader(d.Theme.Ref.JSON))
+			dec.DisallowUnknownFields()
+			var vt vhsTheme
+			if err := dec.Decode(&vt); err != nil {
+				return fmt.Errorf("theme: %w", err)
+			}
+		}
 	}
 	if d.FontSize != nil && *d.FontSize <= 0 {
 		return fmt.Errorf("fontSize %d: must be positive", *d.FontSize)
+	}
+	if d.Font != nil {
+		if err := validateDressFont(*d.Font); err != nil {
+			return err
+		}
 	}
 	if d.WindowBar != nil {
 		switch *d.WindowBar {
@@ -186,12 +204,19 @@ func validateDress(d Dress) error {
 			return fmt.Errorf("titleAlign %q unknown (center|left)", *d.TitleAlign)
 		}
 	}
-	for name, v := range map[string]*int{
-		"margin": d.Margin, "windowBarSize": d.WindowBarSize,
-		"borderRadius": d.BorderRadius, "padding": d.Padding,
+	// A slice, not a map: with two negative fields the blamed one must
+	// be the same on every run — even error text is deterministic here.
+	for _, f := range []struct {
+		name string
+		v    *int
+	}{
+		{"margin", d.Margin},
+		{"windowBarSize", d.WindowBarSize},
+		{"borderRadius", d.BorderRadius},
+		{"padding", d.Padding},
 	} {
-		if v != nil && *v < 0 {
-			return fmt.Errorf("%s %d is negative", name, *v)
+		if f.v != nil && *f.v < 0 {
+			return fmt.Errorf("%s %d is negative", f.name, *f.v)
 		}
 	}
 	if d.WindowBarColor != nil {
@@ -221,6 +246,40 @@ func validateHex(v, field string) error {
 		}
 	}
 	return nil
+}
+
+// validateDressFont checks the dress `font` field: the single form is
+// a .ttf/.otf path or a pinned catalog family name (never a system
+// font — a typo dies HERE, in `foley validate`); the family form needs
+// its regular face and path-form files.
+func validateDressFont(f DressFont) error {
+	if f.Single != "" {
+		if !isFontPath(f.Single) && !foley.KnownFontFamily(f.Single) {
+			return fmt.Errorf("font %q: not a ./file.ttf path and not in the pinned catalog (%s) — system fonts are non-deterministic, foley refuses them (ADR-015)",
+				f.Single, strings.Join(foley.FontFamilies(), ", "))
+		}
+		return nil
+	}
+	if f.Files.Regular == "" {
+		return errors.New("font family: regular is required (metrics derive from it)")
+	}
+	for _, p := range []string{f.Files.Regular, f.Files.Bold, f.Files.Italic, f.Files.BoldItalic} {
+		if p != "" && !isFontPath(p) {
+			return fmt.Errorf("font family: %q is not a font file path (.ttf/.otf)", p)
+		}
+	}
+	return nil
+}
+
+// isFontPath spots the FontFamily PATH form (ADR-015): a font FILE the
+// repo pins (deterministic input), vs a bare NAME resolved against the
+// pinned catalog (system fonts are refused).
+func isFontPath(s string) bool {
+	if strings.ContainsAny(s, "/\\") {
+		return true
+	}
+	l := strings.ToLower(s)
+	return strings.HasSuffix(l, ".ttf") || strings.HasSuffix(l, ".otf")
 }
 
 // cutOnSpace splits at the first whitespace run (space or tab — a tab

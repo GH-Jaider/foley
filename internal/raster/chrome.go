@@ -293,7 +293,8 @@ func (r *Rasterizer) drawBarTitle(dst *image.RGBA, rect image.Rectangle, barBG c
 // from the bar (55% of its height), into an alpha strip.
 func (r *Rasterizer) renderTitleStrip(title string, barPx int) *glyphMask {
 	px := max(8*r.opts.Scale, (barPx*11)/20)
-	out := r.shapeAt(r.text, []rune(title), px)
+	face := r.gridFace() // a user font titles its own window
+	out := r.shapeAt(face, []rune(title), px)
 	asc := out.LineBounds.Ascent.Round()
 	desc := -out.LineBounds.Descent.Round()
 	if asc <= 0 {
@@ -309,7 +310,7 @@ func (r *Rasterizer) renderTitleStrip(title string, barPx int) *glyphMask {
 	strip := image.NewAlpha(image.Rect(0, 0, width, asc+desc))
 	pen := 0
 	for _, g := range out.Glyphs {
-		if m := r.maskAt(r.text, g.GlyphID, px); m != nil {
+		if m := r.maskAt(face, g.GlyphID, px); m != nil {
 			blitAlpha(strip, m, pen+g.XOffset.Round(), asc-g.YOffset.Round())
 		}
 		pen += g.Advance.Round()

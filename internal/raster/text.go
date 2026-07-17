@@ -22,8 +22,21 @@ type glyphMask struct {
 	top   int
 }
 
+// gridFace is the face the grid derives from: the user regular when one
+// is loaded (ADR-015 — metrics follow the primary), the pack otherwise.
+// A primary without basic latin (no 'M') cannot drive cell metrics or
+// title shaping — the pack takes over and checkUserFont warns.
+func (r *Rasterizer) gridFace() *font.Face {
+	if r.user[0] != nil {
+		if _, ok := r.user[0].NominalGlyph('M'); ok {
+			return r.user[0]
+		}
+	}
+	return r.text
+}
+
 func (r *Rasterizer) computeMetrics() {
-	out := r.shape(r.text, []rune{'M'})
+	out := r.shape(r.gridFace(), []rune{'M'})
 	r.cellW = out.Glyphs[0].Advance.Round()
 	asc := out.LineBounds.Ascent.Round()
 	desc := -out.LineBounds.Descent.Round() // Descent is negative-down in typesetting
@@ -56,24 +69,64 @@ func (r *Rasterizer) shapeAt(face *font.Face, runes []rune, px int) shaping.Outp
 	})
 }
 
-func (r *Rasterizer) pickFace(st vtengine.Style) (*font.Face, faceStyle) {
+// styleIdx maps a cell style to its slot (regular, bold, italic,
+// bold-italic) — the order of Rasterizer.user and styleNames.
+func styleIdx(st vtengine.Style) int {
 	switch {
 	case st.Bold && st.Italic:
-		return r.boldItalic, faceBoldItalic
+		return 3
 	case st.Bold:
-		return r.bold, faceBold
+		return 1
 	case st.Italic:
-		return r.italic, faceItalic
+		return 2
 	default:
-		return r.text, faceRegular
+		return 0
 	}
 }
 
-// isEmojiCell: the text face cannot render the base rune but the emoji
-// face can.
+// pickFace maps a style to the PACK's face for it.
+func (r *Rasterizer) pickFace(st vtengine.Style) *font.Face {
+	switch styleIdx(st) {
+	case 3:
+		return r.boldItalic
+	case 1:
+		return r.bold
+	case 2:
+		return r.italic
+	default:
+		return r.text
+	}
+}
+
+// pickCellFace resolves the face a text cell draws with. With a user
+// font loaded it is the user face for the cell's style — unless that
+// face lacks the cell's base rune and the pack covers it: coverage
+// falls back per cell to the pinned faces (ADR-015), style kept.
+func (r *Rasterizer) pickCellFace(c *vtengine.Cell) *font.Face {
+	if r.user[0] == nil {
+		return r.pickFace(c.Style)
+	}
+	uf := r.user[styleIdx(c.Style)]
+	if len(c.Runes) > 0 {
+		if _, ok := uf.NominalGlyph(c.Runes[0]); !ok {
+			if _, ok := r.pickFace(c.Style).NominalGlyph(c.Runes[0]); ok {
+				return r.pickFace(c.Style)
+			}
+		}
+	}
+	return uf
+}
+
+// isEmojiCell: no text face can render the base rune but the emoji
+// face can. With a user font, "text" means user regular OR pack.
 func (r *Rasterizer) isEmojiCell(runes []rune) bool {
 	if len(runes) == 0 {
 		return false
+	}
+	if r.user[0] != nil {
+		if _, ok := r.user[0].NominalGlyph(runes[0]); ok {
+			return false
+		}
 	}
 	if _, ok := r.text.NominalGlyph(runes[0]); ok {
 		return false
@@ -108,7 +161,7 @@ func (r *Rasterizer) drawText(dst *image.RGBA, f *vtengine.Frame) {
 // fonts in the pack substitute glyphs while keeping one glyph per cell,
 // so each glyph anchors to its cluster's origin cell.
 func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) int {
-	runFace, styleID := r.pickFace(f.CellAt(x0, y).Style)
+	runFace := r.pickCellFace(f.CellAt(x0, y))
 
 	var runes []rune
 	var originCell []int
@@ -118,7 +171,7 @@ func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) 
 		if len(c.Runes) == 0 || spriteCell(c) || r.isEmojiCell(c.Runes) {
 			break
 		}
-		if fc, _ := r.pickFace(c.Style); fc != runFace {
+		if r.pickCellFace(c) != runFace {
 			break
 		}
 		for _, rn := range c.Runes {
@@ -137,7 +190,7 @@ func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) 
 		if st.Faint {
 			fg = mix(fg, bg)
 		}
-		mask := r.mask(styleID, runFace, g.GlyphID)
+		mask := r.mask(runFace, g.GlyphID)
 		if mask == nil {
 			continue
 		}
@@ -153,8 +206,8 @@ func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) 
 }
 
 // mask renders (and caches) the alpha mask of a glyph outline.
-func (r *Rasterizer) mask(style faceStyle, face *font.Face, gid font.GID) *glyphMask {
-	key := glyphKey{style: style, gid: gid}
+func (r *Rasterizer) mask(face *font.Face, gid font.GID) *glyphMask {
+	key := glyphKey{face: face, gid: gid}
 	if m, ok := r.glyphs[key]; ok {
 		return m
 	}

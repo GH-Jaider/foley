@@ -76,8 +76,11 @@ type Command struct {
 
 // Settings is the tape's frontmatter with VHS's own defaults applied.
 type Settings struct {
-	Shell         string
-	FontFamily    string
+	Shell      string
+	FontFamily string
+	// FontFiles is a per-style user font family (foley-only: reachable
+	// through a dress, no VHS Set exists — ADR-015).
+	FontFiles     FontFiles
 	FontSize      int
 	LetterSpacing float64
 	LineHeight    float64
