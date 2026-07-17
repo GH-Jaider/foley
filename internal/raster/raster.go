@@ -47,9 +47,10 @@ type Rasterizer struct {
 
 	shaper shaping.HarfbuzzShaper // reused: it caches font data internally
 
-	glyphs map[glyphKey]*glyphMask
-	emojis map[font.GID]*image.RGBA
-	kitty  map[kittyKey]*image.RGBA
+	glyphs  map[glyphKey]*glyphMask
+	sprites map[rune]*glyphMask
+	emojis  map[font.GID]*image.RGBA
+	kitty   map[kittyKey]*image.RGBA
 }
 
 type glyphKey struct {
@@ -81,11 +82,12 @@ func New(opts Options) (*Rasterizer, error) {
 		return nil, fmt.Errorf("raster: invalid size/scale %d/%d", opts.FontSizePx, opts.Scale)
 	}
 	r := &Rasterizer{
-		opts:   opts,
-		sizePx: opts.FontSizePx * opts.Scale,
-		glyphs: make(map[glyphKey]*glyphMask),
-		emojis: make(map[font.GID]*image.RGBA),
-		kitty:  make(map[kittyKey]*image.RGBA),
+		opts:    opts,
+		sizePx:  opts.FontSizePx * opts.Scale,
+		glyphs:  make(map[glyphKey]*glyphMask),
+		sprites: make(map[rune]*glyphMask),
+		emojis:  make(map[font.GID]*image.RGBA),
+		kitty:   make(map[kittyKey]*image.RGBA),
 	}
 	var err error
 	if r.text, err = font.ParseTTF(bytes.NewReader(opts.Pack.Text)); err != nil {

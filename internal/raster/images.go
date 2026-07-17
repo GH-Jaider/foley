@@ -29,7 +29,26 @@ func (r *Rasterizer) drawPlacements(dst *image.RGBA, src ImageSource, ps []vteng
 		oy := int(p.Row)*r.cellH + int(p.OffY)*r.opts.Scale
 		dr := image.Rect(ox, oy, ox+int(p.PixelW)*r.opts.Scale, oy+int(p.PixelH)*r.opts.Scale)
 		sr := image.Rect(int(p.SrcX), int(p.SrcY), int(p.SrcX+p.SrcW), int(p.SrcY+p.SrcH))
-		xdraw.NearestNeighbor.Scale(dst, dr, img, sr, xdraw.Over, nil)
+		if dr.Empty() || sr.Empty() {
+			// Zero-area placement — nothing to paint, and the ratio
+			// math below must never divide by an empty source. The
+			// engine skips unresolvable placements, but Render is the
+			// robustness boundary: it must not panic on ANY frame.
+			continue
+		}
+		// Scaler choice follows kitty's ground truth: exact integer
+		// upscales stay NearestNeighbor (1:1 pixel art at our supersample
+		// keeps its crisp edges), everything else is filtered like a real
+		// terminal's GPU sampler. NN at fractional ratios SAMPLES the
+		// source: most 1px texture lines vanish but the ones the lattice
+		// hits survive at full contrast — phantom cut lines at the beat
+		// period (found live by tenten's fine-pixel sprites).
+		scaler := xdraw.Interpolator(xdraw.ApproxBiLinear)
+		if fx, fy := dr.Dx()/sr.Dx(), dr.Dy()/sr.Dy(); fx >= 1 && fx == fy &&
+			fx*sr.Dx() == dr.Dx() && fy*sr.Dy() == dr.Dy() {
+			scaler = xdraw.NearestNeighbor
+		}
+		scaler.Scale(dst, dr, img, sr, xdraw.Over, nil)
 	}
 	return nil
 }

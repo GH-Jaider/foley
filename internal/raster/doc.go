@@ -1,8 +1,10 @@
 // Package raster turns a vtengine frame snapshot into RGBA pixels: HarfBuzz
 // shaping in style runs (ligature clusters anchored to their origin cell),
-// FreeType glyph rendering with an atlas cache, color emoji (CBDT strikes),
-// kitty graphics compositing by z-layer, cursor and decorations, at 1x or 2x.
-// Quality is pinned by the typographic golden suite (byte-exact frames).
+// FreeType glyph rendering with an atlas cache, synthesized sprites for
+// box-drawing/blocks/braille (sprites.go — cell-exact tiling, like every
+// real terminal), color emoji (CBDT strikes), kitty graphics compositing
+// by z-layer, cursor and decorations, at 1x or 2x. Quality is pinned by
+// the typographic golden suite (byte-exact frames).
 //
 // DETERMINISM RULE: frames must be byte-identical across OS and CPU
 // architecture (the PRD's north metric). Blending and span math stay

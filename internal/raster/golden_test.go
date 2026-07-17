@@ -42,8 +42,7 @@ func TestGoldenScene(t *testing.T) {
 	catppuccin.Palette[2] = vtengine.RGB{R: 0xa6, G: 0xe3, B: 0xa1}
 	e.SetColors(catppuccin)
 
-	write := func(y int, s string, st vtengine.Style) {
-		x := 0
+	writeAt := func(x, y int, s string, st vtengine.Style) {
 		for _, rn := range s {
 			e.SetCell(x, y, string(rn), st)
 			x++
@@ -54,8 +53,8 @@ func TestGoldenScene(t *testing.T) {
 	pink := vtengine.RGB{R: 0xf3, G: 0x8b, B: 0xa8}
 	green := vtengine.RGB{R: 0xa6, G: 0xe3, B: 0xa1}
 
-	write(0, "foley -> raster v1 => != fi ffi", vtengine.Style{FG: blue})
-	write(1, "bold", vtengine.Style{FG: catppuccin.FG, Bold: true})
+	writeAt(0, 0, "foley -> raster v1 => != fi ffi", vtengine.Style{FG: blue})
+	writeAt(0, 1, "bold", vtengine.Style{FG: catppuccin.FG, Bold: true})
 	{ // italic + colors + inverse + faint on one row
 		st := vtengine.Style{FG: pink, Italic: true}
 		x := 6
@@ -79,7 +78,7 @@ func TestGoldenScene(t *testing.T) {
 			x++
 		}
 	}
-	write(2, "single", vtengine.Style{FG: catppuccin.FG, Underline: vtengine.UnderlineSingle})
+	writeAt(0, 2, "single", vtengine.Style{FG: catppuccin.FG, Underline: vtengine.UnderlineSingle})
 	{
 		styles := []struct {
 			s  string
@@ -102,7 +101,7 @@ func TestGoldenScene(t *testing.T) {
 			}
 		}
 	}
-	write(3, "strike", vtengine.Style{FG: catppuccin.FG, Strikethrough: true})
+	writeAt(0, 3, "strike", vtengine.Style{FG: catppuccin.FG, Strikethrough: true})
 	// CJK stays out of scene v1: JetBrains Mono lacks it and the fallback
 	// font is the pending PRD §14.4 decision (future golden).
 	e.SetGrapheme(9, 3, "🚀", 2, vtengine.Style{})
@@ -125,6 +124,14 @@ func TestGoldenScene(t *testing.T) {
 		PixelW: uint32(6 * geo.CellW), PixelH: uint32(2 * geo.CellH), //nolint:gosec // test values
 		SrcW: 8, SrcH: 8,
 	})
+
+	// Sprites (synthesized, sprites.go): box drawing with double/heavy/
+	// rounded corners joining across cells, dashes, diagonals, block
+	// eighths, shades, quadrants and braille. The arc and diagonals are
+	// the only supersampled shapes — this golden pins them cross-arch.
+	writeAt(9, 4, "╔═╦═╗ ┏━┳━┓ ╭──╮ ┌─┬─┐ ▛▀▀▜", vtengine.Style{FG: green})
+	writeAt(9, 5, "╚═╩═╝ ┗━┻━┛ ╰──╯ └─┴─┘ ▙▄▄▟", vtengine.Style{FG: green})
+	writeAt(0, 6, "╌┄┈ ╎┆┊ ╱╲╳ ▁▂▃▄▅▆▇█ ▉▋▍▏▐▔▕ ░▒▓ ▖▘▝▗▚▞ ⠁⠿⣿", vtengine.Style{FG: pink})
 
 	e.SetCursor(vtengine.Cursor{X: 33, Y: 0, Visible: true, Shape: vtengine.CursorBlock})
 
@@ -191,6 +198,30 @@ func BenchmarkRenderFull120x30(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, err := r.Render(&f, e, img); err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+// TestCellSizeIsExactMultipleOfScale pins the geometry invariant behind
+// kitty-graphics alignment: the app plans placements in LOGICAL pixels
+// (winsize = cell/Scale), so logical*Scale must reconstruct the scaled
+// cell EXACTLY — an odd cell drifts 1px per row and slices seams through
+// row-strip images (found live by tenten's studio demo).
+func TestCellSizeIsExactMultipleOfScale(t *testing.T) {
+	pack, err := fontpack.Load(filepath.Join("..", "fontpack", "fonts"))
+	testassets.Require(t, err, "make fonts")
+	for _, size := range []int{12, 13, 14, 15, 16, 17, 18, 20, 22, 28} {
+		for _, scale := range []int{1, 2, 3} {
+			r, err := raster.New(raster.Options{Pack: pack, FontSizePx: size, Scale: scale})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w, h := r.CellSize()
+			lw, lh := r.LogicalCellSize()
+			if lw*scale != w || lh*scale != h {
+				t.Fatalf("size %d scale %d: cell %dx%d vs logical %dx%d — logical*scale must be exact",
+					size, scale, w, h, lw, lh)
+			}
 		}
 	}
 }

@@ -29,6 +29,14 @@ func (r *Rasterizer) computeMetrics() {
 	desc := -out.LineBounds.Descent.Round() // Descent is negative-down in typesetting
 	gap := out.LineBounds.Gap.Round()
 	r.cellH = asc + desc + gap
+	// Cells must be exact multiples of Scale: the geometry the app sees
+	// is LOGICAL (cell/Scale via winsize) and kitty placements come back
+	// in those logical pixels — an odd scaled cell makes logical*Scale
+	// fall 1px short PER ROW, slicing seams through row-strip images
+	// (found live by tenten's studio demo). Round UP: growing a cell
+	// never clips glyphs.
+	r.cellW += (r.opts.Scale - r.cellW%r.opts.Scale) % r.opts.Scale
+	r.cellH += (r.opts.Scale - r.cellH%r.opts.Scale) % r.opts.Scale
 	r.baseline = asc + gap/2
 	r.underline = r.baseline + max(2*r.opts.Scale, desc/2)
 	r.thickness = max(r.opts.Scale, r.sizePx/16)
@@ -76,6 +84,9 @@ func (r *Rasterizer) drawText(dst *image.RGBA, f *vtengine.Frame) {
 			switch {
 			case len(cell.Runes) == 0:
 				x++
+			case spriteCell(cell):
+				r.drawSpriteCell(dst, f, x, y)
+				x++
 			case r.isEmojiCell(cell.Runes):
 				r.drawEmojiCell(dst, f, x, y)
 				x += max(int(cell.Width), 1)
@@ -98,7 +109,7 @@ func (r *Rasterizer) drawTextRun(dst *image.RGBA, f *vtengine.Frame, x0, y int) 
 	x := x0
 	for x < f.Geometry.Cols {
 		c := f.CellAt(x, y)
-		if len(c.Runes) == 0 || r.isEmojiCell(c.Runes) {
+		if len(c.Runes) == 0 || spriteCell(c) || r.isEmojiCell(c.Runes) {
 			break
 		}
 		if fc, _ := r.pickFace(c.Style); fc != runFace {
