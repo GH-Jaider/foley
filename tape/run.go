@@ -111,10 +111,14 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return rep, fmt.Errorf("tape: theme: %w", err)
 	}
 
-	env := append(os.Environ(), sh.env...)
-	for k, v := range t.Env {
-		env = append(env, k+"="+v)
-	}
+	env := mergeEnv(os.Environ(), sh.env, envPairs(t.Env))
+
+	// A custom prompt (ADR-017): `Env PS1` was always legal grammar —
+	// mergeEnv above is what makes it actually WIN over the shell
+	// table. What remains is teaching bare `Wait` to expect the new
+	// prompt. Lint (already run above) voiced the findings; here we
+	// only take the resolved pattern.
+	settings.WaitPattern = promptWaitPattern(t, settings, func(string, ...any) {})
 
 	bar, err := windowBarFor(settings.WindowBar)
 	if err != nil {

@@ -270,7 +270,7 @@ func validateHex(v, field string) error {
 func validateDressFont(f DressFont) error {
 	if f.Single != "" {
 		if !isFontPath(f.Single) && !foley.KnownFontFamily(f.Single) {
-			return fmt.Errorf("font %q: not a ./file.ttf path and not in the pinned catalog (%s) — system fonts are non-deterministic, foley refuses them (ADR-015)",
+			return fmt.Errorf("font %q: not a ./file.ttf path and not in the pinned catalog (%s) — system fonts are non-deterministic, foley refuses them",
 				f.Single, strings.Join(foley.FontFamilies(), ", "))
 		}
 		return nil
