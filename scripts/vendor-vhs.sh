@@ -1,10 +1,10 @@
 #!/bin/sh
-# Vendorea la gramática .tape REAL de VHS (ADR-008), pineada por release.
+# Vendors VHS's REAL .tape grammar (ADR-008), pinned by release.
 #
-# Trae token/, lexer/, parser/ (código + tests), el corpus de ejemplos
-# (*.tape solamente) y la LICENSE, reescribiendo los import paths al
-# árbol de foley. Único cambio permitido: esa reescritura. Nunca editar
-# tape/internal/vhsgrammar/ a mano — se regenera desde el pin.
+# Brings token/, lexer/, parser/ (code + tests), the example corpus
+# (*.tape only) and the LICENSE, rewriting import paths into foley's
+# tree. The rewrite is the ONLY allowed change. Never edit
+# tape/internal/vhsgrammar/ by hand — it regenerates from the pin.
 set -eu
 
 TAG=v0.11.0
@@ -26,14 +26,14 @@ sha256() {
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-echo "vendor-vhs: bajando vhs $TAG"
+echo "vendor-vhs: fetching vhs $TAG"
 curl -fsSL --retry 3 -o "$tmp/vhs.tar.gz" \
   "https://github.com/charmbracelet/vhs/archive/refs/tags/$TAG.tar.gz"
 got=$(sha256 "$tmp/vhs.tar.gz")
 if [ "$got" != "$SHA256" ]; then
-  echo "vendor-vhs: HASH MISMATCH del tarball" >&2
-  echo "  esperado: $SHA256" >&2
-  echo "  obtenido: $got" >&2
+  echo "vendor-vhs: tarball HASH MISMATCH" >&2
+  echo "  expected: $SHA256" >&2
+  echo "  got:      $got" >&2
   exit 1
 fi
 tar -xzf "$tmp/vhs.tar.gz" -C "$tmp"
@@ -46,9 +46,9 @@ for pkg in token lexer parser; do
   cp -R "$src/$pkg" "$dst/$pkg"
 done
 
-# Corpus: solo los .tape (la media del repo upstream no pinta nada aquí),
-# preservando rutas relativas — los tests upstream leen
-# ../examples/fixtures/all.tape y el runner de conformidad recorre todo.
+# Corpus: .tape files only (upstream's media is dead weight here),
+# preserving relative paths — upstream tests read
+# ../examples/fixtures/all.tape and the conformance runner walks it all.
 (
   cd "$src"
   find examples -name '*.tape' -type f | while IFS= read -r f; do
@@ -58,24 +58,24 @@ done
 )
 
 cp "$src/LICENSE" "$dst/LICENSE"
-# themes.json: los temas curados de VHS (Set Theme <nombre> debe migrar).
+# themes.json: VHS's curated themes (Set Theme <name> must migrate).
 cp "$src/themes.json" "$dst/themes.json"
 
-# Reescritura de imports: el único cambio sobre el código upstream.
+# Import rewrite: the only change over upstream code.
 find "$dst" -name '*.go' -exec perl -pi -e \
   's|github\.com/charmbracelet/vhs/|github.com/GH-Jaider/foley/tape/internal/vhsgrammar/|g' {} +
 
 cat > "$dst/PROVENANCE.md" <<EOF
-# Código vendoreado de VHS (no editar a mano)
+# Code vendored from VHS (do not edit by hand)
 
-- Origen: https://github.com/charmbracelet/vhs
+- Origin: https://github.com/charmbracelet/vhs
 - Release: $TAG (commit $COMMIT)
 - Tarball sha256: $SHA256
-- Licencia: MIT (LICENSE en este directorio)
-- Cambios: únicamente la reescritura de import paths
-  (github.com/charmbracelet/vhs/* → .../tape/internal/vhsgrammar/*).
-- Regeneración: scripts/vendor-vhs.sh (ADR-008).
+- License: MIT (LICENSE in this directory)
+- Changes: import-path rewrite only
+  (github.com/charmbracelet/vhs/* -> .../tape/internal/vhsgrammar/*).
+- Regenerate with: scripts/vendor-vhs.sh (ADR-008).
 EOF
 
 count=$(find "$dst" -name '*.tape' | wc -l | tr -d ' ')
-echo "vendor-vhs: listo — token/lexer/parser + $count tapes de corpus"
+echo "vendor-vhs: done — token/lexer/parser + $count corpus tapes"

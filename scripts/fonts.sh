@@ -1,8 +1,8 @@
 #!/bin/sh
-# Descarga las fuentes PINEADAS del fontpack (versión exacta + sha256).
-# Los hashes canónicos viven en internal/fontpack/fontpack.go (el paquete
-# los verifica en cada Load); este script debe coincidir con ellos.
-# POSIX sh: corre igual en macOS y CI Linux. Salida gitignorada.
+# Fetches the PINNED fontpack fonts (exact version + sha256).
+# The canonical hashes live in internal/fontpack/fontpack.go (the package
+# verifies them on every Load); this script must match them.
+# POSIX sh: runs the same on macOS and CI Linux. Output is gitignored.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -23,16 +23,16 @@ fetch() {
   want=$3
   dst=$dir/$name
   if [ -f "$dst" ] && [ "$(sha256 "$dst")" = "$want" ]; then
-    echo "fonts: $name ok (cache)"
+    echo "fonts: $name ok (cached)"
     return 0
   fi
-  echo "fonts: bajando $name"
+  echo "fonts: fetching $name"
   curl -fsSL --retry 3 -o "$dst" "$url"
   got=$(sha256 "$dst")
   if [ "$got" != "$want" ]; then
-    echo "fonts: HASH MISMATCH en $name" >&2
-    echo "  esperado: $want" >&2
-    echo "  obtenido: $got" >&2
+    echo "fonts: HASH MISMATCH for $name" >&2
+    echo "  expected: $want" >&2
+    echo "  got:      $got" >&2
     rm -f "$dst"
     exit 1
   fi
@@ -53,12 +53,12 @@ fetch JetBrainsMono-BoldItalic.ttf "$jb/JetBrainsMono-BoldItalic.ttf" \
 fetch NotoColorEmoji.ttf "$noto/NotoColorEmoji.ttf" \
   39ee3c587e10e89669b9ff32703261d10d5f9c4dd5ad147b6b5a1c5200591817
 
-# El catálogo de familias por NOMBRE (ADR-015): fuentes de terminal
-# populares, licencias libres (OFL / UFL / Hack), URLs inmutables
-# (tag o commit SHA) y sha256 pineado — Set FontFamily "Fira Code"
-# resuelve contra ESTE catálogo, jamás contra el sistema.
+# The by-NAME family catalog (ADR-015): popular terminal fonts,
+# free licenses (OFL / UFL / Hack), immutable URLs
+# (tag or commit SHA) and pinned sha256 — Set FontFamily "Fira Code"
+# resolves against THIS catalog, never against the system.
 
-# Fira Code 5.2 (OFL) — sin itálicas: los slots italic degradan a peso.
+# Fira Code 5.2 (OFL) — no italics: the italic slots degrade to weight.
 fira=https://raw.githubusercontent.com/tonsky/FiraCode/5.2/distr/ttf
 fetch FiraCode-Regular.ttf "$fira/FiraCode-Regular.ttf" \
   28c3ae21a853f1d74673384c7a0d620abb0e877b8c6cd8b64173a95512476824
@@ -76,7 +76,7 @@ fetch IBMPlexMono-Italic.ttf "$plex/IBMPlexMono-Italic.ttf" \
 fetch IBMPlexMono-BoldItalic.ttf "$plex/IBMPlexMono-BoldItalic.ttf" \
   3d0c0888a9c3a98b39fc5aace9c20b149c793063cd9e9e0634f561e55186c4bf
 
-# Source Code Pro (OFL) — commit SHA del branch release (inmutable).
+# Source Code Pro (OFL) — commit SHA of the release branch (immutable).
 scp=https://raw.githubusercontent.com/adobe-fonts/source-code-pro/803b7e23ec97ae58b6232ea76519a76d428ba268/TTF
 fetch SourceCodePro-Regular.ttf "$scp/SourceCodePro-Regular.ttf" \
   74bd80d3e42a08517cd7e1108ba3d86f2da29ac0f3065be95e0357956ab9db37
@@ -98,7 +98,7 @@ fetch Hack-Italic.ttf "$hack/Hack-Italic.ttf" \
 fetch Hack-BoldItalic.ttf "$hack/Hack-BoldItalic.ttf" \
   64f74a079700b7dfe128551a1e28875d5ba980971e55f5e0f0596e37bdc6a6bc
 
-# Ubuntu Mono (UFL) — commit SHA de google/fonts (inmutable).
+# Ubuntu Mono (UFL) — commit SHA of google/fonts (immutable).
 ubuntu=https://raw.githubusercontent.com/google/fonts/389b770410cc0b7c21c85673bfa2077420fe7f65/ufl/ubuntumono
 fetch UbuntuMono-Regular.ttf "$ubuntu/UbuntuMono-Regular.ttf" \
   b35dd9d2131d5d83a9b87fe9ad22c6288fa3d17688d43302c14da29812417d63
@@ -109,4 +109,4 @@ fetch UbuntuMono-Italic.ttf "$ubuntu/UbuntuMono-Italic.ttf" \
 fetch UbuntuMono-BoldItalic.ttf "$ubuntu/UbuntuMono-BoldItalic.ttf" \
   bd255784bb87b5c41513a12a86f0f9cf061bce4e8256d3bfe7234611002e8f48
 
-echo "fonts: listo"
+echo "fonts: done"

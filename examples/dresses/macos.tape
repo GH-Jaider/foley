@@ -1,4 +1,4 @@
-# One scene, six looks. The tape is the recording; the dress is
+# One scene, a whole wardrobe. The tape is the recording; the dress is
 # post-production — VHS ignores the cue below and still records this
 # tape, just undressed.
 
@@ -6,7 +6,7 @@ Output macos.gif
 # foley: dress macos
 
 Set Width 700
-Set Height 400
+Set Height 230
 Set FontSize 16
 Set TypingSpeed 35ms
 

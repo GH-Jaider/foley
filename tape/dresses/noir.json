@@ -1,8 +1,8 @@
 {
+  "theme": "TokyoNight",
   "windowBar": "Colorful",
   "windowBarSize": 28,
   "windowTitle": "~",
-  "titleAlign": "left",
-  "borderRadius": 6,
+  "borderRadius": 10,
   "padding": 30
 }

@@ -197,7 +197,7 @@ func TestTranslucentPlacementUsesStraightAlpha(t *testing.T) {
 // TestZeroAreaPlacementIsSkipped: Render is the robustness boundary — a
 // placement with empty source or destination (an engine's unresolvable
 // placement, a degenerate rect) must be a no-op, never a divide-by-zero
-// in the scaler-ratio math (parada finding, reproduced as a panic).
+// in the scaler-ratio math (review finding, reproduced as a panic).
 func TestZeroAreaPlacementIsSkipped(t *testing.T) {
 	pack, err := fontpack.Load(filepath.Join("..", "fontpack", "fonts"))
 	testassets.Require(t, err, "make fonts")

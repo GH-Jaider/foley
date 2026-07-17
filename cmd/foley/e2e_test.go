@@ -38,7 +38,7 @@ Set Height 240
 Set TypingSpeed 30ms
 Set WaitTimeout 20s
 Sleep 300ms
-Type "echo listo"
+Type "echo ready"
 Enter
 Wait
 Sleep 500ms

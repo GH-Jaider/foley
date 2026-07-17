@@ -374,7 +374,7 @@ func TestEverySpriteRuneInks(t *testing.T) {
 	}
 }
 
-// TestBlocksShareEdgesAtOddCells pins the parada finding: at Scale 1
+// TestBlocksShareEdgesAtOddCells pins a review finding: at Scale 1
 // cells can be odd, and the half blocks must share their split edge with
 // the quadrants — ▀ ends exactly where ▄ and ▟'s lower half begin, ▐
 // begins where ▝'s right half does.

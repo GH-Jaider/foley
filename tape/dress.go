@@ -194,10 +194,10 @@ func ResolveDress(ref DressRef) (Dress, error) {
 }
 
 // rebase resolves the dress's OWN relative paths (font files, a margin
-// image) against the dress file's directory — the kit travels together
-// (parada F3): `dresses/brand.json` finds `dresses/brand.ttf` no matter
-// where foley runs. Names and absolute paths pass through; inline and
-// built-in dresses never reach here.
+// image) against the dress file's directory — the kit travels together:
+// `dresses/brand.json` finds `dresses/brand.ttf` no matter where foley
+// runs. Names and absolute paths pass through; inline and built-in
+// dresses never reach here.
 func (d *Dress) rebase(dir string) {
 	join := func(p string) string {
 		if p == "" || filepath.IsAbs(p) {

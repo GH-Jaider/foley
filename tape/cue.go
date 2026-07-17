@@ -47,7 +47,7 @@ func (d DressRef) IsZero() bool {
 }
 
 // The marker is generous on form (case, spacing around the colon) and
-// strict on content — `# Foley : dress warp` is a valid cue, but its
+// strict on content — `# Foley : dress macos` is a valid cue, but its
 // BODY must parse or the tape fails loudly.
 var cueLineRE = regexp.MustCompile(`(?i)^\s*#\s*foley\s*:\s*(.*)$`)
 
@@ -88,8 +88,8 @@ func scanCues(src string) ([]Cue, error) {
 	for i, line := range strings.Split(src, "\n") {
 		m := cueLineRE.FindStringSubmatch(line)
 		if m == nil {
-			// M2 of the dress parada: the grammar allows trailing
-			// comments, where our marker would silently be plain text.
+			// The grammar allows trailing comments, where our marker
+			// would silently be plain text — reject it loudly instead.
 			if loc := cueAnywhereRE.FindStringIndex(stripQuoted(line)); loc != nil {
 				return nil, fmt.Errorf("tape: %d: `# foley:` cues must be on their own line", i+1)
 			}

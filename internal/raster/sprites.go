@@ -116,7 +116,7 @@ func (r *Rasterizer) spriteBlock(a *image.Alpha, rn rune) {
 	case '▄':
 		// The half block anchors to the SHARED split edge ym, not to a
 		// bottom-anchored rounding of its own: at odd heights they
-		// differ by 1px and ▄ would jag against ▟/▙ (parada finding).
+		// differ by 1px and ▄ would jag against ▟/▙ (review finding).
 		fillAlpha(a, 0, ym, w, h, 0xff)
 	case '▅':
 		lower(5)

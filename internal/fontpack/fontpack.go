@@ -85,11 +85,11 @@ type Pack struct {
 func readPinned(dir, name string) ([]byte, error) {
 	b, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // paths come from the pin table
 	if err != nil {
-		return nil, fmt.Errorf("fontpack: %s: %w (corre scripts/fonts.sh)", name, err)
+		return nil, fmt.Errorf("fontpack: %s: %w", name, err)
 	}
 	sum := sha256.Sum256(b)
 	if got := hex.EncodeToString(sum[:]); got != pinFor(name) {
-		return nil, fmt.Errorf("fontpack: %s: hash %s no coincide con el pin", name, got[:16])
+		return nil, fmt.Errorf("fontpack: %s: hash %s does not match the pin", name, got[:16])
 	}
 	return b, nil
 }

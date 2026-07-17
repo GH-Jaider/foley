@@ -1,7 +1,8 @@
 {
+  "theme": "Catppuccin Latte",
   "windowBar": "Colorful",
   "windowBarSize": 28,
   "windowTitle": "~",
   "borderRadius": 10,
-  "padding": 14
+  "padding": 30
 }

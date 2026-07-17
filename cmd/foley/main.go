@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -95,6 +96,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runWardrobe(args[1:], stdout, stderr)
 		case "fonts":
 			return runFonts(args[1:], stdout, stderr)
+		case "sew":
+			return runSew(args[1:], stdout, stderr)
 		}
 	}
 
@@ -555,6 +558,93 @@ func runWardrobe(args []string, stdout, stderr io.Writer) int {
 }
 
 // runThemes lists the vendored theme catalog, one name per line.
+// sewTemplate is the starter dress `foley sew` writes without -from:
+// every field filled with WORKING values (it validates and records as
+// written — JSON has no comments, so the example is the documentation).
+// The font field is deliberately absent: a path to a file that does not
+// exist yet would break the first run; the next-steps print names it.
+const sewTemplate = `{
+  "theme": "Catppuccin Mocha",
+  "fontSize": 16,
+  "windowBar": "Colorful",
+  "windowBarSize": 28,
+  "windowTitle": "~",
+  "titleAlign": "center",
+  "borderRadius": 10,
+  "margin": 0,
+  "marginFill": "#101014",
+  "padding": 30
+}
+`
+
+// runSew scaffolds a dress file — the costume shop. `-from` copies an
+// existing dress (built-in, path or user wardrobe) as the starting
+// point. Never overwrites (O_EXCL), like `foley new`.
+func runSew(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("sew", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	from := fs.String("from", "",
+		"start from an existing dress: a built-in (see `foley wardrobe`), a .json path, or a name in ~/.config/foley/dresses")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		_, _ = fmt.Fprint(stderr, "usage: foley sew [-from <dress>] <name>\n\n"+
+			"Writes <name>.dress.json — a dress to edit and wear with a\n"+
+			"`# foley: dress ./<name>.dress.json` cue (or -dress per run).\n")
+		return 2
+	}
+	name := fs.Arg(0)
+	path := name
+	if !strings.HasSuffix(path, ".json") {
+		path = name + ".dress.json"
+	}
+
+	content := []byte(sewTemplate)
+	if *from != "" {
+		ref, err := tape.ParseDressRef(resolveDressArg(*from))
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: sew: -from: %v\n", err)
+			return 1
+		}
+		d, err := tape.ResolveDress(ref)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: sew: -from: %v\n", err)
+			return 1
+		}
+		raw, err := json.MarshalIndent(d, "", "  ")
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: sew: %v\n", err)
+			return 1
+		}
+		content = append(raw, '\n')
+	}
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // the target path is the CLI's whole purpose; a dress is a public artifact
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "foley: sew: %v (sew a new name, or edit the existing file)\n", err)
+		return 1
+	}
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		_, _ = fmt.Fprintf(stderr, "foley: sew: %v\n", err)
+		return 1
+	}
+	if err := f.Close(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "foley: sew: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(stdout, "sewed %s\n\n", path)
+	_, _ = fmt.Fprintf(stdout, "  wear it in a tape:  # foley: dress ./%s\n", path)
+	_, _ = fmt.Fprintf(stdout, "  or per run:         foley -dress ./%s demo.tape\n\n", path)
+	_, _ = fmt.Fprint(stdout, "  fields: theme (foley themes), font (foley fonts, ./file.ttf, or\n"+
+		"  {regular/bold/italic/boldItalic} files), fontSize, windowBar,\n"+
+		"  windowBarSize, windowBarColor, windowTitle, titleAlign, margin,\n"+
+		"  marginFill, borderRadius, padding — delete what the dress\n"+
+		"  should not touch; the tape's explicit Sets always win.\n")
+	return 0
+}
+
 // runFonts lists the pinned font family catalog — the names a
 // `Set FontFamily` (or a dress `font`) resolves without touching the
 // system (ADR-015). Your own fonts travel as ./file.ttf paths.

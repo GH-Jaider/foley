@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/GH-Jaider/foley/tape"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -252,20 +254,65 @@ func TestCLIDoctorReportsMissingFonts(t *testing.T) {
 }
 
 // TestCLIWardrobe: list (built-ins present), expansion (MarginFill
+// TestCLISew: the costume shop — the template validates as written and
+// records the working fields, -from copies a built-in, and an existing
+// file is never overwritten (O_EXCL, like `foley new`).
+func TestCLISew(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	exit, stdout, _ := cli([]string{"sew", "my-brand"}, "")
+	if exit != 0 || !strings.Contains(stdout, "my-brand.dress.json") {
+		t.Fatalf("sew failed: exit=%d\n%s", exit, stdout)
+	}
+	d, err := tape.ResolveDress(tape.DressRef{Path: "my-brand.dress.json"})
+	if err != nil {
+		t.Fatalf("the sewn template must validate as written: %v", err)
+	}
+	if d.Theme == nil || d.WindowBar == nil {
+		t.Fatalf("template lacks its paint fields: %+v", d)
+	}
+
+	exit, _, stderr := cli([]string{"sew", "my-brand"}, "")
+	if exit == 0 || !strings.Contains(stderr, "exist") {
+		t.Fatalf("sew must refuse to overwrite: exit=%d stderr=%s", exit, stderr)
+	}
+
+	exit, _, _ = cli([]string{"sew", "-from", "macos", "copy"}, "")
+	if exit != 0 {
+		t.Fatalf("sew -from macos: exit=%d", exit)
+	}
+	d, err = tape.ResolveDress(tape.DressRef{Path: "copy.dress.json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.WindowBar == nil || *d.WindowBar != "Colorful" || d.WindowBarSize == nil || *d.WindowBarSize != 28 {
+		t.Fatalf("-from macos must copy macos's chrome: %+v", d)
+	}
+
+	exit, _, stderr = cli([]string{"sew", "-from", "nosuchdress", "x"}, "")
+	if exit == 0 || !strings.Contains(stderr, "wardrobe") {
+		t.Fatalf("unknown -from must fail with the wardrobe hint: exit=%d stderr=%s", exit, stderr)
+	}
+
+	if exit, _, _ = cli([]string{"sew"}, ""); exit != 2 {
+		t.Fatalf("sew without a name must be usage error, got %d", exit)
+	}
+}
+
 // QUOTED so it round-trips the grammar), -h as help, unknown with hints.
 func TestCLIWardrobe(t *testing.T) {
 	exit, stdout, _ := cli([]string{"wardrobe"}, "")
 	if exit != 0 {
 		t.Fatalf("exit = %d", exit)
 	}
-	for _, want := range []string{"bare (built-in)", "iterm (built-in)", "kitty (built-in)", "warp (built-in)"} {
+	for _, want := range []string{"bare (built-in)", "gnome (built-in)", "macos (built-in)", "noir (built-in)", "paper (built-in)"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("list lacks %q:\n%s", want, stdout)
 		}
 	}
-	exit, stdout, _ = cli([]string{"wardrobe", "warp"}, "")
-	if exit != 0 || !strings.Contains(stdout, `Set MarginFill "#181818"`) {
-		t.Fatalf("expansion must quote MarginFill (grammar round-trip): exit=%d\n%s", exit, stdout)
+	exit, stdout, _ = cli([]string{"wardrobe", "macos"}, "")
+	if exit != 0 || !strings.Contains(stdout, `(foley) WindowTitle "~"`) || !strings.Contains(stdout, "Set Padding 14") {
+		t.Fatalf("expansion must print macos's fields: exit=%d\n%s", exit, stdout)
 	}
 	if exit, _, stderr := cli([]string{"wardrobe", "-h"}, ""); exit != 0 || !strings.Contains(stderr, "usage: foley wardrobe") {
 		t.Fatalf("-h: exit=%d stderr=%q", exit, stderr)

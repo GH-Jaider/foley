@@ -17,7 +17,7 @@ func TestCueScanner(t *testing.T) {
 			src  string
 			want func(tape.DressRef) bool
 		}{
-			{"# foley: dress warp", func(d tape.DressRef) bool { return d.Name == "warp" }},
+			{"# foley: dress macos", func(d tape.DressRef) bool { return d.Name == "macos" }},
 			{"# foley: dress ./brand.dress.json", func(d tape.DressRef) bool { return d.Path == "./brand.dress.json" }},
 			{`# foley: dress {"padding": 10}`, func(d tape.DressRef) bool { return d.JSON != "" }},
 			{"# foley: dress none", func(d tape.DressRef) bool { return d.None }},
@@ -42,7 +42,7 @@ func TestCueScanner(t *testing.T) {
 			{"# foley: dress nosuchbuiltin", "unknown built-in"},
 			{"# foley: dress {\"typo\": 1}", "typo"},
 			{"# foley:", "empty"},
-			{"# foley: dress warp\n# foley: dress kitty", "lines 2 and 3"},
+			{"# foley: dress macos\n# foley: dress macos", "lines 2 and 3"},
 			{"# foley: dress {\"padding\": 10} none", "trailing data"},
 			{"# foley: dress {\"windowBar\": \"Colorfull\"}", "windowBar"},
 			{"# foley: dress {\"padding\": -1}", "negative"},
@@ -55,7 +55,7 @@ func TestCueScanner(t *testing.T) {
 			{"# foley: dress {\"font\": {\"bold\": \"./b.ttf\"}}", "regular is required"},
 			{"# foley: dress {\"font\": {\"regular\": \"Fira Code\"}}", "not a font file path"},
 			{"# foley: dress {\"font\": {\"regulr\": \"./r.ttf\"}}", "regulr"},
-			{"Type \"x\" # foley: dress warp", "own line"},
+			{"Type \"x\" # foley: dress macos", "own line"},
 			{"Type \"x\" # foley: dross warp", "own line"},
 		}
 		for _, c := range cases {
@@ -68,12 +68,12 @@ func TestCueScanner(t *testing.T) {
 			}
 		}
 		// L2: a tab separator must still parse the kind cleanly.
-		if _, err := tape.Parse("Output d.gif\n# foley: dress\twarp\nType \"x\"\n"); err != nil {
+		if _, err := tape.Parse("Output d.gif\n# foley: dress\tmacos\nType \"x\"\n"); err != nil {
 			t.Fatalf("tab-separated cue must parse: %v", err)
 		}
 	})
 	t.Run("generous_marker_strict_body", func(t *testing.T) {
-		tp, err := tape.Parse("Output d.gif\n# Foley : dress warp\nType \"x\"\n")
+		tp, err := tape.Parse("Output d.gif\n# Foley : dress macos\nType \"x\"\n")
 		if err != nil || len(tp.Cues) != 1 {
 			t.Fatalf("generous marker: err=%v cues=%v", err, tp.Cues)
 		}
@@ -82,14 +82,14 @@ func TestCueScanner(t *testing.T) {
 		}
 	})
 	t.Run("quoted_marker_is_data", func(t *testing.T) {
-		tp, err := tape.Parse("Output d.gif\nType \"# foley: dress warp\"\nType \"x\"\n")
+		tp, err := tape.Parse("Output d.gif\nType \"# foley: dress macos\"\nType \"x\"\n")
 		if err != nil || len(tp.Cues) != 0 {
 			t.Fatalf("quoted marker: err=%v cues=%v", err, tp.Cues)
 		}
 	})
 	t.Run("crlf", func(t *testing.T) {
-		tp, err := tape.Parse("Output d.gif\r\n# foley: dress warp\r\nType \"x\"\r\n")
-		if err != nil || tp.DressCue().Name != "warp" {
+		tp, err := tape.Parse("Output d.gif\r\n# foley: dress macos\r\nType \"x\"\r\n")
+		if err != nil || tp.DressCue().Name != "macos" {
 			t.Fatalf("CRLF: err=%v ref=%+v", err, tp.DressCue())
 		}
 	})
@@ -104,9 +104,10 @@ func TestCueScanner(t *testing.T) {
 	})
 }
 
-// TestDressPrecedence: defaults < dress < explicit Sets (ADR-014).
+// TestDressPrecedence: defaults < dress < explicit Sets (ADR-014),
+// exercised through the inline form.
 func TestDressPrecedence(t *testing.T) {
-	src := "Output d.gif\n# foley: dress warp\nSet BorderRadius 2\nType \"hi\"\n"
+	src := "Output d.gif\n# foley: dress {\"windowBar\": \"Colorful\", \"margin\": 24, \"padding\": 40, \"borderRadius\": 10}\nSet BorderRadius 2\nType \"hi\"\n"
 	tp, err := tape.Parse(src)
 	if err != nil {
 		t.Fatal(err)
@@ -184,13 +185,17 @@ func TestDressPaintFields(t *testing.T) {
 	})
 	t.Run("expansion_prints_paint", func(t *testing.T) {
 		size := 18
+		fill := "#181818"
 		d := tape.Dress{
-			Theme:    &tape.DressTheme{Ref: tape.ThemeRef{Name: "Dracula"}},
-			FontSize: &size,
-			Font:     &tape.DressFont{Single: "./brand.ttf"},
+			Theme:      &tape.DressTheme{Ref: tape.ThemeRef{Name: "Dracula"}},
+			FontSize:   &size,
+			Font:       &tape.DressFont{Single: "./brand.ttf"},
+			MarginFill: &fill,
 		}
 		exp := strings.Join(d.Expansion(), "\n")
-		for _, want := range []string{`Set Theme "Dracula"`, "Set FontSize 18", `Set FontFamily "./brand.ttf"`} {
+		// MarginFill must come out QUOTED: unquoted, the grammar's lexer
+		// would eat "#..." as a comment — the expansion round-trips.
+		for _, want := range []string{`Set Theme "Dracula"`, "Set FontSize 18", `Set FontFamily "./brand.ttf"`, `Set MarginFill "#181818"`} {
 			if !strings.Contains(exp, want) {
 				t.Fatalf("expansion lacks %q:\n%s", want, exp)
 			}
@@ -248,7 +253,7 @@ func TestDressPaintFields(t *testing.T) {
 }
 
 // TestDressRebase: paths INSIDE a dress file resolve against the dress
-// file's own directory — the kit travels together (parada F3). Catalog
+// file's own directory — the kit travels together. Catalog
 // names and hex fills pass through untouched.
 func TestDressRebase(t *testing.T) {
 	dir := t.TempDir()
@@ -290,7 +295,7 @@ func TestDressRebase(t *testing.T) {
 // build defect) and the wardrobe lists the canonical four.
 func TestBuiltinWardrobe(t *testing.T) {
 	names := tape.BuiltinDresses()
-	for _, want := range []string{"bare", "gnome", "iterm", "kitty", "macos", "warp"} {
+	for _, want := range []string{"bare", "gnome", "macos", "noir", "paper"} {
 		found := false
 		for _, n := range names {
 			if n == want {
@@ -316,23 +321,23 @@ func TestBuiltinWardrobe(t *testing.T) {
 // ref REPLACES the tape's cue, `none` strips the layer, the tape's
 // explicit Sets beat both (ADR-014) — and the Tape is never mutated.
 func TestDressOverrideSemantics(t *testing.T) {
-	tp, err := tape.Parse("Output d.gif\n# foley: dress warp\nSet BorderRadius 2\nType \"x\"\n")
+	tp, err := tape.Parse("Output d.gif\n# foley: dress {\"margin\": 24, \"windowBar\": \"Rings\"}\nSet BorderRadius 2\nType \"x\"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := tp.Settings
 
-	kitty, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{Dress: tape.DressRef{Name: "kitty"}})
+	gnome, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{Dress: tape.DressRef{Name: "gnome"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// kitty's values, and NONE of warp's (margin 24 must be gone).
-	if kitty.WindowBar != "Colorful" || kitty.WindowBarSize != 24 || kitty.Padding != 16 || kitty.Margin != 0 {
+	// gnome's values, and NONE of the tape dress's (margin 24 must go).
+	if gnome.WindowBar != "GnomeCSD" || gnome.WindowBarSize != 30 || gnome.Padding != 14 || gnome.Margin != 0 {
 		t.Fatalf("override did not REPLACE the layer: bar=%q/%d padding=%d margin=%d",
-			kitty.WindowBar, kitty.WindowBarSize, kitty.Padding, kitty.Margin)
+			gnome.WindowBar, gnome.WindowBarSize, gnome.Padding, gnome.Margin)
 	}
-	if kitty.BorderRadius != 2 {
-		t.Fatalf("explicit Set must beat the CLI dress: radius = %d", kitty.BorderRadius)
+	if gnome.BorderRadius != 2 {
+		t.Fatalf("explicit Set must beat the CLI dress: radius = %d", gnome.BorderRadius)
 	}
 
 	none, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{Dress: tape.DressRef{None: true}})
@@ -356,7 +361,7 @@ func TestDressOverrideSemantics(t *testing.T) {
 // silent no-op.
 func TestSourcedCuesAreLoud(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if err := os.WriteFile("common.tape", []byte("# foley: dress warp\nType \"shared\"\n"), 0o600); err != nil {
+	if err := os.WriteFile("common.tape", []byte("# foley: dress macos\nType \"shared\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := tape.Parse("Output d.gif\nSource common.tape\nType \"x\"\n")
