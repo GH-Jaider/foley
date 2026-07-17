@@ -126,6 +126,19 @@ type Tape struct {
 	// they are applied anyway (last wins) but the executor warns: VHS
 	// applies settings before recording starts.
 	LateSets []string
+	// Cues is the tape's `# foley:` cue sheet (ADR-014), in source order.
+	Cues []Cue
+}
+
+// DressCue returns the tape's dress reference (zero when the tape has no
+// dress cue). Parse guarantees at most one.
+func (t *Tape) DressCue() DressRef {
+	for _, c := range t.Cues {
+		if c.Kind == CueDress {
+			return c.Dress
+		}
+	}
+	return DressRef{}
 }
 
 // vhsDefaults are VHS's own default options (vhs.go/style.go/video.go of
@@ -164,9 +177,25 @@ func Parse(src string) (*Tape, error) {
 		return nil, fmt.Errorf("tape: %s", strings.Join(msgs, "\n"))
 	}
 
+	cues, err := scanCues(src)
+	if err != nil {
+		return nil, err
+	}
+	var dressLines []string
+	for _, c := range cues {
+		if c.Kind == CueDress {
+			dressLines = append(dressLines, strconv.Itoa(c.Line))
+		}
+	}
+	if len(dressLines) > 1 {
+		return nil, fmt.Errorf("tape: more than one `# foley: dress` cue (lines %s) — a tape has one look",
+			strings.Join(dressLines, " and "))
+	}
+
 	t := &Tape{
 		Settings: vhsDefaults(),
 		Env:      map[string]string{},
+		Cues:     cues,
 	}
 	sawAction := false
 	for _, c := range cmds {

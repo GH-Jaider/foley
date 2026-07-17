@@ -27,6 +27,11 @@ type RunOptions struct {
 	ModifyOtherKeys bool
 	// FontsDir forwards to foley.Options.FontsDir.
 	FontsDir string
+	// Dress REPLACES the tape's dress layer (ADR-014). Zero keeps the
+	// tape's own `# foley: dress` cue; DressRef{None: true} strips the
+	// layer. Explicit `Set`s in the tape always win over either. Build
+	// one from CLI-style input with ParseDressRef.
+	Dress DressRef
 	// Warn receives one line per compatibility warning as it happens
 	// (they are also collected in the Report). nil discards the stream.
 	Warn io.Writer
@@ -63,20 +68,25 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		warn("%s", msg)
 	}
 
+	settings, err := effectiveSettings(t, opts)
+	if err != nil {
+		return rep, err
+	}
+
 	for _, prog := range t.Requires {
 		if _, err := execx.LookPath(prog); err != nil {
 			return rep, fmt.Errorf("tape: Require %s: %w", prog, err)
 		}
 	}
 
-	sh, err := shellFor(t.Settings.Shell)
+	sh, err := shellFor(settings.Shell)
 	if err != nil {
 		return rep, err
 	}
 	if _, err := execx.LookPath(sh.command[0]); err != nil {
-		return rep, fmt.Errorf("tape: Set Shell %s: %w", t.Settings.Shell, err)
+		return rep, fmt.Errorf("tape: Set Shell %s: %w", settings.Shell, err)
 	}
-	theme, err := resolveTheme(t.Settings.Theme)
+	theme, err := resolveTheme(settings.Theme)
 	if err != nil {
 		return rep, err
 	}
@@ -86,26 +96,26 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		env = append(env, k+"="+v)
 	}
 
-	bar, err := windowBarFor(t.Settings.WindowBar)
+	bar, err := windowBarFor(settings.WindowBar)
 	if err != nil {
 		return rep, err
 	}
 	rec, err := foley.New(foley.Options{
 		Command:         sh.command,
 		Env:             env,
-		PixelWidth:      t.Settings.Width,
-		PixelHeight:     t.Settings.Height,
-		PixelPadding:    t.Settings.Padding,
-		Margin:          t.Settings.Margin,
-		MarginFill:      t.Settings.MarginFill,
+		PixelWidth:      settings.Width,
+		PixelHeight:     settings.Height,
+		PixelPadding:    settings.Padding,
+		Margin:          settings.Margin,
+		MarginFill:      settings.MarginFill,
 		WindowBar:       bar,
-		WindowBarSize:   t.Settings.WindowBarSize,
-		BorderRadius:    t.Settings.BorderRadius,
-		FontSize:        t.Settings.FontSize,
+		WindowBarSize:   settings.WindowBarSize,
+		BorderRadius:    settings.BorderRadius,
+		FontSize:        settings.FontSize,
 		Theme:           theme,
 		FontsDir:        opts.FontsDir,
 		Mode:            opts.Mode,
-		FPS:             t.Settings.Framerate,
+		FPS:             settings.Framerate,
 		ModifyOtherKeys: opts.ModifyOtherKeys,
 	})
 	if err != nil {
@@ -117,10 +127,10 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	// duration (the video plays twice as fast). Wall-clock waits are
 	// synchronization and stay unscaled.
 	scale := func(d time.Duration) time.Duration {
-		if t.Settings.PlaybackSpeed == 1.0 || t.Settings.PlaybackSpeed <= 0 {
+		if settings.PlaybackSpeed == 1.0 || settings.PlaybackSpeed <= 0 {
 			return d
 		}
-		return time.Duration(float64(d) / t.Settings.PlaybackSpeed)
+		return time.Duration(float64(d) / settings.PlaybackSpeed)
 	}
 	// perKey honors an EXPLICIT @duration even at zero — `Type@0ms` is
 	// VHS's paste semantics, not "use the default".
@@ -128,7 +138,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		if cmd.SpeedSet {
 			return scale(cmd.Speed)
 		}
-		return scale(t.Settings.TypingSpeed)
+		return scale(settings.TypingSpeed)
 	}
 
 	var clipboard string
@@ -146,11 +156,11 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		case KindWait:
 			pattern := cmd.Pattern
 			if pattern == nil {
-				pattern = t.Settings.WaitPattern
+				pattern = settings.WaitPattern
 			}
 			timeout := cmd.Timeout
 			if timeout == 0 {
-				timeout = t.Settings.WaitTimeout
+				timeout = settings.WaitTimeout
 			}
 			if cmd.Scope == WaitScreen {
 				err = rec.WaitText(ctx, pattern, timeout)
@@ -190,6 +200,31 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		rep.Outputs = append(rep.Outputs, out)
 	}
 	return rep, rec.Close()
+}
+
+// effectiveSettings resolves the settings ONE run records with:
+// defaults < dress (the tape's cue, or opts.Dress which REPLACES that
+// layer) < the tape's explicit Sets — computed on a COPY, so Run never
+// mutates the caller's Tape (parse once, run many: light/dark pairs).
+func effectiveSettings(t *Tape, opts RunOptions) (Settings, error) {
+	settings := t.Settings
+	ref := t.DressCue()
+	if !opts.Dress.IsZero() {
+		ref = opts.Dress
+	}
+	if ref.IsZero() || ref.None {
+		return settings, nil
+	}
+	d, err := ResolveDress(ref)
+	if err != nil {
+		return settings, err
+	}
+	explicit := make(map[string]bool, len(t.Explicit))
+	for _, n := range t.Explicit {
+		explicit[n] = true
+	}
+	applyDress(&settings, explicit, d)
+	return settings, nil
 }
 
 // warnStaged emits the ADR-008 tier-2/3 warnings — only for settings the

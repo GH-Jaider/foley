@@ -8,3 +8,10 @@ var (
 	ResolveThemeForTest       = resolveTheme
 	WarnDegradedChordsForTest = warnDegradedChords
 )
+
+// EffectiveSettingsForTest exposes the dress/Set layering resolver to
+// the external test package: the seam that pins precedence, the -dress
+// override, `none` stripping and Run's no-mutation contract.
+func EffectiveSettingsForTest(t *Tape, opts RunOptions) (Settings, error) {
+	return effectiveSettings(t, opts)
+}

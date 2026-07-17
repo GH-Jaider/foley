@@ -250,3 +250,36 @@ func TestCLIDoctorReportsMissingFonts(t *testing.T) {
 		t.Fatalf("extra arg: exit = %d, want 2", exit)
 	}
 }
+
+// TestCLIWardrobe: list (built-ins present), expansion (MarginFill
+// QUOTED so it round-trips the grammar), -h as help, unknown with hints.
+func TestCLIWardrobe(t *testing.T) {
+	exit, stdout, _ := cli([]string{"wardrobe"}, "")
+	if exit != 0 {
+		t.Fatalf("exit = %d", exit)
+	}
+	for _, want := range []string{"bare (built-in)", "iterm (built-in)", "kitty (built-in)", "warp (built-in)"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("list lacks %q:\n%s", want, stdout)
+		}
+	}
+	exit, stdout, _ = cli([]string{"wardrobe", "warp"}, "")
+	if exit != 0 || !strings.Contains(stdout, `Set MarginFill "#181818"`) {
+		t.Fatalf("expansion must quote MarginFill (grammar round-trip): exit=%d\n%s", exit, stdout)
+	}
+	if exit, _, stderr := cli([]string{"wardrobe", "-h"}, ""); exit != 0 || !strings.Contains(stderr, "usage: foley wardrobe") {
+		t.Fatalf("-h: exit=%d stderr=%q", exit, stderr)
+	}
+	if exit, _, stderr := cli([]string{"wardrobe", "nope"}, ""); exit != 1 || !strings.Contains(stderr, "built-ins:") {
+		t.Fatalf("unknown must hint the catalog: exit=%d stderr=%q", exit, stderr)
+	}
+}
+
+// TestCLIDressFlagValidatesEarly: a bad -dress must exit 2 before any
+// tape is read or shell spawned.
+func TestCLIDressFlagValidatesEarly(t *testing.T) {
+	exit, _, stderr := cli([]string{"-dress", "nosuch", "x.tape"}, "")
+	if exit != 2 || !strings.Contains(stderr, "unknown built-in") {
+		t.Fatalf("exit=%d stderr=%q", exit, stderr)
+	}
+}

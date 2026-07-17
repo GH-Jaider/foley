@@ -91,6 +91,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runDoctor(args[1:], stdout, stderr)
 		case "new":
 			return runNew(args[1:], stdout, stderr)
+		case "wardrobe":
+			return runWardrobe(args[1:], stdout, stderr)
 		}
 	}
 
@@ -106,12 +108,15 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	var outs outputsFlag
 	fs.Var(&outs, "o",
 		"write the recording to this path (repeatable; format by extension, replaces the tape's Output declarations)")
+	dress := fs.String("dress", "",
+		"replace the tape's dress layer: a built-in name (see `foley wardrobe`), a .json path, an inline {json}, or none — the tape's explicit Sets still win")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley [flags] <file.tape | ->\n"+
 			"       foley validate [flags] <file.tape ... | ->\n"+
 			"       foley new <file.tape>\n"+
 			"       foley doctor [-fonts dir]\n"+
-			"       foley themes\n\n"+
+			"       foley themes\n"+
+			"       foley wardrobe [name]\n\n"+
 			"\"-\" reads the tape from stdin. Relative paths in the tape (Output,\n"+
 			"Screenshot, Source) resolve against the current working directory,\n"+
 			"exactly like VHS.\n\n")
@@ -136,11 +141,21 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "foley: unknown mode %q (deterministic|realtime)\n", *mode)
 		return 2
 	}
+	var dressRef tape.DressRef
+	if *dress != "" {
+		var err error
+		dressRef, err = tape.ParseDressRef(resolveDressArg(*dress))
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: -dress: %v\n", err)
+			return 2
+		}
+	}
 
 	opts := tape.RunOptions{
 		Mode:            m,
 		ModifyOtherKeys: *mok,
 		FontsDir:        *fonts,
+		Dress:           dressRef,
 		Warn:            stderr,
 	}
 	src, err := readTape(fs.Arg(0), stdin)
@@ -225,6 +240,19 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 		}
 		for _, w := range tape.Lint(t, opts) {
 			_, _ = fmt.Fprintf(stderr, "%s: warning: %s\n", arg, w)
+		}
+		if n := len(t.Cues); n > 0 {
+			dresses := 0
+			for _, c := range t.Cues {
+				if c.Kind == tape.CueDress {
+					dresses++
+				}
+			}
+			plural := "s"
+			if n == 1 {
+				plural = ""
+			}
+			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress\n", arg, n, plural, dresses)
 		}
 	}
 	return exit
@@ -416,6 +444,112 @@ Sleep 2s
 	}
 	_, _ = fmt.Fprintf(stdout, "foley: wrote %s — record it with: foley %s\n", path, path)
 	return 0
+}
+
+// userDressDir is the CLI-side wardrobe (~/.config/foley/dresses). It
+// resolves NAMES only for CLI flags — tapes stay self-contained (their
+// dresses are built-ins, ./paths or inline; ADR-014).
+func userDressDir() string {
+	cfg, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cfg, "foley", "dresses")
+}
+
+// resolveDressArg upgrades a bare -dress NAME that is not a built-in to
+// the user wardrobe path when that file exists; everything else passes
+// through untouched (paths, inline JSON, none, built-ins — built-ins
+// always win a name clash, and wardrobe marks the shadow).
+func resolveDressArg(arg string) string {
+	if arg == "" || arg == "none" || strings.HasPrefix(arg, "{") ||
+		strings.ContainsAny(arg, "/\\") || strings.HasSuffix(arg, ".json") {
+		return arg
+	}
+	for _, b := range tape.BuiltinDresses() {
+		if b == arg {
+			return arg
+		}
+	}
+	if dir := userDressDir(); dir != "" {
+		p := filepath.Join(dir, arg+".json")
+		if _, err := os.Stat(p); err == nil { //nolint:gosec // the user's own wardrobe dir + their own -dress name
+			return p
+		}
+	}
+	return arg
+}
+
+// runWardrobe lists the available dresses, or shows one dress's
+// expansion into the Set primitives it fills.
+func runWardrobe(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		_, _ = fmt.Fprint(stderr, "usage: foley wardrobe [name]\n\n"+
+			"Lists the available dresses (built-ins plus ~/.config/foley/dresses),\n"+
+			"or shows what one dress expands to. Name clashes resolve to the\n"+
+			"built-in; shadowed files are marked.\n")
+		return 0
+	}
+	builtins := map[string]bool{}
+	for _, b := range tape.BuiltinDresses() {
+		builtins[b] = true
+	}
+	switch len(args) {
+	case 0:
+		for _, name := range tape.BuiltinDresses() {
+			_, _ = fmt.Fprintf(stdout, "%s (built-in)\n", name)
+		}
+		dir := userDressDir()
+		if dir == "" {
+			return 0
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				_, _ = fmt.Fprintf(stderr, "foley: warning: wardrobe dir unreadable: %v\n", err)
+			}
+			return 0
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), ".json")
+			mark := ""
+			if builtins[name] {
+				mark = " — SHADOWED by the built-in; rename it or use its path"
+			}
+			_, _ = fmt.Fprintf(stdout, "%s (yours: %s)%s\n", name, filepath.Join(dir, e.Name()), mark)
+		}
+		return 0
+	case 1:
+		spec := resolveDressArg(args[0])
+		ref, err := tape.ParseDressRef(spec)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "foley: (built-ins: %s; yours live in %s)\n",
+				strings.Join(tape.BuiltinDresses(), ", "), userDressDir())
+			return 1
+		}
+		d, err := tape.ResolveDress(ref)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
+			return 1
+		}
+		lines := d.Expansion()
+		if len(lines) == 0 {
+			_, _ = fmt.Fprintf(stdout, "dress %s expands to nothing (empty dress)\n", args[0])
+			return 0
+		}
+		_, _ = fmt.Fprintf(stdout, "dress %s expands to:\n", args[0])
+		for _, l := range lines {
+			_, _ = fmt.Fprintln(stdout, "  "+l)
+		}
+		return 0
+	default:
+		_, _ = fmt.Fprintln(stderr, "usage: foley wardrobe [name]")
+		return 2
+	}
 }
 
 // runThemes lists the vendored theme catalog, one name per line.
