@@ -137,8 +137,26 @@ func (r *Realtime) Now() time.Duration { return time.Since(r.start) }
 // nothing collapses, nothing to flag.
 func (r *Realtime) RestlessSettles() int { return 0 }
 
-// Type presses each rune of s, spacing keystrokes by perKey of real time.
+// Type presses each rune of s, spacing keystrokes by perKey of real
+// time. Zero perKey is paste semantics: one encoded write, no spacing —
+// mirroring the deterministic clock.
 func (r *Realtime) Type(ctx context.Context, s string, perKey time.Duration) error {
+	if perKey == 0 {
+		return r.do(ctx, func() error {
+			var buf []byte
+			for _, rn := range s {
+				b, err := r.opts.Engine.EncodeKey(vtengine.KeyEvent{Key: key.RuneKey(rn), Type: vtengine.KeyTap})
+				if err != nil {
+					return fmt.Errorf("driver: Type %q: %w", rn, err)
+				}
+				buf = append(buf, b...)
+			}
+			if _, err := r.opts.Transport.Write(buf); err != nil {
+				return fmt.Errorf("driver: transport write: %w", err)
+			}
+			return nil
+		})
+	}
 	for _, rn := range s {
 		if err := r.Press(ctx, key.RuneKey(rn), perKey); err != nil {
 			return fmt.Errorf("driver: Type %q: %w", rn, err)

@@ -143,9 +143,22 @@ func New(opts Options) (*Driver, error) {
 // Now reports the virtual timeline position.
 func (d *Driver) Now() time.Duration { return d.now }
 
-// Type presses each rune of s as one step of perKey virtual time. With
-// perKey zero the whole string lands on a single frame.
+// Type presses each rune of s as one step of perKey virtual time. Zero
+// perKey is paste semantics: the whole string is ONE write and ONE
+// settle — per-rune settling would spend real seconds of wall clock on
+// keystrokes the timeline shows for zero time.
 func (d *Driver) Type(ctx context.Context, s string, perKey time.Duration) error {
+	if perKey == 0 {
+		var buf []byte
+		for _, r := range s {
+			b, err := d.opts.Engine.EncodeKey(vtengine.KeyEvent{Key: key.RuneKey(r), Type: vtengine.KeyTap})
+			if err != nil {
+				return fmt.Errorf("driver: Type %q: %w", r, err)
+			}
+			buf = append(buf, b...)
+		}
+		return d.step(ctx, buf, 0)
+	}
 	for _, r := range s {
 		if err := d.Press(ctx, key.RuneKey(r), perKey); err != nil {
 			return fmt.Errorf("driver: Type %q: %w", r, err)

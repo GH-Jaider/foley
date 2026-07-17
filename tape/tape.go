@@ -59,11 +59,14 @@ type Command struct {
 	// Text is the payload of Type and Copy, and the path of Screenshot.
 	Text string
 	// Key, Count and Speed shape a Press (Count repeats; Speed is the
-	// per-press duration, zero meaning the tape's TypingSpeed). Speed
-	// also carries Type's per-key override.
-	Key   key.Key
-	Count int
-	Speed time.Duration
+	// per-press duration). Speed also carries Type's per-key override.
+	// SpeedSet records whether the tape wrote an explicit @duration:
+	// `Type@0ms` means INSTANT (paste semantics), which a zero-means-
+	// default sentinel would silently turn into the TypingSpeed.
+	Key      key.Key
+	Count    int
+	Speed    time.Duration
+	SpeedSet bool
 	// Scope, Pattern and Timeout shape a Wait; nil Pattern and zero
 	// Timeout mean the tape's WaitPattern / WaitTimeout.
 	Scope   WaitScope
@@ -202,7 +205,7 @@ func (t *Tape) convert(c parser.Command, sawAction bool) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		t.Commands = append(t.Commands, Command{Kind: KindType, Text: c.Args, Speed: speed})
+		t.Commands = append(t.Commands, Command{Kind: KindType, Text: c.Args, Speed: speed, SpeedSet: c.Options != ""})
 	case token.SLEEP:
 		d, err := time.ParseDuration(c.Args)
 		if err != nil {
@@ -252,7 +255,7 @@ func (t *Tape) convert(c parser.Command, sawAction bool) (bool, error) {
 		if token.Type(c.Type) == token.SCROLL_DOWN {
 			k = KindScrollDown
 		}
-		t.Commands = append(t.Commands, Command{Kind: k, Count: n, Speed: speed})
+		t.Commands = append(t.Commands, Command{Kind: k, Count: n, Speed: speed, SpeedSet: c.Options != ""})
 	case token.SOURCE:
 		// The grammar expands Source inline; a surviving SOURCE command
 		// would be an upstream behavior change worth failing loudly on.
@@ -292,6 +295,7 @@ func convertKeypress(tt token.Type, speed, count string) (Command, error) {
 		return cmd, err
 	}
 	cmd.Speed = d
+	cmd.SpeedSet = speed != ""
 	n, err := strconv.Atoi(count)
 	if err != nil || n < 1 {
 		return cmd, fmt.Errorf("tape: repeat count %q for %s", count, tt)

@@ -488,3 +488,35 @@ func TestDeterminism(t *testing.T) {
 }
 
 var _ driver.Transport = (*ptyx.Proc)(nil)
+
+// TestTypeZeroSpeedIsPaste: zero perKey types the whole string as ONE
+// write and one settle — instant on the timeline AND on the wall clock
+// (per-rune settling would bill ~50ms of real time per key).
+func TestTypeZeroSpeedIsPaste(t *testing.T) {
+	e := fake.New(vtengine.Options{Geometry: vtengine.Geometry{Cols: 20, Rows: 4}})
+	tr := newTransport(false)
+	r := newRecorder()
+	d, err := driver.New(driver.Options{
+		Engine: e, Transport: tr, Render: r.render, Sink: r,
+		Settle: driver.SettleOptions{First: 30 * time.Millisecond, Quiet: 20 * time.Millisecond, Max: 2 * time.Second},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := d.Type(ctx, "hola", 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(tr.snapWritten()); got != "hola" {
+		t.Fatalf("transport got %q, want the whole string in one paste", got)
+	}
+	if err := d.Sleep(ctx, 100*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	if frames := r.snapFrames(); len(frames) != 1 {
+		t.Fatalf("frames = %d, want 1 (paste lands whole on the slept frame)", len(frames))
+	}
+}

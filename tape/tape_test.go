@@ -76,9 +76,9 @@ ScrollUp@250ms 4
 	}
 
 	want := []tape.Command{
-		{Kind: tape.KindType, Text: "hola foley", Speed: 100 * time.Millisecond},
+		{Kind: tape.KindType, Text: "hola foley", Speed: 100 * time.Millisecond, SpeedSet: true},
 		{Kind: tape.KindPress, Key: key.Named(key.NameEnter), Count: 2},
-		{Kind: tape.KindPress, Key: key.Named(key.NameBackspace), Count: 3, Speed: 50 * time.Millisecond},
+		{Kind: tape.KindPress, Key: key.Named(key.NameBackspace), Count: 3, Speed: 50 * time.Millisecond, SpeedSet: true},
 		{Kind: tape.KindPress, Key: key.RuneKey('c').With(key.ModCtrl | key.ModShift), Count: 1}, // physical base key, mods carry the shift
 		{Kind: tape.KindPress, Key: key.Named(key.NameEnter).With(key.ModAlt), Count: 1},
 		{Kind: tape.KindSleep, Speed: 1500 * time.Millisecond},
@@ -89,7 +89,7 @@ ScrollUp@250ms 4
 		{Kind: tape.KindScreenshot, Text: "cap.png"},
 		{Kind: tape.KindCopy, Text: "pegado"},
 		{Kind: tape.KindPaste},
-		{Kind: tape.KindScrollUp, Count: 4, Speed: 250 * time.Millisecond},
+		{Kind: tape.KindScrollUp, Count: 4, Speed: 250 * time.Millisecond, SpeedSet: true},
 	}
 	if len(tp.Commands) != len(want) {
 		t.Fatalf("got %d commands, want %d:\n%+v", len(tp.Commands), len(want), tp.Commands)
@@ -203,5 +203,27 @@ func TestLateSetTracked(t *testing.T) {
 	}
 	if tp.Settings.FontSize != 30 {
 		t.Fatal("late Set must still apply (last wins)")
+	}
+}
+
+// TestParseSpeedZeroIsExplicit: `Type@0ms` means INSTANT (VHS paste
+// semantics) — the parser must distinguish it from "no @ given", where
+// the tape's TypingSpeed applies.
+func TestParseSpeedZeroIsExplicit(t *testing.T) {
+	tp, err := tape.Parse("Output d.gif\nType@0ms \"fast\"\nType \"slow\"\nEnter@0ms\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tp.Commands) != 3 {
+		t.Fatalf("commands = %d, want 3", len(tp.Commands))
+	}
+	if !tp.Commands[0].SpeedSet || tp.Commands[0].Speed != 0 {
+		t.Fatalf("Type@0ms: SpeedSet=%v Speed=%v, want explicit zero", tp.Commands[0].SpeedSet, tp.Commands[0].Speed)
+	}
+	if tp.Commands[1].SpeedSet {
+		t.Fatal("bare Type must not report an explicit speed")
+	}
+	if !tp.Commands[2].SpeedSet || tp.Commands[2].Speed != 0 {
+		t.Fatalf("Enter@0ms: SpeedSet=%v Speed=%v, want explicit zero", tp.Commands[2].SpeedSet, tp.Commands[2].Speed)
 	}
 }

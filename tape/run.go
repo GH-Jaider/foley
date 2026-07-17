@@ -113,9 +113,11 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		}
 		return time.Duration(float64(d) / t.Settings.PlaybackSpeed)
 	}
-	perKey := func(override time.Duration) time.Duration {
-		if override > 0 {
-			return scale(override)
+	// perKey honors an EXPLICIT @duration even at zero — `Type@0ms` is
+	// VHS's paste semantics, not "use the default".
+	perKey := func(cmd Command) time.Duration {
+		if cmd.SpeedSet {
+			return scale(cmd.Speed)
 		}
 		return scale(t.Settings.TypingSpeed)
 	}
@@ -125,10 +127,10 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		var err error
 		switch cmd.Kind {
 		case KindType:
-			err = rec.Type(ctx, cmd.Text, perKey(cmd.Speed))
+			err = rec.Type(ctx, cmd.Text, perKey(cmd))
 		case KindPress:
 			for i := 0; i < cmd.Count && err == nil; i++ {
-				err = rec.Press(ctx, cmd.Key, perKey(cmd.Speed))
+				err = rec.Press(ctx, cmd.Key, perKey(cmd))
 			}
 		case KindSleep:
 			err = rec.Sleep(ctx, scale(cmd.Speed))
