@@ -45,7 +45,7 @@ Sleep 500ms
 `)
 
 	var out, errb bytes.Buffer
-	if got := run([]string{"-fonts", fonts, "demo.tape"}, &out, &errb); got != 0 {
+	if got := run([]string{"-fonts", fonts, "demo.tape"}, strings.NewReader(""), &out, &errb); got != 0 {
 		t.Fatalf("exit = %d\nstderr: %s", got, errb.String())
 	}
 	if !strings.Contains(out.String(), "wrote demo.gif") || !strings.Contains(out.String(), "wrote demo.mp4") {
@@ -104,7 +104,7 @@ func TestKittyGraphicsExample(t *testing.T) {
 	t.Chdir(dir)
 
 	var out, errb bytes.Buffer
-	if got := run([]string{"-fonts", fonts, "demo.tape"}, &out, &errb); got != 0 {
+	if got := run([]string{"-fonts", fonts, "demo.tape"}, strings.NewReader(""), &out, &errb); got != 0 {
 		t.Fatalf("exit = %d\nstderr: %s", got, errb.String())
 	}
 
@@ -151,4 +151,44 @@ func abs(n int) int {
 		return -n
 	}
 	return n
+}
+
+// TestCLIStdinAndOutputOverride: `foley -` reads the tape from stdin and
+// -o replaces the tape's own Output declarations — the CI redirection
+// combo (`cat demo.tape | foley - -o out.gif`).
+func TestCLIStdinAndOutputOverride(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	tapeSrc := `Output demo.gif
+Set Width 400
+Set Height 160
+Type "echo hola"
+Enter
+Sleep 300ms
+`
+	var out, errb bytes.Buffer
+	if got := run([]string{"-fonts", fonts, "-o", "override.gif", "-"},
+		strings.NewReader(tapeSrc), &out, &errb); got != 0 {
+		t.Fatalf("exit = %d\nstderr: %s", got, errb.String())
+	}
+	if !strings.Contains(out.String(), "wrote override.gif") {
+		t.Fatalf("stdout = %q", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "override.gif")); err != nil {
+		t.Fatalf("override.gif missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "demo.gif")); !os.IsNotExist(err) {
+		t.Fatalf("demo.gif exists — -o must REPLACE the tape's outputs, not add to them (err=%v)", err)
+	}
 }

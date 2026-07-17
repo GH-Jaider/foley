@@ -59,9 +59,8 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 			_, _ = fmt.Fprintln(opts.Warn, "tape: warning:", msg)
 		}
 	}
-	warnStaged(t, opts.Mode, warn)
-	if !opts.ModifyOtherKeys {
-		warnDegradedChords(t, warn)
+	for _, msg := range Lint(t, opts) {
+		warn("%s", msg)
 	}
 
 	for _, prog := range t.Requires {

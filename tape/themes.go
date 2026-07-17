@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/GH-Jaider/foley"
@@ -40,6 +41,22 @@ type vhsTheme struct {
 	BrightMagenta string `json:"brightMagenta"`
 	BrightCyan    string `json:"brightCyan"`
 	BrightWhite   string `json:"brightWhite"`
+}
+
+// Themes lists the vendored VHS theme names accepted by
+// `Set Theme "<name>"`, sorted — the CLI's `foley themes` and anything
+// that wants to offer the catalog.
+func Themes() ([]string, error) {
+	var all []vhsTheme
+	if err := json.Unmarshal(themesJSON, &all); err != nil {
+		return nil, fmt.Errorf("tape: vendored themes.json: %w", err)
+	}
+	names := make([]string, 0, len(all))
+	for _, t := range all {
+		names = append(names, t.Name)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // resolveTheme turns a tape's ThemeRef into a foley.Theme: by curated
