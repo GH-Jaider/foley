@@ -403,8 +403,10 @@ func TestRestlessSettlesCountsContinuousApps(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := d.RestlessSettles(); got != 3 {
-		t.Fatalf("RestlessSettles = %d, want 3", got)
+	// 4 = the LAUNCH settle (also Max-capped by the nonstop writer —
+	// real evidence) plus the three Sleeps.
+	if got := d.RestlessSettles(); got != 4 {
+		t.Fatalf("RestlessSettles = %d, want 4", got)
 	}
 }
 
@@ -518,5 +520,37 @@ func TestTypeZeroSpeedIsPaste(t *testing.T) {
 	}
 	if frames := r.snapFrames(); len(frames) != 1 {
 		t.Fatalf("frames = %d, want 1 (paste lands whole on the slept frame)", len(frames))
+	}
+}
+
+// TestLaunchSettleAbsorbsPromptBeforeFirstKey: the first keystroke must
+// not race the shell's initial paint — the launch settle drains it
+// first, so recordings open "> h", never "h> " (found live by the dress
+// examples).
+func TestLaunchSettleAbsorbsPromptBeforeFirstKey(t *testing.T) {
+	e := fake.New(vtengine.Options{Geometry: vtengine.Geometry{Cols: 20, Rows: 4}})
+	tr := newTransport(true)
+	r := newRecorder()
+	d, err := driver.New(driver.Options{
+		Engine: e, Transport: tr, Render: r.render, Sink: r,
+		Settle: driver.SettleOptions{First: 300 * time.Millisecond, Quiet: 20 * time.Millisecond, Max: 2 * time.Second},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(5 * time.Millisecond) // the "shell" paints its prompt late
+		tr.feed("> ")
+	}()
+	ctx := context.Background()
+	if err := d.Type(ctx, "hi", 10*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	frames := r.snapFrames()
+	if len(frames) == 0 || frames[0].text != "> h" {
+		t.Fatalf("first frame = %+v, want the prompt BEFORE the first key (\"> h\")", frames)
 	}
 }

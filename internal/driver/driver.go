@@ -115,6 +115,7 @@ type Driver struct {
 	// output someone explicitly waits for was asked for.
 	restless int
 	settled  bool // some settle already ran (launch-paint exemption)
+	launched bool // the pre-first-write launch settle already ran
 
 	emitBuf  *image.RGBA // reused render target for timeline frames
 	stillBuf *image.RGBA // reused render target for screenshots
@@ -286,7 +287,20 @@ func (d *Driver) Finish() error {
 }
 
 // step is the universal primitive: write, settle, advance (ADR-012 D1).
+// The very first step runs a LAUNCH settle before writing anything: the
+// shell's initial paint (its prompt) must land before the first
+// keystroke, or the keystroke races it and the recording opens with the
+// key BEFORE the prompt (found live by the dress examples: "e> echo").
 func (d *Driver) step(ctx context.Context, b []byte, dur time.Duration) error {
+	if !d.launched {
+		d.launched = true
+		// prompted=true: the launch paint answers exec, not input — it
+		// must never count as restless (same exemption RestlessSettles
+		// documents).
+		if err := d.settle(ctx, true); err != nil {
+			return err
+		}
+	}
 	if len(b) > 0 {
 		if _, err := d.opts.Transport.Write(b); err != nil {
 			return fmt.Errorf("driver: transport write: %w", err)
