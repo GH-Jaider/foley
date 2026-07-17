@@ -15,3 +15,8 @@ internal/vtengine/ghostty/testdata/bin/
 
 # fuentes pineadas (scripts/fonts.sh)
 internal/fontpack/fonts/
+
+# salidas de correr los examples in-place
+examples/**/*.gif
+examples/**/*.mp4
+examples/**/*.webm

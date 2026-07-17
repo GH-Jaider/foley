@@ -26,6 +26,11 @@ type Timeline interface {
 	ScreenText() (string, error)
 	Finish() error
 	Now() time.Duration
+	// RestlessSettles reports settles where the app wrote with no input
+	// to answer (always zero on the wall clock, which collapses nothing)
+	// — the tape executor turns it into a "this app animates; use
+	// realtime mode" hint.
+	RestlessSettles() int
 }
 
 var (

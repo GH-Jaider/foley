@@ -107,6 +107,14 @@ type Driver struct {
 	now    time.Duration // virtual timeline position
 	hidden bool
 	dirty  bool // engine changed since the pending frame was rendered
+	// restless counts settles where the app kept writing with no input
+	// to answer: the settle hit its Max ceiling (nonstop stream), or
+	// output arrived in a settle no keystroke preceded (animation,
+	// background work). The launch settle is exempt from the unprompted
+	// rule — the first paint answers exec, not input. Waits never count:
+	// output someone explicitly waits for was asked for.
+	restless int
+	settled  bool // some settle already ran (launch-paint exemption)
 
 	emitBuf  *image.RGBA // reused render target for timeline frames
 	stillBuf *image.RGBA // reused render target for screenshots
@@ -271,7 +279,7 @@ func (d *Driver) step(ctx context.Context, b []byte, dur time.Duration) error {
 			return fmt.Errorf("driver: transport write: %w", err)
 		}
 	}
-	if err := d.settle(ctx); err != nil {
+	if err := d.settle(ctx, len(b) > 0); err != nil {
 		return err
 	}
 	return d.advance(dur)
@@ -281,8 +289,11 @@ func (d *Driver) step(ctx context.Context, b []byte, dur time.Duration) error {
 // the first byte, then until a Quiet gap, capped by Max. A closed
 // transport (app exited) ends the settle immediately. Virtual time is
 // untouched. Timer Reset without draining is sound on go >= 1.23.
-func (d *Driver) settle(ctx context.Context) error {
+func (d *Driver) settle(ctx context.Context, prompted bool) error {
 	s := d.opts.Settle
+	unprompted := !prompted && d.settled
+	d.settled = true
+	sawOutput := false
 	deadline := time.NewTimer(s.Max)
 	defer deadline.Stop()
 	quiet := time.NewTimer(s.First)
@@ -295,17 +306,30 @@ func (d *Driver) settle(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
+			sawOutput = true
 			if _, err := d.opts.Engine.Write(ch.Data); err != nil {
 				return err
 			}
 			quiet.Reset(s.Quiet)
 		case <-quiet.C:
+			if unprompted && sawOutput {
+				d.restless++
+			}
 			return nil
 		case <-deadline.C:
+			d.restless++
 			return nil
 		}
 	}
 }
+
+// RestlessSettles reports settles where the app kept writing with no
+// input to answer — nonstop past the Max ceiling, or unprompted after a
+// pure time advance (see the field's classification rules). A nonzero
+// count means the app animates (or works) on its own and deterministic
+// mode collapsed that motion into settled keyframes; callers surface it
+// as a "record with Realtime" hint.
+func (d *Driver) RestlessSettles() int { return d.restless }
 
 // snapshot refreshes d.frame and accumulates dirtiness across every
 // snapshot the driver takes — a Wait's intermediate snapshots must not

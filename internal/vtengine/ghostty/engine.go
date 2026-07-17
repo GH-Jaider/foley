@@ -418,22 +418,38 @@ func (e *Engine) snapshotGraphics(dst *vtengine.Frame) error {
 			C.GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z, unsafe.Pointer(&z))
 		p.ImageID, p.PlacementID = uint32(imageID), uint32(placementID)
 		p.Virtual, p.Z = bool(virtual), int32(z)
+		if p.Virtual {
+			// Placeholder placements render via the grid (fase 2):
+			// they carry no paint geometry here.
+			dst.Graphics.Placements = append(dst.Graphics.Placements, p)
+			continue
+		}
 
-		if !p.Virtual {
-			img := C.ghostty_kitty_graphics_image(gfx, imageID)
-			if img != nil {
-				var info C.GhosttyKittyGraphicsPlacementRenderInfo
-				info.size = C.size_t(unsafe.Sizeof(info))
-				if rc := C.ghostty_kitty_graphics_placement_render_info(e.gfxIter, img, e.term, &info); rc == C.GHOSTTY_SUCCESS {
-					p.Col, p.Row = int32(info.viewport_col), int32(info.viewport_row)
-					p.PixelW, p.PixelH = uint32(info.pixel_width), uint32(info.pixel_height)
-					p.SrcX, p.SrcY = uint32(info.source_x), uint32(info.source_y)
-					p.SrcW, p.SrcH = uint32(info.source_width), uint32(info.source_height)
-					if !bool(info.viewport_visible) {
-						continue // fully off-viewport: nothing to paint this frame
-					}
-				}
-			}
+		// Sub-cell pixel offsets (kitty X=/Y=): apps center sprites with
+		// these — dropping them shifts every placement to its cell corner
+		// (found live by tenten, which centers via X/Y).
+		var offX, offY C.uint32_t
+		C.ghostty_kitty_graphics_placement_get(e.gfxIter,
+			C.GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_X_OFFSET, unsafe.Pointer(&offX))
+		C.ghostty_kitty_graphics_placement_get(e.gfxIter,
+			C.GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Y_OFFSET, unsafe.Pointer(&offY))
+		p.OffX, p.OffY = uint32(offX), uint32(offY)
+
+		img := C.ghostty_kitty_graphics_image(gfx, imageID)
+		if img == nil {
+			continue // image deleted from storage: nothing to show
+		}
+		var info C.GhosttyKittyGraphicsPlacementRenderInfo
+		info.size = C.size_t(unsafe.Sizeof(info))
+		if rc := C.ghostty_kitty_graphics_placement_render_info(e.gfxIter, img, e.term, &info); rc != C.GHOSTTY_SUCCESS {
+			continue // no resolvable geometry: nothing to paint this frame
+		}
+		p.Col, p.Row = int32(info.viewport_col), int32(info.viewport_row)
+		p.PixelW, p.PixelH = uint32(info.pixel_width), uint32(info.pixel_height)
+		p.SrcX, p.SrcY = uint32(info.source_x), uint32(info.source_y)
+		p.SrcW, p.SrcH = uint32(info.source_width), uint32(info.source_height)
+		if !bool(info.viewport_visible) {
+			continue // fully off-viewport: nothing to paint this frame
 		}
 		dst.Graphics.Placements = append(dst.Graphics.Placements, p)
 	}
@@ -576,11 +592,17 @@ func (e *Engine) encodeKeyRaw(ev vtengine.KeyEvent) ([]byte, error) {
 	C.ghostty_key_event_set_key(e.keyEv, keyC(ev.Key))
 
 	// The encoder needs the codepoint to build text-carrying encodings:
-	// plain/shifted runes, and alt-prefixed ones (ESC+utf8 in legacy
-	// mode). Ctrl stays keypress-only — its C0 byte derives from the key.
+	// plain/shifted runes, alt-prefixed ones (ESC+utf8 in legacy mode) —
+	// and the Space key, which IS text (found by a real tape: bare Space
+	// encoded empty). Ctrl stays keypress-only — its C0 byte derives
+	// from the key (Ctrl+Space is NUL).
+	textRune := ev.Key.Rune
+	if textRune == 0 && ev.Key.Name == key.NameSpace {
+		textRune = ' '
+	}
 	var utf8 []byte
-	if ev.Key.Rune != 0 && ev.Key.Mods&^(key.ModShift|key.ModAlt) == 0 {
-		utf8 = []byte(string(ev.Key.Rune))
+	if textRune != 0 && ev.Key.Mods&^(key.ModShift|key.ModAlt) == 0 {
+		utf8 = []byte(string(textRune))
 		C.ghostty_key_event_set_utf8(e.keyEv,
 			(*C.char)(unsafe.Pointer(&utf8[0])), C.size_t(len(utf8)))
 	} else {

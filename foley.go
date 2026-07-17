@@ -334,6 +334,13 @@ func (r *Recorder) Screenshot(path string) error {
 // elapsed wall time in Realtime).
 func (r *Recorder) Now() time.Duration { return r.timeline.Now() }
 
+// RestlessSettles reports how many Deterministic-mode settle windows saw
+// the app writing with no input to answer (animation, background work).
+// Deterministic recordings collapse that self-paced motion into settled
+// keyframes by design — Mode Realtime captures it as it happened. Always
+// zero in Realtime mode.
+func (r *Recorder) RestlessSettles() int { return r.timeline.RestlessSettles() }
+
 // Output finishes the timeline (first call) and encodes the recording to
 // path; the format follows the extension: .gif, .mp4, .webm, .txt (the
 // final screen as text) — or a PNG frame sequence into a directory when

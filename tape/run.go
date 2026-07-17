@@ -38,6 +38,12 @@ type Report struct {
 	Outputs  []string
 }
 
+// restlessWarnThreshold: how many restless settles (app output nobody
+// asked for) earn the deterministic-mode hint. One is already reliable
+// evidence — the driver exempts the launch paint and everything a
+// keystroke prompted — so the only tapes below it are truly quiet ones.
+const restlessWarnThreshold = 1
+
 // Run executes a parsed tape end to end: resolves shell and theme,
 // records every action against a foley Recorder, and encodes each
 // declared Output. Relative paths (outputs, screenshots) resolve against
@@ -157,6 +163,14 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		if err != nil {
 			return rep, err
 		}
+	}
+
+	// The question every animated-TUI tape raises, answered proactively.
+	// One restless settle is already proof the app writes on its own —
+	// launch paint and answered keystrokes never count — and the
+	// keyframe collapse it warns about applies from the first one.
+	if opts.Mode == foley.Deterministic && rec.RestlessSettles() >= restlessWarnThreshold {
+		warn("the app wrote output on its own %d time(s) (animation or background activity); deterministic mode records settled keyframes only — run with --mode realtime to capture that motion as it happened", rec.RestlessSettles())
 	}
 
 	for _, out := range t.Outputs {

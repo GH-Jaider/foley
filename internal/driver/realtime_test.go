@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/GH-Jaider/foley/internal/driver"
+	"github.com/GH-Jaider/foley/internal/ptyx"
 	"github.com/GH-Jaider/foley/internal/vtengine"
 	"github.com/GH-Jaider/foley/internal/vtengine/fake"
 	"github.com/GH-Jaider/foley/key"
@@ -165,6 +166,25 @@ func TestRealtimeScreenshotWhileHidden(t *testing.T) {
 	if frames := g.r.snapFrames(); len(frames) != 1 || frames[0].text != "" {
 		t.Fatalf("frames = %+v, want only the pre-Hide blank", frames)
 	}
+}
+
+// TestRealtimeContinuousWriterStillGetsFrames: micro-quiescence defers
+// ticks that land mid-burst, but its cap must keep a NONSTOP writer
+// rendering — starvation would record nothing.
+func TestRealtimeContinuousWriterStillGetsFrames(t *testing.T) {
+	g := newRtRig(t)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for i := 0; ; i++ {
+			select {
+			case g.tr.ch <- ptyx.Chunk{Data: []byte{byte('a' + i%26)}}:
+			case <-stop:
+				return
+			}
+		}
+	}()
+	waitFor(t, "frames despite a nonstop writer", func() bool { return len(g.r.snapFrames()) >= 2 })
 }
 
 func TestRealtimePressWritesAndActionsAfterFinishFail(t *testing.T) {

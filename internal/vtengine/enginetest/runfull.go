@@ -259,6 +259,10 @@ func RunFull(t *testing.T, factory Factory) {
 			{"shift_tab", vtengine.KeyEvent{Key: key.Named(key.NameTab).With(key.ModShift)}, "\x1b[Z"},
 			{"ctrl_enter_degrades", vtengine.KeyEvent{Key: key.Named(key.NameEnter).With(key.ModCtrl)}, "\r"},
 			{"shift_a_text", vtengine.KeyEvent{Key: key.RuneKey('A').With(key.ModShift)}, "A"},
+			// Space IS text — a real tape found it encoding empty.
+			{"space", vtengine.KeyEvent{Key: key.Named(key.NameSpace)}, " "},
+			{"ctrl_space_nul", vtengine.KeyEvent{Key: key.Named(key.NameSpace).With(key.ModCtrl)}, "\x00"},
+			{"alt_space", vtengine.KeyEvent{Key: key.Named(key.NameSpace).With(key.ModAlt)}, "\x1b "},
 		}
 		for _, c := range cases {
 			got, err := e.EncodeKey(c.ev)

@@ -29,10 +29,14 @@ type RealtimeOptions struct {
 // current frame for free. Durations are real elapsed time between emitted
 // states, so the same Sink works for both clocks.
 //
-// Sampling semantics, stated plainly: a state change is attributed to the
-// tick that observes it (up to one frame period after the bytes arrived;
-// ptyx chunk timestamps remain available if finer attribution is ever
-// needed), and dirtiness is engine-level, not pixel-level — an app that
+// Sampling semantics, stated plainly: a state change is attributed to
+// the tick that observes it. A tick landing inside a repaint burst
+// defers (micro-quiescence, see rtQuietWindow), so attribution lags the
+// bytes by up to 1+rtMaxDeferredTicks frame periods, and an app that
+// saturates the quiet window records at FPS/(1+rtMaxDeferredTicks) —
+// bounded, in exchange for never sampling a torn half-repaint. ptyx
+// chunk timestamps remain available if finer attribution is ever
+// needed. Dirtiness is engine-level, not pixel-level — an app that
 // rewrites identical content produces consecutive identical frames.
 //
 // One event-loop goroutine owns the engine, the render buffers and the
@@ -83,7 +87,29 @@ type rtLoop struct {
 	// appExited remembers a closed chunk channel: it fires exactly once,
 	// and a Wait installed AFTER it must still fail fast.
 	appExited bool
+
+	// lastChunk and deferred implement micro-quiescence: a tick landing
+	// inside a repaint burst would snapshot a torn, half-drawn UI (a
+	// state no human ever perceives on a real terminal), so rendering
+	// defers until the stream has been quiet for a moment — bounded, so
+	// a continuously-writing app still gets frames.
+	lastChunk time.Time
+	deferred  int
 }
+
+const (
+	// rtQuietWindow is how long the byte stream must be quiet before a
+	// tick may snapshot (repaint bursts span single-digit milliseconds).
+	rtQuietWindow = 6 * time.Millisecond
+	// rtMaxDeferredTicks caps quiescence deferrals. Consequence, stated
+	// plainly: an app that never leaves a 6ms gap records at
+	// FPS/(rtMaxDeferredTicks+1) — a bounded worst case of a third of
+	// the requested rate, in exchange for never sampling mid-repaint.
+	// Deliberately internal, not an Options knob: tuning it is choosing
+	// between torn frames and sampling lag, and both bounds are already
+	// at the perceptual floor.
+	rtMaxDeferredTicks = 2
+)
 
 // NewRealtime validates options and starts the recording immediately.
 func NewRealtime(opts RealtimeOptions) (*Realtime, error) {
@@ -106,6 +132,10 @@ func NewRealtime(opts RealtimeOptions) (*Realtime, error) {
 
 // Now reports real time elapsed since the recording started.
 func (r *Realtime) Now() time.Duration { return time.Since(r.start) }
+
+// RestlessSettles is always zero: the wall clock records continuously —
+// nothing collapses, nothing to flag.
+func (r *Realtime) RestlessSettles() int { return 0 }
 
 // Type presses each rune of s, spacing keystrokes by perKey of real time.
 func (r *Realtime) Type(ctx context.Context, s string, perKey time.Duration) error {
@@ -308,6 +338,7 @@ func (lp *rtLoop) snapshot() bool {
 }
 
 func (lp *rtLoop) onChunk(data []byte) {
+	lp.lastChunk = time.Now()
 	if _, err := lp.r.opts.Engine.Write(data); err != nil {
 		lp.fail(err)
 		return
@@ -328,6 +359,11 @@ func (lp *rtLoop) onTick(now time.Time) {
 	if lp.hidden || lp.firstErr != nil {
 		return
 	}
+	if !lp.lastChunk.IsZero() && now.Sub(lp.lastChunk) < rtQuietWindow && lp.deferred < rtMaxDeferredTicks {
+		lp.deferred++ // mid-burst: wait for micro-quiescence, bounded
+		return
+	}
+	lp.deferred = 0
 	if !lp.snapshot() {
 		return
 	}

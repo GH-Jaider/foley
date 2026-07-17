@@ -372,6 +372,95 @@ func TestSettleMaxCapsAStreamingApp(t *testing.T) {
 	}
 }
 
+// TestRestlessSettlesCountsContinuousApps: an app that never goes quiet
+// trips the Max ceiling every settle — the signal the tape executor
+// turns into a "use realtime mode" hint.
+func TestRestlessSettlesCountsContinuousApps(t *testing.T) {
+	e := fake.New(vtengine.Options{Geometry: vtengine.Geometry{Cols: 20, Rows: 4}})
+	tr := newTransport(false)
+	r := newRecorder()
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for {
+			select {
+			case tr.ch <- ptyx.Chunk{Data: []byte("x")}:
+			case <-stop:
+				return
+			}
+		}
+	}()
+	d, err := driver.New(driver.Options{
+		Engine: e, Transport: tr, Render: r.render, Sink: r,
+		Settle: driver.SettleOptions{First: 5 * time.Second, Quiet: 2 * time.Second, Max: 30 * time.Millisecond},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if err := d.Sleep(ctx, 100*time.Millisecond); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := d.RestlessSettles(); got != 3 {
+		t.Fatalf("RestlessSettles = %d, want 3", got)
+	}
+}
+
+// TestRestlessSettlesCountsUnpromptedOutput: output in a settle that no
+// keystroke preceded marks the app as self-animating — with the launch
+// settle exempt (its paint answers exec, not input) and prompted echo
+// never counted.
+func TestRestlessSettlesCountsUnpromptedOutput(t *testing.T) {
+	e := fake.New(vtengine.Options{Geometry: vtengine.Geometry{Cols: 20, Rows: 4}})
+	tr := newTransport(false)
+	r := newRecorder()
+	d, err := driver.New(driver.Options{
+		Engine: e, Transport: tr, Render: r.render, Sink: r,
+		Settle: driver.SettleOptions{First: 50 * time.Millisecond, Quiet: 20 * time.Millisecond, Max: 2 * time.Second},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	// Launch paint queued before the first settle: unprompted but exempt.
+	tr.ch <- ptyx.Chunk{Data: []byte("boot")}
+	if err := d.Sleep(ctx, 10*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.RestlessSettles(); got != 0 {
+		t.Fatalf("after launch settle: RestlessSettles = %d, want 0 (exempt)", got)
+	}
+
+	// Prompted: a keystroke's settle absorbing output is answered input.
+	tr.ch <- ptyx.Chunk{Data: []byte("echo")}
+	if err := d.Press(ctx, key.RuneKey('x'), 10*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.RestlessSettles(); got != 0 {
+		t.Fatalf("after prompted settle: RestlessSettles = %d, want 0", got)
+	}
+
+	// Unprompted: output during a pure time advance = the app moved alone.
+	tr.ch <- ptyx.Chunk{Data: []byte("tick")}
+	if err := d.Sleep(ctx, 10*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.RestlessSettles(); got != 1 {
+		t.Fatalf("after unprompted settle: RestlessSettles = %d, want 1", got)
+	}
+
+	// A quiet Sleep counts nothing.
+	if err := d.Sleep(ctx, 10*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.RestlessSettles(); got != 1 {
+		t.Fatalf("after quiet settle: RestlessSettles = %d, want still 1", got)
+	}
+}
+
 func TestDeterminism(t *testing.T) {
 	script := func() []frameRec {
 		g := newRig(t, true)
