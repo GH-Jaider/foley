@@ -21,15 +21,18 @@ type Cue struct {
 	Kind CueKind
 	// Dress carries the payload when Kind == CueDress.
 	Dress DressRef
+	// KeysSize carries the reel size when Kind == CueKeys.
+	KeysSize foley.KeysSize
 }
 
 // CueKind identifies a cue type.
 type CueKind uint8
 
-// The cue types. dress is the first (ADR-014); zoom, overlay and
-// captions extend the same scanner later.
+// The cue types: dress (ADR-014) and keys (ADR-016); zoom and captions
+// extend the same scanner later.
 const (
 	CueDress CueKind = iota
+	CueKeys
 )
 
 // DressRef is a dress argument in one of its four forms — exactly one
@@ -112,8 +115,20 @@ func scanCues(src string) ([]Cue, error) {
 				return nil, fmt.Errorf("tape: %d: %w", i+1, err)
 			}
 			cues = append(cues, Cue{Line: i + 1, Kind: CueDress, Dress: ref})
+		case "keys":
+			size := foley.KeysMedium
+			switch rest {
+			case "", "medium":
+			case "small":
+				size = foley.KeysSmall
+			case "large":
+				size = foley.KeysLarge
+			default:
+				return nil, fmt.Errorf("tape: %d: keys size %q unknown (small|medium|large)", i+1, rest)
+			}
+			cues = append(cues, Cue{Line: i + 1, Kind: CueKeys, KeysSize: size})
 		default:
-			return nil, fmt.Errorf("tape: %d: unknown cue %q (available cues: dress)", i+1, kind)
+			return nil, fmt.Errorf("tape: %d: unknown cue %q (available cues: dress, keys)", i+1, kind)
 		}
 	}
 	return cues, nil

@@ -121,6 +121,17 @@ const (
 	WindowBarGnomeCSD
 )
 
+// KeysSize scales the input reel's caps relative to the grid's font
+// (ADR-016). The zero value is medium — the grid's own size.
+type KeysSize uint8
+
+// The reel sizes.
+const (
+	KeysMedium KeysSize = iota
+	KeysSmall
+	KeysLarge
+)
+
 // Mode selects the recording clock.
 type Mode uint8
 
@@ -186,7 +197,15 @@ type Options struct {
 	// aligns it left of center (macOS genre centers).
 	WindowTitle     string
 	WindowTitleLeft bool
-	BorderRadius    int
+	// KeysOverlay draws the injected input track as film-strip frames
+	// on a stage band UNDER the window (ADR-016). The canvas GROWS by
+	// the band height — the footage is never covered and the grid
+	// never shrinks (a deliberate, documented divergence from VHS's
+	// "declared size = canvas": VHS has no such feature). KeysSize
+	// picks the reel size; zero = medium.
+	KeysOverlay  bool
+	KeysSize     KeysSize
+	BorderRadius int
 	// FontSize is the font size in logical pixels. Default 16.
 	FontSize int
 	// Scale multiplies every metric for supersampling. Default 2.
@@ -704,7 +723,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	}
 
 	win := raster.Window{}
-	chromeWanted := opts.PixelPadding > 0 || opts.Margin > 0 || barH > 0 || opts.BorderRadius > 0
+	chromeWanted := opts.PixelPadding > 0 || opts.Margin > 0 || barH > 0 || opts.BorderRadius > 0 || opts.KeysOverlay
 	if pixelPath {
 		// Pixel path: the canvas is EXACTLY the declared size, always.
 		win.CanvasW, win.CanvasH = opts.PixelWidth, opts.PixelHeight
@@ -712,6 +731,24 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		// Grid path with chrome: the canvas grows around the grid.
 		win.CanvasW = opts.Cols*cellW + 2*(opts.Margin+opts.PixelPadding)
 		win.CanvasH = opts.Rows*cellH + 2*(opts.Margin+opts.PixelPadding) + barH
+	}
+	keysFontPx := 0
+	if opts.KeysOverlay && win.CanvasW > 0 {
+		// The reel EXTENDS the canvas below the declared size: a cue
+		// never eats grid rows and never covers footage (ADR-016). Its
+		// height follows the grid's cell scaled by the reel size.
+		num := 4
+		switch opts.KeysSize {
+		case KeysSmall:
+			num = 3
+		case KeysMedium:
+		case KeysLarge:
+			num = 5
+		}
+		keysFontPx = opts.FontSize * num / 4
+		band := raster.KeysBandFor(cellH * num / 4)
+		win.KeysBand = band
+		win.CanvasH += band
 	}
 	if win.CanvasW > 0 {
 		win.Padding = opts.PixelPadding
@@ -758,9 +795,14 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		}
 	}
 
+	var keysTrack *raster.KeysTrack
+	if opts.KeysOverlay {
+		keysTrack = raster.NewKeysTrack()
+	}
 	ras, err := raster.New(raster.Options{
 		Pack: pack, UserFonts: userFonts,
 		FontSizePx: opts.FontSize, Scale: opts.Scale, Window: win,
+		Keys: keysTrack, KeysFontPx: keysFontPx,
 	})
 	if err != nil {
 		return nil, err
@@ -817,17 +859,27 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		return ras.Render(f, eng, dst)
 	}
 
+	// Keys band wiring (ADR-016): the driver reports each injected key
+	// into the track; the track paces frame splits and feeds the chips.
+	var onKey func(k key.Key, at time.Duration, hidden bool)
+	var overlay driver.Overlay
+	if keysTrack != nil {
+		onKey, overlay = keysTrack.AddKey, keysTrack
+	}
+
 	var timeline driver.Timeline
 	switch opts.Mode {
 	case Deterministic:
 		timeline, err = driver.New(driver.Options{
 			Engine: eng, Transport: proc, Render: render, Sink: sink,
 			Settle: driver.SettleOptions(opts.Settle),
+			OnKey:  onKey, Overlay: overlay,
 		})
 	case Realtime:
 		timeline, err = driver.NewRealtime(driver.RealtimeOptions{
 			Engine: eng, Transport: proc, Render: render, Sink: sink,
-			FPS: opts.FPS,
+			FPS:   opts.FPS,
+			OnKey: onKey, Overlay: overlay,
 		})
 	default:
 		err = fmt.Errorf("foley: unknown mode %d", opts.Mode)

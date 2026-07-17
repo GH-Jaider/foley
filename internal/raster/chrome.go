@@ -75,6 +75,10 @@ type Window struct {
 	// leak hostnames — determinism). TitleAlign positions it.
 	Title      string
 	TitleAlign TitleAlign
+	// KeysBand is the height of the input-caption band under the
+	// window (ADR-016); zero = no band. The canvas GROWS by it — a cue
+	// never eats grid rows and the footage is never covered.
+	KeysBand int
 	// Radius rounds the window block's corners, revealing MarginFill.
 	Radius int
 }
@@ -125,12 +129,41 @@ func (r *Rasterizer) drawChrome(dst *image.RGBA, bg, fg color.RGBA) {
 
 	// 2. Window block: bar on top, terminal background below (the
 	// padding border is simply background the grid does not cover).
+	// With a keys band the block STOPS above it — the caps float on
+	// the margin fill under the window, like the mockup's stage; the
+	// caps themselves draw per frame (they animate), not here.
+	kb := w.KeysBand * s
 	winTop := m
 	if bh := w.barHeight() * s; bh > 0 {
 		r.drawBar(dst, image.Rect(m, winTop, cw-m, winTop+bh), bg)
 		winTop += bh
 	}
-	fillRect(dst, image.Rect(m, winTop, cw-m, ch-m), bg)
+	fillRect(dst, image.Rect(m, winTop, cw-m, ch-kb-m), bg)
+	if kb > 0 {
+		// The input reel (ADR-016): the whole band is STAGE — a darker
+		// surface that is clearly not the terminal — with the film
+		// strip running square, edge to edge across it (tape shape:
+		// straight cuts, no rounded corners), sprocket rows committed.
+		// The key frames draw per RECORDING frame; this is chrome.
+		bandTop := ch - kb
+		stage := stageShade(bg)
+		r.stageBG = stage
+		fillRect(dst, image.Rect(0, bandTop, cw, ch), stage)
+		stripTop := bandTop + keysStageTop*s
+		stripBot := ch - keysStageBot*s
+		strip := filmShade(bg)
+		fillRect(dst, image.Rect(0, stripTop, cw, stripBot), strip)
+		r.bandRect = image.Rect(m, stripTop, cw-m, stripBot)
+		hole := mixRGBA(strip, bg, 50)
+		hw, hh := keysSprocketW*s, keysSprocketH*s
+		pitch := (keysSprocketW + keysSprocketGap) * s
+		topY := stripTop + keysSprocketPad*s
+		botY := stripBot - keysSprocketPad*s - hh
+		for x := pitch / 2; x+hw <= cw; x += pitch {
+			fillRoundedRect(dst, image.Rect(x, topY, x+hw, topY+hh), s, hole, 255)
+			fillRoundedRect(dst, image.Rect(x, botY, x+hw, botY+hh), s, hole, 255)
+		}
+	}
 }
 
 // barShade derives a bar background that READS as a bar over any theme:
@@ -292,20 +325,28 @@ func (r *Rasterizer) drawBarTitle(dst *image.RGBA, rect image.Rectangle, barBG c
 // renderTitleStrip shapes and rasters the title once, at a size derived
 // from the bar (55% of its height), into an alpha strip.
 func (r *Rasterizer) renderTitleStrip(title string, barPx int) *glyphMask {
-	px := max(8*r.opts.Scale, (barPx*11)/20)
-	face := r.gridFace() // a user font titles its own window
+	m, _ := r.renderTextStrip(title, max(8*r.opts.Scale, (barPx*11)/20))
+	return m
+}
+
+// renderTextStrip shapes and rasters a text run at an explicit pixel
+// size into an alpha strip — the bar title and the key frames share
+// it. The returned ascent lets callers align BASELINES across strips
+// of different sizes (a cap's counter next to its key).
+func (r *Rasterizer) renderTextStrip(title string, px int) (*glyphMask, int) {
+	face := r.gridFace() // a user font labels its own window
 	out := r.shapeAt(face, []rune(title), px)
 	asc := out.LineBounds.Ascent.Round()
 	desc := -out.LineBounds.Descent.Round()
 	if asc <= 0 {
-		return nil
+		return nil, 0
 	}
 	width := 0
 	for _, g := range out.Glyphs {
 		width += g.Advance.Round()
 	}
 	if width <= 0 {
-		return nil
+		return nil, 0
 	}
 	strip := image.NewAlpha(image.Rect(0, 0, width, asc+desc))
 	pen := 0
@@ -315,7 +356,7 @@ func (r *Rasterizer) renderTitleStrip(title string, barPx int) *glyphMask {
 		}
 		pen += g.Advance.Round()
 	}
-	return &glyphMask{alpha: strip}
+	return &glyphMask{alpha: strip}, asc
 }
 
 // blitAlpha maxes a glyph mask into an alpha strip at (penX, baselineY).
@@ -339,6 +380,79 @@ func blitAlpha(dst *image.Alpha, m *glyphMask, penX, baselineY int) {
 			if dst.Pix[o] < a {
 				dst.Pix[o] = a
 			}
+		}
+	}
+}
+
+// fillRoundedRect blends a rounded rectangle over dst at the given
+// opacity (0-255) — the key chips' body. Corner coverage reuses the
+// half-pixel AA circle.
+func fillRoundedRect(dst *image.RGBA, rect image.Rectangle, rad int, c color.RGBA, alpha int) {
+	if alpha <= 0 {
+		return
+	}
+	b := dst.Bounds()
+	for y := max(rect.Min.Y, 0); y < min(rect.Max.Y, b.Max.Y); y++ {
+		for x := max(rect.Min.X, 0); x < min(rect.Max.X, b.Max.X); x++ {
+			cov := 1.0
+			left, right := x < rect.Min.X+rad, x >= rect.Max.X-rad
+			top, bot := y < rect.Min.Y+rad, y >= rect.Max.Y-rad
+			if (left || right) && (top || bot) {
+				cx, cy := rect.Min.X+rad, rect.Min.Y+rad
+				if right {
+					cx = rect.Max.X - rad
+				}
+				if bot {
+					cy = rect.Max.Y - rad
+				}
+				cov = circleCoverage(x, y, cx, cy, rad+1)
+			}
+			a := int(math.Round(cov*255)) * alpha / 255
+			if a <= 0 {
+				continue
+			}
+			o := dst.PixOffset(x, y)
+			ia := 255 - a
+			dst.Pix[o] = uint8((int(c.R)*a + int(dst.Pix[o])*ia) / 255)     //nolint:gosec // bounded by construction
+			dst.Pix[o+1] = uint8((int(c.G)*a + int(dst.Pix[o+1])*ia) / 255) //nolint:gosec
+			dst.Pix[o+2] = uint8((int(c.B)*a + int(dst.Pix[o+2])*ia) / 255) //nolint:gosec
+			dst.Pix[o+3] = 0xff
+		}
+	}
+}
+
+// blitMaskFaded is blitMask with an extra opacity multiplier — fading
+// chip labels.
+func blitMaskFaded(dst *image.RGBA, m *glyphMask, x, y int, c color.RGBA, alpha int) {
+	if alpha >= 255 {
+		blitMask(dst, m, x, y, c)
+		return
+	}
+	if alpha <= 0 {
+		return
+	}
+	mb := m.alpha.Bounds()
+	db := dst.Bounds()
+	for j := 0; j < mb.Dy(); j++ {
+		dy := y + j
+		if dy < 0 || dy >= db.Max.Y {
+			continue
+		}
+		for i := 0; i < mb.Dx(); i++ {
+			a := int(m.alpha.Pix[j*m.alpha.Stride+i]) * alpha / 255
+			if a == 0 {
+				continue
+			}
+			dx := x + i
+			if dx < 0 || dx >= db.Max.X {
+				continue
+			}
+			o := dst.PixOffset(dx, dy)
+			ia := 255 - a
+			dst.Pix[o] = uint8((int(c.R)*a + int(dst.Pix[o])*ia) / 255)     //nolint:gosec // bounded by construction
+			dst.Pix[o+1] = uint8((int(c.G)*a + int(dst.Pix[o+1])*ia) / 255) //nolint:gosec
+			dst.Pix[o+2] = uint8((int(c.B)*a + int(dst.Pix[o+2])*ia) / 255) //nolint:gosec
+			dst.Pix[o+3] = 0xff
 		}
 	}
 }
@@ -395,6 +509,9 @@ func (r *Rasterizer) roundCorners(dst *image.RGBA) {
 	rad := radius * s
 	m := w.Margin * s
 	cw, ch := w.CanvasW*s, w.CanvasH*s
+	// The keys band sits below the window block: corners round the
+	// BLOCK, not the canvas.
+	ch -= w.KeysBand * s
 	// Window block corners (inside the margin).
 	corners := [4]struct{ x, y, cx, cy int }{
 		{m, m, m + rad, m + rad},                                 // top-left
@@ -409,7 +526,10 @@ func (r *Rasterizer) roundCorners(dst *image.RGBA) {
 		// Sample the cached canvas-scaled fill drawChrome built.
 		return r.marginBuf.RGBAAt(x, y)
 	}
-	for _, c := range corners {
+	for ci, c := range corners {
+		// With the reel below, the block's bottom corners border the
+		// STAGE, not the margin — they reveal the stage shade.
+		stage := w.KeysBand > 0 && ci >= 2
 		for y := c.y; y < c.y+rad; y++ {
 			for x := c.x; x < c.x+rad; x++ {
 				if x < 0 || y < 0 || x >= cw || y >= ch {
@@ -421,6 +541,9 @@ func (r *Rasterizer) roundCorners(dst *image.RGBA) {
 					continue // fully inside the window: untouched
 				}
 				fill := marginAt(x, y)
+				if stage {
+					fill = r.stageBG
+				}
 				a := int(math.Round((1 - cov) * 255))
 				o := dst.PixOffset(x, y)
 				ia := 255 - a

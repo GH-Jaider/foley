@@ -51,6 +51,12 @@ type Options struct {
 	// window bar, padding, rounded corners). Zero value = no chrome, the
 	// canvas is exactly the grid.
 	Window Window
+	// Keys is the injected input track for the keys band (ADR-016);
+	// nil = no chips. Window.KeysBand sizes the band itself.
+	Keys *KeysTrack
+	// KeysFontPx is the cap label size in logical px (the reel's
+	// small/medium/large); zero = FontSizePx.
+	KeysFontPx int
 }
 
 // Rasterizer turns engine frames into RGBA images. It caches parsed
@@ -92,6 +98,17 @@ type Rasterizer struct {
 	// the theme foreground the title color derives from.
 	titleMask *glyphMask
 	titleFG   color.RGBA
+	// The keys band (ADR-016): the track feeding the frames, the film
+	// strip's rect and the stage shade (set by drawChrome — the block's
+	// bottom corners reveal the stage), the cap font size, and the
+	// label cache.
+	keys      *KeysTrack
+	bandRect  image.Rectangle
+	stageBG   color.RGBA
+	keysCapPx int
+	keyStrips map[string]textStrip
+	capLabels map[string]string
+	keysMult  string
 }
 
 // glyphKey caches masks per FACE — the GID space belongs to a face, so
@@ -117,12 +134,19 @@ func New(opts Options) (*Rasterizer, error) {
 		return nil, fmt.Errorf("raster: invalid size/scale %d/%d", opts.FontSizePx, opts.Scale)
 	}
 	r := &Rasterizer{
-		opts:    opts,
-		sizePx:  opts.FontSizePx * opts.Scale,
-		glyphs:  make(map[glyphKey]*glyphMask),
-		sprites: make(map[rune]*glyphMask),
-		emojis:  make(map[font.GID]*image.RGBA),
-		kitty:   make(map[kittyKey]*image.RGBA),
+		opts:      opts,
+		sizePx:    opts.FontSizePx * opts.Scale,
+		glyphs:    make(map[glyphKey]*glyphMask),
+		sprites:   make(map[rune]*glyphMask),
+		emojis:    make(map[font.GID]*image.RGBA),
+		kitty:     make(map[kittyKey]*image.RGBA),
+		keys:      opts.Keys,
+		keyStrips: make(map[string]textStrip),
+		capLabels: make(map[string]string),
+	}
+	r.keysCapPx = r.sizePx
+	if opts.KeysFontPx > 0 {
+		r.keysCapPx = opts.KeysFontPx * opts.Scale
 	}
 	var err error
 	if r.text, err = font.ParseTTF(bytes.NewReader(opts.Pack.Text)); err != nil {
@@ -170,6 +194,18 @@ func New(opts Options) (*Rasterizer, error) {
 	}
 	r.computeMetrics()
 	r.checkUserFont()
+	// The coalescing counter's multiplication sign, decided once per
+	// effective font (× when covered, plain x otherwise).
+	r.keysMult = "×"
+	if _, ok := r.gridFace().NominalGlyph('×'); !ok {
+		r.keysMult = "x"
+	}
+	if opts.Keys != nil && opts.Window.KeysBand > 0 {
+		// Take capacity from what the strip actually fits (a square
+		// frame is the minimum): same inputs, same capacity.
+		frameH := opts.Window.KeysBand - keysStageTop - keysStageBot - 2*(keysSprocketH+2*keysSprocketPad)
+		opts.Keys.setCapacity((opts.Window.CanvasW - 2*opts.Window.Margin) / (frameH + keysCapGap))
+	}
 	ox, oy := opts.Window.contentOrigin()
 	r.orgX, r.orgY = ox*opts.Scale, oy*opts.Scale
 	return r, nil
@@ -278,10 +314,15 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 	if err := r.drawPlacements(dst, src, placements[vtengine.LayerAboveText]); err != nil {
 		return nil, err
 	}
-	// 4. Cursor on top; rounded corners re-reveal the margin fill LAST,
-	// masking the whole window block like VHS does.
+	// 4. Cursor on top; the keys band's chips (they animate per frame,
+	// unlike the band strip itself, which is chrome); rounded corners
+	// re-reveal the margin fill LAST, masking the whole window block
+	// like VHS does.
 	r.drawCursor(dst, f)
 	r.roundCorners(dst)
+	// The key caps live OUTSIDE the window block (the band below), so
+	// they composite after the corner mask.
+	r.drawKeyChips(dst, f)
 	return dst, nil
 }
 

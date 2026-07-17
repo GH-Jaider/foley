@@ -87,6 +87,17 @@ type SettleOptions struct {
 	Max time.Duration
 }
 
+// Overlay is a time-driven composited layer (the keys band, ADR-016).
+// The driver sets its clock to each frame's START instant before
+// rendering, and splits time advances at its breakpoints so the
+// overlay's animation lands on exact frames. Implementations live in
+// the raster; the contract is structural — neither package imports the
+// other.
+type Overlay interface {
+	SetTime(t time.Duration)
+	Breakpoints(from, to time.Duration) []time.Duration
+}
+
 // Options configures a Driver. Engine, Transport, Render and Sink are
 // required; zero Settle fields get defaults (150ms / 40ms / 2s).
 type Options struct {
@@ -95,6 +106,11 @@ type Options struct {
 	Render    RenderFunc
 	Sink      Sink
 	Settle    SettleOptions
+	// OnKey observes every injected keystroke at its virtual instant,
+	// with the Hide state — concealed setup must not leak its typing.
+	OnKey func(k key.Key, at time.Duration, hidden bool)
+	// Overlay, when non-nil, animates over the frames (see Overlay).
+	Overlay Overlay
 }
 
 // Driver runs a deterministic recording timeline. Not safe for concurrent
@@ -157,6 +173,11 @@ func (d *Driver) Type(ctx context.Context, s string, perKey time.Duration) error
 				return fmt.Errorf("driver: Type %q: %w", r, err)
 			}
 			buf = append(buf, b...)
+			if d.opts.OnKey != nil {
+				// Paste semantics: every rune lands at the same instant
+				// — the track shows the string arriving whole.
+				d.opts.OnKey(key.RuneKey(r), d.now, d.hidden)
+			}
 		}
 		return d.step(ctx, buf, 0)
 	}
@@ -174,6 +195,9 @@ func (d *Driver) Press(ctx context.Context, k key.Key, dur time.Duration) error 
 	b, err := d.opts.Engine.EncodeKey(vtengine.KeyEvent{Key: k, Type: vtengine.KeyTap})
 	if err != nil {
 		return fmt.Errorf("driver: Press: %w", err)
+	}
+	if d.opts.OnKey != nil {
+		d.opts.OnKey(k, d.now, d.hidden)
 	}
 	return d.step(ctx, b, dur)
 }
@@ -255,6 +279,9 @@ func (d *Driver) Show() error {
 func (d *Driver) Screenshot(name string) error {
 	if _, err := d.snapshot(); err != nil {
 		return err
+	}
+	if d.opts.Overlay != nil {
+		d.opts.Overlay.SetTime(d.now)
 	}
 	img, err := d.opts.Render(&d.frame, d.stillBuf)
 	if err != nil {
@@ -369,11 +396,40 @@ func (d *Driver) snapshot() (*vtengine.Frame, error) {
 	return &d.frame, nil
 }
 
-// advance moves virtual time by dur and accounts the span to the current
-// settled state: unchanged state extends the pending frame, changed state
-// flushes it and renders anew. States that were visible for zero time
-// (perKey == 0 bursts) are skipped by flush, so they cost no frames.
+// advance moves virtual time by dur. With an overlay, the span first
+// splits at the overlay's breakpoints — a chip fading mid-Sleep needs
+// its own frames — and each cut forces a fresh render even when the
+// grid did not change (the overlay did).
 func (d *Driver) advance(dur time.Duration) error {
+	if d.opts.Overlay == nil || d.hidden || dur == 0 {
+		return d.advanceSpan(dur)
+	}
+	start := d.now
+	prev := start
+	for _, cut := range d.opts.Overlay.Breakpoints(start, start+dur) {
+		if cut == start {
+			// A state change lands exactly at this span's first frame
+			// (e.g. a fade step that closed the previous advance).
+			d.dirty = true
+			continue
+		}
+		if cut <= prev || cut >= start+dur {
+			continue
+		}
+		if err := d.advanceSpan(cut - prev); err != nil {
+			return err
+		}
+		d.dirty = true
+		prev = cut
+	}
+	return d.advanceSpan(start + dur - prev)
+}
+
+// advanceSpan accounts one span to the current settled state: unchanged
+// state extends the pending frame, changed state flushes it and renders
+// anew. States that were visible for zero time (perKey == 0 bursts) are
+// skipped by flush, so they cost no frames.
+func (d *Driver) advanceSpan(dur time.Duration) error {
 	d.now += dur
 	if d.hidden {
 		return nil
@@ -387,6 +443,10 @@ func (d *Driver) advance(dur time.Duration) error {
 	}
 	if err := d.flush(); err != nil {
 		return err
+	}
+	if d.opts.Overlay != nil {
+		// The frame represents the span STARTING at now-dur.
+		d.opts.Overlay.SetTime(d.now - dur)
 	}
 	img, err := d.opts.Render(&d.frame, d.emitBuf)
 	if err != nil {

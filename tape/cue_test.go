@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/tape"
 )
 
@@ -367,5 +368,49 @@ func TestSourcedCuesAreLoud(t *testing.T) {
 	_, err := tape.Parse("Output d.gif\nSource common.tape\nType \"x\"\n")
 	if err == nil || !strings.Contains(err.Error(), "top-level") {
 		t.Fatalf("sourced cue must be loud, got: %v", err)
+	}
+}
+
+// TestKeysCue: the second cue (ADR-016) — parses bare and with a size,
+// rejects unknown sizes and duplicates, layers under the CLI override.
+func TestKeysCue(t *testing.T) {
+	tp, err := tape.Parse("Output d.gif\n# foley: keys\nType \"x\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if on, size := tp.KeysCue(); !on || size != foley.KeysMedium {
+		t.Fatalf("bare keys cue = %v %v, want on medium", on, size)
+	}
+	settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
+	if err != nil || !settings.KeysOverlay {
+		t.Fatalf("effective keys: err=%v on=%v", err, settings.KeysOverlay)
+	}
+	settings, err = tape.EffectiveSettingsForTest(tp, tape.RunOptions{Keys: tape.KeysOff})
+	if err != nil || settings.KeysOverlay {
+		t.Fatal("-keys off must strip the reel")
+	}
+
+	small, err := tape.Parse("Output d.gif\n# foley: keys small\nType \"x\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if on, size := small.KeysCue(); !on || size != foley.KeysSmall {
+		t.Fatalf("keys small = %v %v", on, size)
+	}
+
+	plain, err := tape.Parse("Output d.gif\nType \"x\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, err = tape.EffectiveSettingsForTest(plain, tape.RunOptions{Keys: tape.KeysOnLarge})
+	if err != nil || !settings.KeysOverlay || settings.KeysSize != foley.KeysLarge {
+		t.Fatalf("-keys large must add the reel: %+v", settings.KeysSize)
+	}
+
+	if _, err := tape.Parse("Output d.gif\n# foley: keys bottom\nType \"x\"\n"); err == nil || !strings.Contains(err.Error(), "small|medium|large") {
+		t.Fatalf("unknown keys size must fail loudly, got %v", err)
+	}
+	if _, err := tape.Parse("Output d.gif\n# foley: keys\n# foley: keys\nType \"x\"\n"); err == nil || !strings.Contains(err.Error(), "lines 2 and 3") {
+		t.Fatalf("two keys cues must fail with lines, got %v", err)
 	}
 }

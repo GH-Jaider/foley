@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/key"
 	"github.com/GH-Jaider/foley/tape/internal/vhsgrammar/lexer"
 	"github.com/GH-Jaider/foley/tape/internal/vhsgrammar/parser"
@@ -80,7 +81,12 @@ type Settings struct {
 	FontFamily string
 	// FontFiles is a per-style user font family (foley-only: reachable
 	// through a dress, no VHS Set exists — ADR-015).
-	FontFiles     FontFiles
+	FontFiles FontFiles
+	// KeysOverlay turns on the input reel, KeysSize picks its size
+	// (foley-only: the `# foley: keys` cue or the CLI override —
+	// ADR-016).
+	KeysOverlay   bool
+	KeysSize      foley.KeysSize
 	FontSize      int
 	LetterSpacing float64
 	LineHeight    float64
@@ -150,6 +156,17 @@ func (t *Tape) DressCue() DressRef {
 	return DressRef{}
 }
 
+// KeysCue reports whether the tape asks for the input reel (ADR-016)
+// and at which size. Parse guarantees at most one keys cue.
+func (t *Tape) KeysCue() (bool, foley.KeysSize) {
+	for _, c := range t.Cues {
+		if c.Kind == CueKeys {
+			return true, c.KeysSize
+		}
+	}
+	return false, foley.KeysMedium
+}
+
 // vhsDefaults are VHS's own default options (vhs.go/style.go/video.go of
 // the pinned release) — a migrated tape must behave as it did there.
 func vhsDefaults() Settings {
@@ -190,15 +207,22 @@ func Parse(src string) (*Tape, error) {
 	if err != nil {
 		return nil, err
 	}
-	var dressLines []string
+	var dressLines, keysLines []string
 	for _, c := range cues {
-		if c.Kind == CueDress {
+		switch c.Kind {
+		case CueDress:
 			dressLines = append(dressLines, strconv.Itoa(c.Line))
+		case CueKeys:
+			keysLines = append(keysLines, strconv.Itoa(c.Line))
 		}
 	}
 	if len(dressLines) > 1 {
 		return nil, fmt.Errorf("tape: more than one `# foley: dress` cue (lines %s) — a tape has one look",
 			strings.Join(dressLines, " and "))
+	}
+	if len(keysLines) > 1 {
+		return nil, fmt.Errorf("tape: more than one `# foley: keys` cue (lines %s) — the band is one switch",
+			strings.Join(keysLines, " and "))
 	}
 
 	t := &Tape{

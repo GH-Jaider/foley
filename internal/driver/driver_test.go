@@ -554,3 +554,72 @@ func TestLaunchSettleAbsorbsPromptBeforeFirstKey(t *testing.T) {
 		t.Fatalf("first frame = %+v, want the prompt BEFORE the first key (\"> h\")", frames)
 	}
 }
+
+// scriptedOverlay is a minimal Overlay: fixed breakpoints, recorded
+// SetTime calls.
+type scriptedOverlay struct {
+	cuts  []time.Duration
+	times []time.Duration
+}
+
+func (o *scriptedOverlay) SetTime(t time.Duration) { o.times = append(o.times, t) }
+func (o *scriptedOverlay) Breakpoints(from, to time.Duration) []time.Duration {
+	var out []time.Duration
+	for _, c := range o.cuts {
+		if c >= from && c < to {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// TestOverlaySplitsAdvances pins the ADR-016 emission contract: a span
+// crossing overlay breakpoints splits into exact sub-frames — a chip
+// fading mid-Sleep gets its own frames even though the GRID never
+// changed — and every render sees the frame's START instant.
+func TestOverlaySplitsAdvances(t *testing.T) {
+	e := fake.New(vtengine.Options{Geometry: vtengine.Geometry{Cols: 20, Rows: 4}})
+	tr := newTransport(false)
+	r := newRecorder()
+	ov := &scriptedOverlay{cuts: []time.Duration{600 * time.Millisecond, 900 * time.Millisecond}}
+	d, err := driver.New(driver.Options{
+		Engine: e, Transport: tr, Render: r.render, Sink: r,
+		Settle:  driver.SettleOptions{First: 2 * time.Millisecond, Quiet: 2 * time.Millisecond, Max: time.Second},
+		Overlay: ov,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := d.Press(ctx, key.RuneKey('a'), 500*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Sleep(ctx, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	// The overlay state is constant through [0,600): the press frame
+	// EXTENDS across the first sub-span (600ms total), then each cut
+	// forces a fresh render: [600,900) and [900,1500).
+	durs := []time.Duration{600 * time.Millisecond, 300 * time.Millisecond, 600 * time.Millisecond}
+	frames := r.snapFrames()
+	if len(frames) != len(durs) {
+		t.Fatalf("frames = %+v, want durations %v", frames, durs)
+	}
+	for i, want := range durs {
+		if frames[i].dur != want {
+			t.Fatalf("frame %d dur = %v, want %v", i, frames[i].dur, want)
+		}
+	}
+	wantTimes := []time.Duration{0, 600 * time.Millisecond, 900 * time.Millisecond}
+	if len(ov.times) != len(wantTimes) {
+		t.Fatalf("SetTime calls = %v, want %v", ov.times, wantTimes)
+	}
+	for i, want := range wantTimes {
+		if ov.times[i] != want {
+			t.Fatalf("SetTime %d = %v, want %v", i, ov.times[i], want)
+		}
+	}
+}

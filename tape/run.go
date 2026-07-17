@@ -13,6 +13,19 @@ import (
 	"github.com/GH-Jaider/foley/key"
 )
 
+// KeysOverride is the CLI's replacement for the tape's keys layer
+// (ADR-016). The zero value defers to the tape.
+type KeysOverride uint8
+
+// The keys overrides.
+const (
+	KeysDefault KeysOverride = iota
+	KeysOff
+	KeysOnSmall
+	KeysOnMedium
+	KeysOnLarge
+)
+
 // RunOptions configures an execution. The zero value records in
 // Deterministic mode with foley's font resolution and collects warnings
 // silently.
@@ -32,6 +45,11 @@ type RunOptions struct {
 	// layer. Explicit `Set`s in the tape always win over either. Build
 	// one from CLI-style input with ParseDressRef.
 	Dress DressRef
+	// Keys REPLACES the tape's keys switch (ADR-016): the zero value
+	// keeps the tape's own `# foley: keys` cue; the others force the
+	// reel off or on at a size (the CLI's -keys off|on|small|medium|
+	// large).
+	Keys KeysOverride
 	// Warn receives one line per compatibility warning as it happens
 	// (they are also collected in the Report). nil discards the stream.
 	Warn io.Writer
@@ -115,6 +133,8 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		WindowBarColor:  settings.WindowBarColor,
 		WindowTitle:     settings.WindowTitle,
 		WindowTitleLeft: settings.TitleAlign == "left",
+		KeysOverlay:     settings.KeysOverlay,
+		KeysSize:        settings.KeysSize,
 		BorderRadius:    settings.BorderRadius,
 		FontSize:        settings.FontSize,
 		FontFamily:      fontFamilyFor(settings.FontFamily),
@@ -220,8 +240,22 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 // defaults < dress (the tape's cue, or opts.Dress which REPLACES that
 // layer) < the tape's explicit Sets — computed on a COPY, so Run never
 // mutates the caller's Tape (parse once, run many: light/dark pairs).
+// The keys band follows the same layering: the tape's cue turns it on,
+// opts.Keys replaces that switch (ADR-016).
 func effectiveSettings(t *Tape, opts RunOptions) (Settings, error) {
 	settings := t.Settings
+	settings.KeysOverlay, settings.KeysSize = t.KeysCue()
+	switch opts.Keys {
+	case KeysDefault:
+	case KeysOff:
+		settings.KeysOverlay = false
+	case KeysOnSmall:
+		settings.KeysOverlay, settings.KeysSize = true, foley.KeysSmall
+	case KeysOnMedium:
+		settings.KeysOverlay, settings.KeysSize = true, foley.KeysMedium
+	case KeysOnLarge:
+		settings.KeysOverlay, settings.KeysSize = true, foley.KeysLarge
+	}
 	ref := t.DressCue()
 	if !opts.Dress.IsZero() {
 		ref = opts.Dress

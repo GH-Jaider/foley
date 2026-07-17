@@ -115,12 +115,16 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"write the recording to this path (repeatable; format by extension, replaces the tape's Output declarations)")
 	dress := fs.String("dress", "",
 		"replace the tape's dress layer: a built-in name (see `foley wardrobe`), a .json path, an inline {json}, or none — the tape's explicit Sets still win")
+	keys := fs.String("keys", "",
+		"replace the tape's keys layer: off, or on|small|medium|large to draw the input reel at that size (default: the tape's `# foley: keys` cue decides)")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley [flags] <file.tape | ->\n"+
 			"       foley validate [flags] <file.tape ... | ->\n"+
 			"       foley new <file.tape>\n"+
+			"       foley sew [-from <dress>] <name>\n"+
 			"       foley doctor [-fonts dir]\n"+
 			"       foley themes\n"+
+			"       foley fonts\n"+
 			"       foley wardrobe [name]\n\n"+
 			"\"-\" reads the tape from stdin. Relative paths in the tape (Output,\n"+
 			"Screenshot, Source) resolve against the current working directory,\n"+
@@ -155,12 +159,28 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
+	var keysOverride tape.KeysOverride
+	switch *keys {
+	case "":
+	case "off":
+		keysOverride = tape.KeysOff
+	case "on", "medium":
+		keysOverride = tape.KeysOnMedium
+	case "small":
+		keysOverride = tape.KeysOnSmall
+	case "large":
+		keysOverride = tape.KeysOnLarge
+	default:
+		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: off, on, small, medium or large\n", *keys)
+		return 2
+	}
 
 	opts := tape.RunOptions{
 		Mode:            m,
 		ModifyOtherKeys: *mok,
 		FontsDir:        *fonts,
 		Dress:           dressRef,
+		Keys:            keysOverride,
 		Warn:            stderr,
 	}
 	src, err := readTape(fs.Arg(0), stdin)
@@ -247,17 +267,20 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 			_, _ = fmt.Fprintf(stderr, "%s: warning: %s\n", arg, w)
 		}
 		if n := len(t.Cues); n > 0 {
-			dresses := 0
+			dresses, keys := 0, 0
 			for _, c := range t.Cues {
-				if c.Kind == tape.CueDress {
+				switch c.Kind {
+				case tape.CueDress:
 					dresses++
+				case tape.CueKeys:
+					keys++
 				}
 			}
 			plural := "s"
 			if n == 1 {
 				plural = ""
 			}
-			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress\n", arg, n, plural, dresses)
+			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys\n", arg, n, plural, dresses, keys)
 		}
 	}
 	return exit

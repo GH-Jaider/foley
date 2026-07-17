@@ -16,9 +16,17 @@ type shell struct {
 func shellFor(name string) (shell, error) {
 	switch name {
 	case "bash":
+		// VHS disables history outright (+o history); foley keeps
+		// SESSION history — it only contains what the tape typed, so
+		// it is deterministic, and Up recalls the demo's own commands
+		// like a real terminal. HISTFILE stays empty (nothing personal
+		// read or written) and histexpand is OFF: with a live history
+		// list, a typed `!1` would otherwise silently EXPAND against
+		// the session (review finding, probe-confirmed). Literal `!`
+		// also beats VHS's "event not found" error.
 		return shell{
-			env:     []string{"PS1=\\[\\e[38;2;90;86;224m\\]> \\[\\e[0m\\]", "BASH_SILENCE_DEPRECATION_WARNING=1"},
-			command: []string{"bash", "--noprofile", "--norc", "--login", "+o", "history"},
+			env:     []string{"PS1=\\[\\e[38;2;90;86;224m\\]> \\[\\e[0m\\]", "BASH_SILENCE_DEPRECATION_WARNING=1", "HISTFILE="},
+			command: []string{"bash", "--noprofile", "--norc", "--login", "+o", "histexpand"},
 		}, nil
 	case "zsh":
 		return shell{

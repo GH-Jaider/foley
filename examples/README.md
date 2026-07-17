@@ -26,3 +26,10 @@ The examples in this directory showcase foley-only ground:
   kitty graphics protocol. VHS's xterm.js cannot display it at all;
   foley's embedded engine decodes the transmission and composites the
   image into the recording, byte-exactly, on any machine.
+- **`dresses/`** — one scene recorded under the whole wardrobe: genre
+  chrome, the noir/paper light/dark pair, and a brand kit in a file
+  (`# foley: dress …` — VHS ignores the cue and still records).
+- **`keys/`** — the input reel (`# foley: keys`): a film strip under
+  the window where every keystroke lands as a frame, with exact
+  timing — foley is the one typing, so the track is emitted, not
+  captured. The most-upvoted VHS request, structural here.

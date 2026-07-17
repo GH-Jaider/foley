@@ -21,6 +21,11 @@ type RealtimeOptions struct {
 	Render    RenderFunc
 	Sink      Sink
 	FPS       int
+	// OnKey and Overlay mirror the deterministic driver's (ADR-016);
+	// here timestamps are wall-clock since the recording started, and
+	// the overlay animates on the FPS ticks (no span splitting).
+	OnKey   func(k key.Key, at time.Duration, hidden bool)
+	Overlay Overlay
 }
 
 // Realtime is the wall-clock timeline (ADR-012 D7): recording starts at
@@ -150,6 +155,9 @@ func (r *Realtime) Type(ctx context.Context, s string, perKey time.Duration) err
 					return fmt.Errorf("driver: Type %q: %w", rn, err)
 				}
 				buf = append(buf, b...)
+				if r.opts.OnKey != nil {
+					r.opts.OnKey(key.RuneKey(rn), time.Since(r.start), r.lp.hidden)
+				}
 			}
 			if _, err := r.opts.Transport.Write(buf); err != nil {
 				return fmt.Errorf("driver: transport write: %w", err)
@@ -172,6 +180,9 @@ func (r *Realtime) Press(ctx context.Context, k key.Key, dur time.Duration) erro
 		b, err := r.opts.Engine.EncodeKey(vtengine.KeyEvent{Key: k, Type: vtengine.KeyTap})
 		if err != nil {
 			return fmt.Errorf("driver: Press: %w", err)
+		}
+		if r.opts.OnKey != nil {
+			r.opts.OnKey(k, time.Since(r.start), r.lp.hidden)
 		}
 		if _, err := r.opts.Transport.Write(b); err != nil {
 			return fmt.Errorf("driver: transport write: %w", err)
@@ -386,7 +397,17 @@ func (lp *rtLoop) onTick(now time.Time) {
 		return
 	}
 	if lp.pending == nil || !lp.dirty {
-		return // unchanged screen: the pending span keeps growing for free
+		// Unchanged screen: the pending span grows for free — unless
+		// the OVERLAY changed since the pending frame started (a cap
+		// born, a take fading). Idle overlays must not spam frames.
+		ov := lp.r.opts.Overlay
+		if ov == nil || lp.pending == nil {
+			return
+		}
+		from := lp.pendingStart.Sub(lp.r.start)
+		if len(ov.Breakpoints(from, now.Sub(lp.r.start))) == 0 {
+			return
+		}
 	}
 	lp.flush(now)
 	lp.renderCurrent(now) // lp.frame is fresh from this tick's snapshot
@@ -403,6 +424,9 @@ func (lp *rtLoop) renderPending(now time.Time) {
 
 // renderCurrent renders lp.frame as-is into the new pending frame.
 func (lp *rtLoop) renderCurrent(now time.Time) {
+	if ov := lp.r.opts.Overlay; ov != nil {
+		ov.SetTime(now.Sub(lp.r.start))
+	}
 	img, err := lp.r.opts.Render(&lp.frame, lp.emitBuf)
 	if err != nil {
 		lp.fail(err)
@@ -479,6 +503,9 @@ func (lp *rtLoop) show() error {
 func (lp *rtLoop) screenshot(name string) error {
 	if !lp.snapshot() {
 		return lp.firstErr
+	}
+	if ov := lp.r.opts.Overlay; ov != nil {
+		ov.SetTime(time.Since(lp.r.start))
 	}
 	img, err := lp.r.opts.Render(&lp.frame, lp.stillBuf)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -205,5 +206,57 @@ func TestRealtimePressWritesAndActionsAfterFinishFail(t *testing.T) {
 	}
 	if err := g.d.Press(context.Background(), key.RuneKey('a'), 0); err == nil {
 		t.Fatal("Press after Finish must fail")
+	}
+}
+
+// TestRealtimeOverlayTicksOnlyOnBreakpoints pins the keys wiring on the
+// wall clock (ADR-016): OnKey observes the press on the loop goroutine,
+// and an overlay only forces tick renders at its breakpoints — an idle
+// overlay must NOT spam one frame per tick. Content and order asserts
+// only; no wall timings.
+func TestRealtimeOverlayTicksOnlyOnBreakpoints(t *testing.T) {
+	e := fake.New(vtengine.Options{Geometry: vtengine.Geometry{Cols: 20, Rows: 4}})
+	tr := newTransport(false)
+	r := newRecorder()
+	ov := &scriptedOverlay{cuts: []time.Duration{30 * time.Millisecond}}
+	var mu sync.Mutex
+	var pressed []key.Key
+	d, err := driver.NewRealtime(driver.RealtimeOptions{
+		Engine: e, Transport: tr, Render: r.render, Sink: r,
+		FPS: 200,
+		OnKey: func(k key.Key, _ time.Duration, hidden bool) {
+			mu.Lock()
+			defer mu.Unlock()
+			if !hidden {
+				pressed = append(pressed, k)
+			}
+		},
+		Overlay: ov,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := d.Press(ctx, key.RuneKey('a'), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Sleep(ctx, 120*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(pressed) != 1 || pressed[0] != key.RuneKey('a') {
+		t.Fatalf("OnKey saw %v, want the single 'a'", pressed)
+	}
+	// Structural frame bound: the initial render, ONE breakpoint-forced
+	// render, and the trailing flush — never a frame per tick (~24 ticks
+	// ran). The grid never changed (echo off), so any extra frame means
+	// the overlay spammed.
+	frames := r.snapFrames()
+	if len(frames) < 2 || len(frames) > 3 {
+		t.Fatalf("frames = %d (%+v), want 2-3: initial + breakpoint(+trailing)", len(frames), frames)
 	}
 }
