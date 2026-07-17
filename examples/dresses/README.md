@@ -1,4 +1,4 @@
-# dresses — one tape, four looks
+# dresses — one tape, six looks
 
 A **dress** is an appearance preset: window bar, rounded corners, margin,
 padding. It travels *inside* the tape as a cue comment — `# foley: dress
@@ -8,9 +8,11 @@ there, just without the wardrobe.
 
 | Tape | Look |
 |---|---|
-| `warp.tape` | Colorful bar, radius 10, dark margin band |
-| `iterm.tape` | Colorful bar, radius 6, no margin |
-| `kitty.tape` | no decorations, tight padding |
+| `macos.tape` | traffic lights + centered `~` title, rounded — the macOS genre |
+| `gnome.tape` | CSD close button + centered title — the Linux/GNOME genre |
+| `iterm.tape` | traffic lights + LEFT title, subtle radius |
+| `kitty.tape` | thin bar, lights + centered `~`, tight padding |
+| `warp.tape` | lights, radius 10, dark margin band (inspired — foley never fakes another app's input layout: the footage is the footage) |
 | `bare.tape` | content only — padding 0 |
 
 Try them:

@@ -24,13 +24,26 @@ import (
 // BarStyle is a WindowBar variant. The zero value means no bar.
 type BarStyle uint8
 
-// The VHS window bar styles.
+// The window bar styles: VHS's four, plus foley's genre controls
+// (dress-reachable; a tape using them still degrades in VHS, which
+// silently draws no bar for unknown styles).
 const (
-	BarNone BarStyle = iota
-	BarColorful
-	BarColorfulRight
+	BarNone          BarStyle = iota
+	BarColorful               // macOS traffic lights, left
+	BarColorfulRight          // macOS traffic lights, right
 	BarRings
 	BarRingsRight
+	BarLinuxControls // minimize/maximize/close strokes, right
+	BarGnomeCSD      // a close button in a circle, right (CSD-like)
+)
+
+// TitleAlign positions the window title inside the bar.
+type TitleAlign uint8
+
+// Title alignments.
+const (
+	TitleCenter TitleAlign = iota
+	TitleLeft
 )
 
 // Fill is a margin fill: a solid color, or an image file already decoded
@@ -58,6 +71,10 @@ type Window struct {
 	Bar      BarStyle
 	BarSize  int
 	BarColor color.RGBA
+	// Title is drawn inside the bar (static text: recordings must not
+	// leak hostnames — determinism). TitleAlign positions it.
+	Title      string
+	TitleAlign TitleAlign
 	// Radius rounds the window block's corners, revealing MarginFill.
 	Radius int
 }
@@ -83,7 +100,8 @@ func (w Window) contentOrigin() (x, y int) {
 // drawChrome paints everything around the grid. dst is the full scaled
 // canvas; the grid pipeline draws after this, and roundCorners after
 // everything.
-func (r *Rasterizer) drawChrome(dst *image.RGBA, bg color.RGBA) {
+func (r *Rasterizer) drawChrome(dst *image.RGBA, bg, fg color.RGBA) {
+	r.titleFG = fg
 	w := r.opts.Window
 	if !w.enabled() {
 		return
@@ -109,17 +127,54 @@ func (r *Rasterizer) drawChrome(dst *image.RGBA, bg color.RGBA) {
 	// padding border is simply background the grid does not cover).
 	winTop := m
 	if bh := w.barHeight() * s; bh > 0 {
-		r.drawBar(dst, image.Rect(m, winTop, cw-m, winTop+bh))
+		r.drawBar(dst, image.Rect(m, winTop, cw-m, winTop+bh), bg)
 		winTop += bh
 	}
 	fillRect(dst, image.Rect(m, winTop, cw-m, ch-m), bg)
 }
 
-// drawBar renders the VHS bar styles into rect (already scaled).
-func (r *Rasterizer) drawBar(dst *image.RGBA, rect image.Rectangle) {
+// barShade derives a bar background that READS as a bar over any theme:
+// lighten dark backgrounds, darken light ones — a bar that inherits the
+// content background is invisible (dots floating in space).
+func barShade(bg color.RGBA) color.RGBA {
+	lum := (299*int(bg.R) + 587*int(bg.G) + 114*int(bg.B)) / 1000
+	f := func(c uint8) uint8 {
+		if lum < 128 {
+			return uint8(int(c) + (255-int(c))*12/100) //nolint:gosec // bounded
+		}
+		return uint8(int(c) * 90 / 100) //nolint:gosec // bounded
+	}
+	return color.RGBA{R: f(bg.R), G: f(bg.G), B: f(bg.B), A: 0xff}
+}
+
+// mixRGBA blends a toward b by pct (integer math, deterministic).
+func mixRGBA(a, b color.RGBA, pct int) color.RGBA {
+	m := func(x, y uint8) uint8 {
+		return uint8((int(x)*(100-pct) + int(y)*pct) / 100) //nolint:gosec // bounded
+	}
+	return color.RGBA{R: m(a.R, b.R), G: m(a.G, b.G), B: m(a.B, b.B), A: 0xff}
+}
+
+// resolvedBarColor returns the explicit bar color, or the theme-derived
+// shade when unset (zero value).
+func (r *Rasterizer) resolvedBarColor(contentBG color.RGBA) color.RGBA {
+	if r.opts.Window.BarColor.A != 0 {
+		return r.opts.Window.BarColor
+	}
+	return barShade(contentBG)
+}
+
+// drawBar renders the bar styles into rect (already scaled): background
+// shade, style controls, title, and the divider line every real
+// terminal draws under its bar.
+func (r *Rasterizer) drawBar(dst *image.RGBA, rect image.Rectangle, contentBG color.RGBA) {
 	w := r.opts.Window
 	s := r.opts.Scale
-	fillRect(dst, rect, w.BarColor)
+	barBG := r.resolvedBarColor(contentBG)
+	fillRect(dst, rect, barBG)
+	// Divider: a subtle dark edge between bar and content.
+	div := mixRGBA(barBG, color.RGBA{A: 0xff}, 35)
+	fillRect(dst, image.Rect(rect.Min.X, rect.Max.Y-s, rect.Max.X, rect.Max.Y), div)
 	barSize := w.BarSize * s
 
 	switch w.Bar {
@@ -143,6 +198,45 @@ func (r *Rasterizer) drawBar(dst *image.RGBA, rect image.Rectangle) {
 			}
 			fillCircle(dst, cx, cy, dotRad, c)
 		}
+	case BarLinuxControls:
+		// Three stroke glyphs on the right: minus, hollow square, X —
+		// the linux/window-manager genre from the dress spec shots.
+		side := barSize / 3
+		gap := (barSize - side) / 2
+		space := side + barSize/4
+		stroke := max(s, barSize/14)
+		c := mixRGBA(barBG, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}, 72)
+		cy := rect.Min.Y + barSize/2
+		for i := 0; i < 3; i++ {
+			cx := rect.Max.X - (gap + side/2 + (2-i)*space)
+			switch i {
+			case 0: // minimize
+				fillRect(dst, image.Rect(cx-side/2, cy-stroke/2, cx+side/2, cy-stroke/2+stroke), c)
+			case 1: // maximize (hollow square)
+				x0, y0, x1, y1 := cx-side/2, cy-side/2, cx+side/2, cy+side/2
+				fillRect(dst, image.Rect(x0, y0, x1, y0+stroke), c)
+				fillRect(dst, image.Rect(x0, y1-stroke, x1, y1), c)
+				fillRect(dst, image.Rect(x0, y0, x0+stroke, y1), c)
+				fillRect(dst, image.Rect(x1-stroke, y0, x1, y1), c)
+			case 2: // close (X)
+				a := image.NewAlpha(image.Rect(0, 0, side, side))
+				fs := float64(side)
+				strokeAlpha(a, [][]spritePt{{{0, 0}, {fs, fs}}, {{fs, 0}, {0, fs}}}, float64(stroke))
+				blitMask(dst, &glyphMask{alpha: a}, cx-side/2, cy-side/2, c)
+			}
+		}
+	case BarGnomeCSD:
+		// One CSD-like close button: a small X in a subtle circle,
+		// right, GNOME headerbar proportions.
+		rad := barSize / 4
+		cx := rect.Max.X - (barSize/2 + rad)
+		cy := rect.Min.Y + barSize/2
+		fillCircle(dst, cx, cy, rad, mixRGBA(barBG, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}, 14))
+		xr := (rad * 11) / 20
+		a := image.NewAlpha(image.Rect(0, 0, 2*xr, 2*xr))
+		fs := float64(2 * xr)
+		strokeAlpha(a, [][]spritePt{{{0, 0}, {fs, fs}}, {{fs, 0}, {0, fs}}}, float64(max(s, barSize/20)))
+		blitMask(dst, &glyphMask{alpha: a}, cx-xr, cy-xr, mixRGBA(barBG, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}, 80))
 	case BarRings, BarRingsRight:
 		// VHS: outerRad = barSize/5, innerRad = 2*(2*outerRad)/5,
 		// gap = (barSize-2*outerRad)/2, space = 2*outerRad + barSize/6.
@@ -158,7 +252,92 @@ func (r *Rasterizer) drawBar(dst *image.RGBA, rect image.Rectangle) {
 				cx = rect.Max.X - (ringGap + outerRad + i*ringSpace)
 			}
 			fillCircle(dst, cx, cy, outerRad, ring)
-			fillCircle(dst, cx, cy, innerRad, w.BarColor)
+			fillCircle(dst, cx, cy, innerRad, barBG)
+		}
+	}
+
+	r.drawBarTitle(dst, rect, barBG)
+}
+
+// drawBarTitle blits the window title into the bar. The rendered strip
+// is cached: title, bar and metrics are fixed for a whole recording.
+func (r *Rasterizer) drawBarTitle(dst *image.RGBA, rect image.Rectangle, barBG color.RGBA) {
+	w := r.opts.Window
+	if w.Title == "" {
+		return
+	}
+	if r.titleMask == nil {
+		r.titleMask = r.renderTitleStrip(w.Title, w.BarSize*r.opts.Scale)
+	}
+	if r.titleMask == nil {
+		return
+	}
+	b := r.titleMask.alpha.Bounds()
+	barSize := w.BarSize * r.opts.Scale
+	// Keep clear of the controls: one bar-height is enough when they sit
+	// right (or there are none), but LEFT controls span 5/3·barSize (VHS
+	// dot geometry: gap ⅓ + radius ⅙ + two ½ spacings + radius ⅙), so a
+	// left title there insets two bar-heights.
+	x := rect.Min.X + barSize
+	if w.Bar == BarColorful || w.Bar == BarRings {
+		x = rect.Min.X + 2*barSize
+	}
+	if w.TitleAlign == TitleCenter {
+		x = rect.Min.X + (rect.Dx()-b.Dx())/2
+	}
+	y := rect.Min.Y + (barSize-b.Dy())/2
+	blitMask(dst, r.titleMask, x, y, mixRGBA(barBG, r.titleFG, 62))
+}
+
+// renderTitleStrip shapes and rasters the title once, at a size derived
+// from the bar (55% of its height), into an alpha strip.
+func (r *Rasterizer) renderTitleStrip(title string, barPx int) *glyphMask {
+	px := max(8*r.opts.Scale, (barPx*11)/20)
+	out := r.shapeAt(r.text, []rune(title), px)
+	asc := out.LineBounds.Ascent.Round()
+	desc := -out.LineBounds.Descent.Round()
+	if asc <= 0 {
+		return nil
+	}
+	width := 0
+	for _, g := range out.Glyphs {
+		width += g.Advance.Round()
+	}
+	if width <= 0 {
+		return nil
+	}
+	strip := image.NewAlpha(image.Rect(0, 0, width, asc+desc))
+	pen := 0
+	for _, g := range out.Glyphs {
+		if m := r.maskAt(r.text, g.GlyphID, px); m != nil {
+			blitAlpha(strip, m, pen+g.XOffset.Round(), asc-g.YOffset.Round())
+		}
+		pen += g.Advance.Round()
+	}
+	return &glyphMask{alpha: strip}
+}
+
+// blitAlpha maxes a glyph mask into an alpha strip at (penX, baselineY).
+func blitAlpha(dst *image.Alpha, m *glyphMask, penX, baselineY int) {
+	b := m.alpha.Bounds()
+	for j := 0; j < b.Dy(); j++ {
+		dy := baselineY - m.top + j
+		if dy < 0 || dy >= dst.Bounds().Dy() {
+			continue
+		}
+		for i := 0; i < b.Dx(); i++ {
+			a := m.alpha.Pix[j*m.alpha.Stride+i]
+			if a == 0 {
+				continue
+			}
+			dx := penX + m.left + i
+			if dx < 0 || dx >= dst.Bounds().Dx() {
+				continue
+			}
+			o := dy*dst.Stride + dx
+			if dst.Pix[o] < a {
+				dst.Pix[o] = a
+			}
 		}
 	}
 }

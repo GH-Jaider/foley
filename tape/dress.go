@@ -17,12 +17,17 @@ import (
 // Pointer fields distinguish "not part of this dress" from an explicit
 // zero (a dress may force Padding 0). The JSON shape is public API.
 type Dress struct {
-	Margin        *int    `json:"margin,omitempty"`
-	MarginFill    *string `json:"marginFill,omitempty"`
-	WindowBar     *string `json:"windowBar,omitempty"`
-	WindowBarSize *int    `json:"windowBarSize,omitempty"`
-	BorderRadius  *int    `json:"borderRadius,omitempty"`
-	Padding       *int    `json:"padding,omitempty"`
+	Margin         *int    `json:"margin,omitempty"`
+	MarginFill     *string `json:"marginFill,omitempty"`
+	WindowBar      *string `json:"windowBar,omitempty"`
+	WindowBarSize  *int    `json:"windowBarSize,omitempty"`
+	WindowBarColor *string `json:"windowBarColor,omitempty"`
+	BorderRadius   *int    `json:"borderRadius,omitempty"`
+	Padding        *int    `json:"padding,omitempty"`
+	// Foley-only primitives (no VHS Set exists for them): static bar
+	// title and its alignment ("center" default, or "left").
+	WindowTitle *string `json:"windowTitle,omitempty"`
+	TitleAlign  *string `json:"titleAlign,omitempty"`
 }
 
 // dressesFS embeds the built-in wardrobe. The presets are foley's own
@@ -114,11 +119,21 @@ func applyDress(s *Settings, explicit map[string]bool, d Dress) {
 	if d.WindowBarSize != nil && !explicit["WindowBarSize"] {
 		s.WindowBarSize = *d.WindowBarSize
 	}
+	if d.WindowBarColor != nil {
+		s.WindowBarColor = *d.WindowBarColor
+	}
 	if d.BorderRadius != nil && !explicit["BorderRadius"] {
 		s.BorderRadius = *d.BorderRadius
 	}
 	if d.Padding != nil && !explicit["Padding"] {
 		s.Padding = *d.Padding
+	}
+	// Foley-only fields have no Set, so no Explicit entry can exist.
+	if d.WindowTitle != nil {
+		s.WindowTitle = *d.WindowTitle
+	}
+	if d.TitleAlign != nil {
+		s.TitleAlign = *d.TitleAlign
 	}
 }
 
@@ -131,6 +146,9 @@ func (d Dress) Expansion() []string {
 	}
 	if d.WindowBarSize != nil {
 		out = append(out, "Set WindowBarSize "+strconv.Itoa(*d.WindowBarSize))
+	}
+	if d.WindowBarColor != nil {
+		out = append(out, "(foley) WindowBarColor "+strconv.Quote(*d.WindowBarColor))
 	}
 	if d.BorderRadius != nil {
 		out = append(out, "Set BorderRadius "+strconv.Itoa(*d.BorderRadius))
@@ -146,6 +164,14 @@ func (d Dress) Expansion() []string {
 	}
 	if d.Padding != nil {
 		out = append(out, "Set Padding "+strconv.Itoa(*d.Padding))
+	}
+	// Foley-only primitives: printed with a marker — there is no Set to
+	// paste, they travel only inside a dress.
+	if d.WindowTitle != nil {
+		out = append(out, "(foley) WindowTitle "+strconv.Quote(*d.WindowTitle))
+	}
+	if d.TitleAlign != nil {
+		out = append(out, "(foley) TitleAlign "+*d.TitleAlign)
 	}
 	return out
 }

@@ -61,6 +61,10 @@ type Rasterizer struct {
 	orgX, orgY int
 	// marginBuf caches a canvas-scaled MarginFill image.
 	marginBuf *image.RGBA
+	// titleMask caches the rendered window-bar title strip; titleFG is
+	// the theme foreground the title color derives from.
+	titleMask *glyphMask
+	titleFG   color.RGBA
 }
 
 type glyphKey struct {
@@ -148,7 +152,7 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 	// 1. Theme background — or the full window chrome (margin fill, bar,
 	// terminal background incl. the visual padding) when configured.
 	if r.opts.Window.enabled() {
-		r.drawChrome(dst, rgba(f.Colors.BG))
+		r.drawChrome(dst, rgba(f.Colors.BG), rgba(f.Colors.FG))
 	} else {
 		fillRect(dst, dst.Bounds(), rgba(f.Colors.BG))
 	}

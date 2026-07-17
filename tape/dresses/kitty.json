@@ -1,4 +1,7 @@
 {
-  "padding": 24,
-  "borderRadius": 0
+  "windowBar": "Colorful",
+  "windowBarSize": 24,
+  "windowTitle": "~",
+  "borderRadius": 6,
+  "padding": 16
 }

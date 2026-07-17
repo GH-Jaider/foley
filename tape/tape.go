@@ -94,9 +94,15 @@ type Settings struct {
 	WindowBar     string
 	WindowBarSize int
 	BorderRadius  int
-	CursorBlink   bool
-	WaitTimeout   time.Duration
-	WaitPattern   *regexp.Regexp
+	// WindowTitle, TitleAlign and WindowBarColor are foley-only (no VHS
+	// Set exists); they flow exclusively from a dress. Empty bar color
+	// means theme-derived AUTO shading.
+	WindowTitle    string
+	TitleAlign     string
+	WindowBarColor string
+	CursorBlink    bool
+	WaitTimeout    time.Duration
+	WaitPattern    *regexp.Regexp
 }
 
 // ThemeRef is a Set Theme argument: a curated theme name or an inline

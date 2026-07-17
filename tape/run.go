@@ -110,6 +110,9 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		MarginFill:      settings.MarginFill,
 		WindowBar:       bar,
 		WindowBarSize:   settings.WindowBarSize,
+		WindowBarColor:  settings.WindowBarColor,
+		WindowTitle:     settings.WindowTitle,
+		WindowTitleLeft: settings.TitleAlign == "left",
 		BorderRadius:    settings.BorderRadius,
 		FontSize:        settings.FontSize,
 		Theme:           theme,
@@ -310,6 +313,10 @@ func windowBarFor(name string) (foley.WindowBarStyle, error) {
 		return foley.WindowBarRings, nil
 	case "RingsRight":
 		return foley.WindowBarRingsRight, nil
+	case "LinuxControls":
+		return foley.WindowBarLinuxControls, nil
+	case "GnomeCSD":
+		return foley.WindowBarGnomeCSD, nil
 	}
-	return foley.WindowBarNone, fmt.Errorf("tape: Set WindowBar %q: unknown style (Colorful|ColorfulRight|Rings|RingsRight)", name)
+	return foley.WindowBarNone, fmt.Errorf("tape: WindowBar %q: unknown style (Colorful|ColorfulRight|Rings|RingsRight|LinuxControls|GnomeCSD)", name)
 }

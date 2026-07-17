@@ -125,7 +125,7 @@ func TestDressPrecedence(t *testing.T) {
 // build defect) and the wardrobe lists the canonical four.
 func TestBuiltinWardrobe(t *testing.T) {
 	names := tape.BuiltinDresses()
-	for _, want := range []string{"bare", "iterm", "kitty", "warp"} {
+	for _, want := range []string{"bare", "gnome", "iterm", "kitty", "macos", "warp"} {
 		found := false
 		for _, n := range names {
 			if n == want {
@@ -161,8 +161,10 @@ func TestDressOverrideSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if kitty.WindowBar != "" || kitty.Padding != 24 {
-		t.Fatalf("override did not REPLACE the layer: bar=%q padding=%d", kitty.WindowBar, kitty.Padding)
+	// kitty's values, and NONE of warp's (margin 24 must be gone).
+	if kitty.WindowBar != "Colorful" || kitty.WindowBarSize != 24 || kitty.Padding != 16 || kitty.Margin != 0 {
+		t.Fatalf("override did not REPLACE the layer: bar=%q/%d padding=%d margin=%d",
+			kitty.WindowBar, kitty.WindowBarSize, kitty.Padding, kitty.Margin)
 	}
 	if kitty.BorderRadius != 2 {
 		t.Fatalf("explicit Set must beat the CLI dress: radius = %d", kitty.BorderRadius)

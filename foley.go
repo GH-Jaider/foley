@@ -115,6 +115,10 @@ const (
 	WindowBarColorfulRight
 	WindowBarRings
 	WindowBarRingsRight
+	// Foley genre extensions (dress-reachable; VHS silently draws no
+	// bar for styles it does not know — still degradable).
+	WindowBarLinuxControls
+	WindowBarGnomeCSD
 )
 
 // Mode selects the recording clock.
@@ -177,7 +181,12 @@ type Options struct {
 	WindowBar      WindowBarStyle
 	WindowBarSize  int
 	WindowBarColor string
-	BorderRadius   int
+	// WindowTitle draws static text in the bar (never auto-derived from
+	// the host: recordings must not leak hostnames). WindowTitleLeft
+	// aligns it left of center (macOS genre centers).
+	WindowTitle     string
+	WindowTitleLeft bool
+	BorderRadius    int
 	// FontSize is the font size in logical pixels. Default 16.
 	FontSize int
 	// Scale multiplies every metric for supersampling. Default 2.
@@ -611,6 +620,14 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 			win.Bar = raster.BarRings
 		case WindowBarRingsRight:
 			win.Bar = raster.BarRingsRight
+		case WindowBarLinuxControls:
+			win.Bar = raster.BarLinuxControls
+		case WindowBarGnomeCSD:
+			win.Bar = raster.BarGnomeCSD
+		}
+		win.Title = opts.WindowTitle
+		if opts.WindowTitleLeft {
+			win.TitleAlign = raster.TitleLeft
 		}
 		bg := opts.Theme.Background
 		bgRGBA := color.RGBA{R: bg.R, G: bg.G, B: bg.B, A: 0xff}
@@ -618,7 +635,11 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		if err != nil {
 			return nil, err
 		}
-		win.BarColor = bgRGBA
+		// Unset bar color = AUTO: the raster derives a shade from the
+		// theme so the bar reads as a bar over any palette. (VHS's own
+		// default — bar equals the background — renders an invisible
+		// strip with floating dots; set WindowBarColor to the theme
+		// background explicitly if that exact look is wanted.)
 		if opts.WindowBarColor != "" {
 			c, err := parseVHSHex(opts.WindowBarColor)
 			if err != nil {

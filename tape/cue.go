@@ -164,9 +164,16 @@ func parseDressJSON(raw []byte) (Dress, error) {
 func validateDress(d Dress) error {
 	if d.WindowBar != nil {
 		switch *d.WindowBar {
-		case "", "Colorful", "ColorfulRight", "Rings", "RingsRight":
+		case "", "Colorful", "ColorfulRight", "Rings", "RingsRight", "LinuxControls", "GnomeCSD":
 		default:
-			return fmt.Errorf("windowBar %q unknown (Colorful|ColorfulRight|Rings|RingsRight)", *d.WindowBar)
+			return fmt.Errorf("windowBar %q unknown (Colorful|ColorfulRight|Rings|RingsRight|LinuxControls|GnomeCSD)", *d.WindowBar)
+		}
+	}
+	if d.TitleAlign != nil {
+		switch *d.TitleAlign {
+		case "center", "left":
+		default:
+			return fmt.Errorf("titleAlign %q unknown (center|left)", *d.TitleAlign)
 		}
 	}
 	for name, v := range map[string]*int{
@@ -177,15 +184,30 @@ func validateDress(d Dress) error {
 			return fmt.Errorf("%s %d is negative", name, *v)
 		}
 	}
-	if d.MarginFill != nil && strings.HasPrefix(*d.MarginFill, "#") {
-		hex := (*d.MarginFill)[1:]
-		if len(hex) != 3 && len(hex) != 6 {
-			return fmt.Errorf("marginFill %q: hex colors are #RGB or #RRGGBB", *d.MarginFill)
+	if d.WindowBarColor != nil {
+		if err := validateHex(*d.WindowBarColor, "windowBarColor"); err != nil {
+			return err
 		}
-		for _, r := range hex {
-			if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
-				return fmt.Errorf("marginFill %q: invalid hex color", *d.MarginFill)
-			}
+	}
+	if d.MarginFill != nil && strings.HasPrefix(*d.MarginFill, "#") {
+		if err := validateHex(*d.MarginFill, "marginFill"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateHex(v, field string) error {
+	if !strings.HasPrefix(v, "#") {
+		return fmt.Errorf("%s %q: hex colors start with #", field, v)
+	}
+	hex := v[1:]
+	if len(hex) != 3 && len(hex) != 6 {
+		return fmt.Errorf("%s %q: hex colors are #RGB or #RRGGBB", field, v)
+	}
+	for _, r := range hex {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return fmt.Errorf("%s %q: invalid hex color", field, v)
 		}
 	}
 	return nil

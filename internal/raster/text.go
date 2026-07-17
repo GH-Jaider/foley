@@ -43,9 +43,15 @@ func (r *Rasterizer) computeMetrics() {
 }
 
 func (r *Rasterizer) shape(face *font.Face, runes []rune) shaping.Output {
+	return r.shapeAt(face, runes, r.sizePx)
+}
+
+// shapeAt shapes at an explicit pixel size — the grid uses sizePx; the
+// window-bar title uses a bar-derived size.
+func (r *Rasterizer) shapeAt(face *font.Face, runes []rune, px int) shaping.Output {
 	return r.shaper.Shape(shaping.Input{
 		Text: runes, RunStart: 0, RunEnd: len(runes),
-		Face: face, Size: fixed.I(r.sizePx),
+		Face: face, Size: fixed.I(px),
 		Script: language.Latin, Language: language.NewLanguage("en"),
 	})
 }
@@ -152,12 +158,19 @@ func (r *Rasterizer) mask(style faceStyle, face *font.Face, gid font.GID) *glyph
 	if m, ok := r.glyphs[key]; ok {
 		return m
 	}
+	m := r.maskAt(face, gid, r.sizePx)
+	r.glyphs[key] = m
+	return m
+}
+
+// maskAt renders a glyph mask at an explicit pixel size, uncached — the
+// title strip renders once per recording and caches ITSELF.
+func (r *Rasterizer) maskAt(face *font.Face, gid font.GID, sizePx int) *glyphMask {
 	outline, ok := face.GlyphData(gid).(font.GlyphOutline)
 	if !ok || len(outline.Segments) == 0 {
-		r.glyphs[key] = nil
 		return nil
 	}
-	scale := float32(r.sizePx) / float32(face.Upem())
+	scale := float32(sizePx) / float32(face.Upem())
 
 	minX, minY := float32(1e9), float32(1e9)
 	maxX, maxY := float32(-1e9), float32(-1e9)
@@ -178,7 +191,6 @@ func (r *Rasterizer) mask(style faceStyle, face *font.Face, gid font.GID) *glyph
 	w := int(maxX) - left + 2
 	h := top - (int(minY) - 2)
 	if w <= 0 || h <= 0 {
-		r.glyphs[key] = nil
 		return nil
 	}
 
@@ -207,9 +219,7 @@ func (r *Rasterizer) mask(style faceStyle, face *font.Face, gid font.GID) *glyph
 	alpha := image.NewAlpha(image.Rect(0, 0, w, h))
 	ras.Draw(alpha, alpha.Bounds(), image.Opaque, image.Point{})
 
-	m := &glyphMask{alpha: alpha, left: left, top: top}
-	r.glyphs[key] = m
-	return m
+	return &glyphMask{alpha: alpha, left: left, top: top}
 }
 
 func segPointCount(op ot.SegmentOp) int {
