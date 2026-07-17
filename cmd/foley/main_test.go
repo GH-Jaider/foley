@@ -52,6 +52,18 @@ func TestCLIArgErrors(t *testing.T) {
 	}
 }
 
+// TestCLISubcommandAfterFlagsGetsAHint: `foley -fonts x doctor` parses
+// "doctor" as a tape path; the failure must hint at the real mistake.
+func TestCLISubcommandAfterFlagsGetsAHint(t *testing.T) {
+	exit, _, stderr := cli([]string{"-fonts", t.TempDir(), "doctor"}, "")
+	if exit != 1 {
+		t.Fatalf("exit = %d, want 1", exit)
+	}
+	if !strings.Contains(stderr, "subcommands go before flags") {
+		t.Fatalf("stderr lacks the hint: %q", stderr)
+	}
+}
+
 func TestCLIGrammarErrorsSurface(t *testing.T) {
 	tapePath := filepath.Join(t.TempDir(), "bad.tape")
 	writeFile(t, tapePath, "Output x.gif\nFoo bar\n")
@@ -160,5 +172,81 @@ func TestCLINoOutputIsAParseError(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "no Output declared") {
 		t.Fatalf("stderr lacks the no-Output parse error: %s", stderr)
+	}
+}
+
+// TestCLINewScaffold: `foley new` writes a starter tape that its own
+// validate accepts, and never overwrites.
+func TestCLINewScaffold(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "demo.tape")
+	exit, stdout, stderr := cli([]string{"new", path}, "")
+	if exit != 0 {
+		t.Fatalf("exit = %d (stderr: %s)", exit, stderr)
+	}
+	if !strings.Contains(stdout, "wrote "+path) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+	if exit, _, stderr := cli([]string{"validate", path}, ""); exit != 0 || stderr != "" {
+		t.Fatalf("scaffold does not validate cleanly: exit=%d stderr=%q", exit, stderr)
+	}
+	if exit, _, stderr := cli([]string{"new", path}, ""); exit != 1 || !strings.Contains(stderr, "refusing to overwrite") {
+		t.Fatalf("overwrite guard failed: exit=%d stderr=%q", exit, stderr)
+	}
+	if exit, _, _ := cli([]string{"new"}, ""); exit != 2 {
+		t.Fatalf("missing arg: exit = %d, want 2", exit)
+	}
+
+	t.Run("help_is_not_a_filename", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		for _, flag := range []string{"--help", "-h"} {
+			exit, _, stderr := cli([]string{"new", flag}, "")
+			if exit != 0 {
+				t.Fatalf("new %s: exit = %d, want 0 (help)", flag, exit)
+			}
+			if !strings.Contains(stderr, "usage: foley new") {
+				t.Fatalf("new %s: no usage printed: %q", flag, stderr)
+			}
+			if _, err := os.Stat(flag); !os.IsNotExist(err) {
+				t.Fatalf("new %s CREATED A FILE — a help request must never mutate", flag)
+			}
+		}
+	})
+	t.Run("stdin_dash_rejected", func(t *testing.T) {
+		exit, _, stderr := cli([]string{"new", "-"}, "")
+		if exit != 2 || !strings.Contains(stderr, `"-"`) {
+			t.Fatalf("new -: exit=%d stderr=%q, want a clear rejection", exit, stderr)
+		}
+	})
+	t.Run("extension_appended_and_parents_created", func(t *testing.T) {
+		dir := t.TempDir()
+		bare := filepath.Join(dir, "sub", "demo")
+		exit, stdout, stderr := cli([]string{"new", bare}, "")
+		if exit != 0 {
+			t.Fatalf("exit = %d (stderr: %s)", exit, stderr)
+		}
+		want := bare + ".tape"
+		if !strings.Contains(stdout, "wrote "+want) {
+			t.Fatalf("stdout = %q, want mention of %s", stdout, want)
+		}
+		if exit, _, stderr := cli([]string{"validate", want}, ""); exit != 0 || stderr != "" {
+			t.Fatalf("scaffold in subdir does not validate: exit=%d stderr=%q", exit, stderr)
+		}
+	})
+}
+
+// TestCLIDoctorReportsMissingFonts: an empty fonts dir must fail the
+// record check loudly (this dies at fontpack, BEFORE the engine — the
+// engine-less case is pinned separately in doctor_notag_test.go).
+func TestCLIDoctorReportsMissingFonts(t *testing.T) {
+	exit, stdout, _ := cli([]string{"doctor", "-fonts", t.TempDir()}, "")
+	if exit != 1 {
+		t.Fatalf("exit = %d, want 1", exit)
+	}
+	if !strings.Contains(stdout, "✗ record") || !strings.Contains(stdout, "NOT ready") {
+		t.Fatalf("doctor output lacks the loud failure: %q", stdout)
+	}
+	if exit, _, _ := cli([]string{"doctor", "extra"}, ""); exit != 2 {
+		t.Fatalf("extra arg: exit = %d, want 2", exit)
 	}
 }

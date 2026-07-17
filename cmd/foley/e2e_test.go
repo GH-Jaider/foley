@@ -192,3 +192,27 @@ Sleep 300ms
 		t.Fatalf("demo.gif exists — -o must REPLACE the tape's outputs, not add to them (err=%v)", err)
 	}
 }
+
+// TestCLIDoctorEndToEnd: with the real engine, pinned fonts and ffmpeg
+// present, doctor reports ready and exits 0.
+func TestCLIDoctorEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	var out, errb bytes.Buffer
+	if got := run([]string{"doctor", "-fonts", fonts}, strings.NewReader(""), &out, &errb); got != 0 {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", got, out.String(), errb.String())
+	}
+	for _, want := range []string{"✓ ffmpeg", "✓ record", "doctor: ready"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("doctor output lacks %q:\n%s", want, out.String())
+		}
+	}
+}
