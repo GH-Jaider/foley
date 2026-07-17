@@ -269,3 +269,99 @@ jobs:
           echo "macos: ${{ needs.crossos-macos.outputs.frames }}"
           test -n "${{ needs.crossos-linux.outputs.frames }}"
           test "${{ needs.crossos-linux.outputs.frames }}" = "${{ needs.crossos-macos.outputs.frames }}"
+
+  # ── M9: imagen OCI producto. Presupuesto del roadmap: ≤15% de la de VHS
+  # (908.2 MB comprimida, ghcr amd64 digest 16b21a3bf7bd, medida
+  # 2026-07-17) → techo 136 MB; la imagen real ronda ~72 MB (7.9%). ──────
+  oci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: cache fuentes pineadas
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/fontpack/fonts
+          key: fonts-${{ hashFiles('scripts/fonts.sh') }}
+      - name: fuentes
+        run: make fonts
+      - name: restore libghostty-vt (linux-amd64)
+        id: libcache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/linux-amd64
+          key: libghostty-linux-amd64-${{ hashFiles('internal/vtengine/ghostty/libbuild/build.zig.zon', 'scripts/engine-lib.sh') }}
+      - name: libghostty-vt (linux-amd64, desde el pin)
+        if: steps.libcache.outputs.cache-hit != 'true'
+        run: scripts/engine-lib.sh linux-amd64
+      - name: save libghostty-vt (linux-amd64)
+        if: always() && steps.libcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/linux-amd64
+          key: ${{ steps.libcache.outputs.cache-primary-key }}
+      - name: build de la imagen
+        run: docker build -t foley:ci .
+      - name: gate de tamaño (≤15% de VHS) + smoke del flujo usuario
+        run: |
+          unc=$(docker image inspect foley:ci --format '{{.Size}}')
+          comp=$(docker save foley:ci | gzip -c | wc -c)
+          awk -v u="$unc" -v c="$comp" 'BEGIN {
+            printf "uncompressed: %.1f MB\ncompressed:   %.1f MB (%.1f%% de VHS 908.2 MB)\n",
+              u/1e6, c/1e6, c/9.082e6
+          }'
+          test "$comp" -le 136240000
+          mkdir /tmp/oci-smoke && cd /tmp/oci-smoke
+          printf 'Output smoke.gif\nSet Width 400\nSet Height 200\nType "echo imagen"\nEnter\nSleep 500ms\n' > demo.tape
+          docker run --rm -v "$PWD":/work foley:ci demo.tape
+          test -s smoke.gif
+
+  # ── M9: benchmark honesto (métrica 3): ci/bench.tape declara ~32 s y en
+  # la máquina de referencia (M-series) exporta en <5 s. Los runners son
+  # más lentos y ruidosos: aquí se IMPRIME la medición y el gate es un
+  # techo de regresión ×4, no la métrica — esa se verifica en local. ─────
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: cache fuentes pineadas
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/fontpack/fonts
+          key: fonts-${{ hashFiles('scripts/fonts.sh') }}
+      - name: fuentes
+        run: make fonts
+      - name: ffmpeg (el export es parte de la cuenta)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg
+      - name: restore libghostty-vt (linux-amd64)
+        id: libcache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/linux-amd64
+          key: libghostty-linux-amd64-${{ hashFiles('internal/vtengine/ghostty/libbuild/build.zig.zon', 'scripts/engine-lib.sh') }}
+      - name: libghostty-vt (linux-amd64, desde el pin)
+        if: steps.libcache.outputs.cache-hit != 'true'
+        run: scripts/engine-lib.sh linux-amd64
+      - name: save libghostty-vt (linux-amd64)
+        if: always() && steps.libcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/linux-amd64
+          key: ${{ steps.libcache.outputs.cache-primary-key }}
+      - name: benchmark
+        run: |
+          CGO_ENABLED=1 go build -tags ghosttyvt -o /tmp/foley ./cmd/foley
+          mkdir /tmp/bench && cd /tmp/bench
+          start=$(date +%s%3N)
+          /tmp/foley -fonts "$GITHUB_WORKSPACE/internal/fontpack/fonts" "$GITHUB_WORKSPACE/ci/bench.tape"
+          wall=$(( $(date +%s%3N) - start ))
+          declared=$(ffprobe -v error -show_entries format=duration -of csv=p=0 bench.gif)
+          echo "declarado: ${declared}s · export: ${wall}ms (métrica 3: <5000ms en la máquina de referencia)"
+          test "$wall" -le 20000
