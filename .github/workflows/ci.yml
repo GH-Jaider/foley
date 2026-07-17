@@ -107,3 +107,165 @@ jobs:
         # tagged (motor real) corren en el job linux: los runners macOS no
         # tienen Docker para construir la .a (dev local sí los corre).
         run: go test -race -v ./...
+
+  # ── M9: métrica 1 del PRD — el MISMO tape produce frames byte-idénticos
+  # en macOS y Linux. ci/crossos.tape corre DOS veces por OS (estabilidad
+  # within-OS) y el hash del manifiesto de frames se compara entre OSes.
+  # Sin ffmpeg: la salida frames/ es PNG puro del rasterizador. ───────────
+
+  crossos-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      frames: ${{ steps.hash.outputs.sha }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: cache fuentes pineadas
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/fontpack/fonts
+          key: fonts-${{ hashFiles('scripts/fonts.sh') }}
+      - name: fuentes
+        run: make fonts
+      - name: restore libghostty-vt (linux-amd64)
+        id: libcache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/linux-amd64
+          key: libghostty-linux-amd64-${{ hashFiles('internal/vtengine/ghostty/libbuild/build.zig.zon', 'scripts/engine-lib.sh') }}
+      - name: libghostty-vt (linux-amd64, desde el pin)
+        if: steps.libcache.outputs.cache-hit != 'true'
+        run: scripts/engine-lib.sh linux-amd64
+      - name: save libghostty-vt (linux-amd64)
+        if: always() && steps.libcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/linux-amd64
+          key: ${{ steps.libcache.outputs.cache-primary-key }}
+      - name: tape de referencia ×2 (estabilidad within-OS)
+        run: |
+          CGO_ENABLED=1 go build -tags ghosttyvt -o /tmp/foley ./cmd/foley
+          for i in 1 2; do
+            mkdir -p "/tmp/xos$i"
+            (cd "/tmp/xos$i" && /tmp/foley -fonts "$GITHUB_WORKSPACE/internal/fontpack/fonts" "$GITHUB_WORKSPACE/ci/crossos.tape")
+            (cd "/tmp/xos$i/frames" && shasum -a 256 -- *.png | sort) > "/tmp/manifest$i.txt"
+          done
+          diff /tmp/manifest1.txt /tmp/manifest2.txt
+          cp /tmp/manifest1.txt frames-manifest.txt
+          echo "frames within-OS estables:"
+          cat frames-manifest.txt
+      - name: hash del manifiesto
+        id: hash
+        run: echo "sha=$(shasum -a 256 frames-manifest.txt | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: goldens ×20 (estabilidad, M9)
+        run: go test -run 'TestGoldenScene' -count=20 ./internal/raster/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frames-manifest-linux
+          path: frames-manifest.txt
+      - name: frames para depurar (solo en fallo)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frames-linux
+          path: /tmp/xos1/frames
+
+  # La .a darwin se cross-compila aquí (zig en Docker, cacheada); el runner
+  # macOS no tiene Docker, así que la recibe como artifact y solo re-empaca.
+  darwin-lib:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: restore libghostty-vt (darwin-arm64)
+        id: libcache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/darwin-arm64
+          key: libghostty-darwin-arm64-${{ hashFiles('internal/vtengine/ghostty/libbuild/build.zig.zon', 'scripts/engine-lib.sh') }}
+      - name: libghostty-vt (darwin-arm64, desde el pin)
+        if: steps.libcache.outputs.cache-hit != 'true'
+        run: scripts/engine-lib.sh darwin-arm64
+      - name: save libghostty-vt (darwin-arm64)
+        if: always() && steps.libcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/darwin-arm64
+          key: ${{ steps.libcache.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: libghostty-darwin-arm64
+          path: internal/vtengine/ghostty/lib/darwin-arm64/libghostty-vt.a
+
+  crossos-macos:
+    runs-on: macos-15
+    needs: darwin-lib
+    timeout-minutes: 30
+    outputs:
+      frames: ${{ steps.hash.outputs.sha }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: cache fuentes pineadas
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/fontpack/fonts
+          key: fonts-${{ hashFiles('scripts/fonts.sh') }}
+      - name: fuentes
+        run: make fonts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: libghostty-darwin-arm64
+          path: internal/vtengine/ghostty/lib/darwin-arm64
+      # Réplica del re-empacado de scripts/engine-lib.sh (la fuente de
+      # verdad): el archiver de zig desalinea y el ld de Apple lo rechaza.
+      - name: re-empacar la .a con libtool de Apple
+        run: |
+          dir="$GITHUB_WORKSPACE/internal/vtengine/ghostty/lib/darwin-arm64"
+          work=$(mktemp -d)
+          cd "$work"
+          ar x "$dir/libghostty-vt.a"
+          chmod 644 ./*
+          libtool -static -o "$dir/libghostty-vt.a" ./*.o
+      - name: tape de referencia ×2 (estabilidad within-OS)
+        run: |
+          CGO_ENABLED=1 go build -tags ghosttyvt -o /tmp/foley ./cmd/foley
+          for i in 1 2; do
+            mkdir -p "/tmp/xos$i"
+            (cd "/tmp/xos$i" && /tmp/foley -fonts "$GITHUB_WORKSPACE/internal/fontpack/fonts" "$GITHUB_WORKSPACE/ci/crossos.tape")
+            (cd "/tmp/xos$i/frames" && shasum -a 256 -- *.png | sort) > "/tmp/manifest$i.txt"
+          done
+          diff /tmp/manifest1.txt /tmp/manifest2.txt
+          cp /tmp/manifest1.txt frames-manifest.txt
+          echo "frames within-OS estables:"
+          cat frames-manifest.txt
+      - name: hash del manifiesto
+        id: hash
+        run: echo "sha=$(shasum -a 256 frames-manifest.txt | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frames-manifest-macos
+          path: frames-manifest.txt
+      - name: frames para depurar (solo en fallo)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frames-macos
+          path: /tmp/xos1/frames
+
+  crossos-verify:
+    runs-on: ubuntu-latest
+    needs: [crossos-linux, crossos-macos]
+    timeout-minutes: 5
+    steps:
+      - name: métrica 1 del PRD — mismos frames en macOS y Linux
+        run: |
+          echo "linux: ${{ needs.crossos-linux.outputs.frames }}"
+          echo "macos: ${{ needs.crossos-macos.outputs.frames }}"
+          test -n "${{ needs.crossos-linux.outputs.frames }}"
+          test "${{ needs.crossos-linux.outputs.frames }}" = "${{ needs.crossos-macos.outputs.frames }}"
