@@ -175,13 +175,18 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 
+	// The pulse: a live progress line on stderr while recording and
+	// developing — only when stderr is a terminal; CI and pipes stay
+	// silent as always.
+	progress := newProgressRenderer(stderr)
 	opts := tape.RunOptions{
 		Mode:            m,
 		ModifyOtherKeys: *mok,
 		FontsDir:        *fonts,
 		Dress:           dressRef,
 		Keys:            keysOverride,
-		Warn:            stderr,
+		Warn:            progress.warnWriter(),
+		Progress:        progress.pulse,
 	}
 	src, err := readTape(fs.Arg(0), stdin)
 	if err != nil {
@@ -207,6 +212,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	rep, err := tape.Run(ctx, t, opts)
+	progress.done()
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
 		return 1

@@ -53,6 +53,41 @@ type RunOptions struct {
 	// Warn receives one line per compatibility warning as it happens
 	// (they are also collected in the Report). nil discards the stream.
 	Warn io.Writer
+	// Progress, when non-nil, receives the recording's pulse: one event
+	// before the first command, one after each command, and one before
+	// each output is developed. Called synchronously from Run's
+	// goroutine — a slow callback slows the recording; render cheap.
+	Progress func(ProgressEvent)
+}
+
+// ProgressPhase names what the recording is doing right now.
+type ProgressPhase uint8
+
+// The phases a Run pulses through.
+const (
+	// ProgressRecording: the script is executing; Now advances toward
+	// Total (deterministic) or just advances (realtime).
+	ProgressRecording ProgressPhase = iota
+	// ProgressDeveloping: frames are being encoded into Output.
+	ProgressDeveloping
+)
+
+// ProgressEvent is one pulse of a recording (RunOptions.Progress).
+type ProgressEvent struct {
+	Phase ProgressPhase
+	// Now is the timeline position: virtual time in deterministic mode,
+	// elapsed wall time in realtime.
+	Now time.Duration
+	// Total is the script's own promise: the sum of every declared
+	// duration (typing, presses, sleeps) at their scaled speeds. Waits
+	// and settles are synchronization — unknowable ahead — so Now can
+	// legitimately arrive past Total. Zero in realtime: a camera
+	// rolling on the wall clock has no declared end.
+	Total time.Duration
+	// Frames emitted so far.
+	Frames int
+	// Output is the file being developed (ProgressDeveloping only).
+	Output string
 }
 
 // Report is what an execution produced.
@@ -175,20 +210,10 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	// PlaybackSpeed scales the recording: speed 2 halves every declared
 	// duration (the video plays twice as fast). Wall-clock waits are
 	// synchronization and stay unscaled.
-	scale := func(d time.Duration) time.Duration {
-		if settings.PlaybackSpeed == 1.0 || settings.PlaybackSpeed <= 0 {
-			return d
-		}
-		return time.Duration(float64(d) / settings.PlaybackSpeed)
-	}
+	scale := func(d time.Duration) time.Duration { return scaleDur(settings, d) }
 	// perKey honors an EXPLICIT @duration even at zero — `Type@0ms` is
 	// VHS's paste semantics, not "use the default".
-	perKey := func(cmd Command) time.Duration {
-		if cmd.SpeedSet {
-			return scale(cmd.Speed)
-		}
-		return scale(settings.TypingSpeed)
-	}
+	perKey := func(cmd Command) time.Duration { return perKeyDur(settings, cmd) }
 	// Camera transitions live on the same virtual timeline PlaybackSpeed
 	// compresses, so they scale like Type and Sleep — the default too.
 	zoomDur := func(d time.Duration) time.Duration {
@@ -252,6 +277,24 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return nil
 	}
 
+	// The recording's pulse (RunOptions.Progress): the total is the
+	// script's promise in deterministic mode; realtime rolls on the
+	// wall clock with no declared end.
+	var total time.Duration
+	if opts.Mode == foley.Deterministic {
+		total = declaredTotal(t, settings)
+	}
+	pulse := func(phase ProgressPhase, output string) {
+		if opts.Progress == nil {
+			return
+		}
+		opts.Progress(ProgressEvent{
+			Phase: phase, Now: rec.Now(), Total: total,
+			Frames: rec.Frames(), Output: output,
+		})
+	}
+	pulse(ProgressRecording, "")
+
 	var clipboard string
 	for i, cmd := range t.Commands {
 		if err := applyCues(i); err != nil {
@@ -297,6 +340,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		if err != nil {
 			return rep, err
 		}
+		pulse(ProgressRecording, "")
 	}
 	if err := applyCues(len(t.Commands)); err != nil {
 		return rep, err
@@ -311,12 +355,53 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	}
 
 	for _, out := range t.Outputs {
+		pulse(ProgressDeveloping, out)
 		if err := rec.Output(ctx, out); err != nil {
 			return rep, fmt.Errorf("tape: Output %s: %w", out, err)
 		}
 		rep.Outputs = append(rep.Outputs, out)
 	}
 	return rep, rec.Close()
+}
+
+// scaleDur applies PlaybackSpeed to a declared duration: speed 2
+// halves it (the video plays twice as fast).
+func scaleDur(settings Settings, d time.Duration) time.Duration {
+	if settings.PlaybackSpeed == 1.0 || settings.PlaybackSpeed <= 0 {
+		return d
+	}
+	return time.Duration(float64(d) / settings.PlaybackSpeed)
+}
+
+// perKeyDur is the scaled per-keystroke duration of a command,
+// honoring an explicit @duration even at zero (VHS paste semantics).
+func perKeyDur(settings Settings, cmd Command) time.Duration {
+	if cmd.SpeedSet {
+		return scaleDur(settings, cmd.Speed)
+	}
+	return scaleDur(settings, settings.TypingSpeed)
+}
+
+// declaredTotal sums the virtual time the script PROMISES: typing (one
+// perKey per rune, exactly as the driver spends it), presses and
+// sleeps, at their scaled speeds. Waits and settles are
+// synchronization — unknowable ahead of the run — so the recording can
+// legitimately run past this total; it is a floor, not a bound.
+func declaredTotal(t *Tape, settings Settings) time.Duration {
+	var total time.Duration
+	for _, cmd := range t.Commands {
+		switch cmd.Kind {
+		case KindType:
+			total += time.Duration(len([]rune(cmd.Text))) * perKeyDur(settings, cmd)
+		case KindPress:
+			total += time.Duration(cmd.Count) * perKeyDur(settings, cmd)
+		case KindSleep:
+			total += scaleDur(settings, cmd.Speed)
+		case KindWait, KindHide, KindShow, KindScreenshot, KindCopy, KindPaste, KindScrollUp, KindScrollDown:
+			// Paste types at 0ms; the rest spend no declared time.
+		}
+	}
+	return total
 }
 
 // effectiveSettings resolves the settings ONE run records with:

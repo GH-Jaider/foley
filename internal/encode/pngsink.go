@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -42,7 +43,9 @@ type PNGSinkOptions struct {
 type PNGSink struct {
 	opts     PNGSinkOptions
 	manifest bytes.Buffer
-	n        int
+	// n counts timeline frames. Atomic: the recording goroutine (or
+	// realtime's loop) writes while a progress reader may poll Frames.
+	n        atomic.Int64
 	lastFile string
 	closed   bool
 }
@@ -69,8 +72,8 @@ func (s *PNGSink) Add(img *image.RGBA, d time.Duration) error {
 	if s.closed {
 		return errors.New("encode: sink already closed")
 	}
-	name := fmt.Sprintf("frame-%05d.png", s.n)
-	s.n++
+	name := fmt.Sprintf("frame-%05d.png", s.n.Load())
+	s.n.Add(1)
 	if err := s.writePNG(name, img); err != nil {
 		return err
 	}
@@ -98,7 +101,7 @@ func (s *PNGSink) Close() error {
 		return nil
 	}
 	s.closed = true
-	if s.n == 0 {
+	if s.n.Load() == 0 {
 		return errors.New("encode: recording has no frames")
 	}
 	fmt.Fprintf(&s.manifest, "file '%s'\n%s", s.lastFile, manifestFramerate)
@@ -109,8 +112,10 @@ func (s *PNGSink) Close() error {
 	return nil
 }
 
-// Frames reports how many timeline frames were added.
-func (s *PNGSink) Frames() int { return s.n }
+// Frames reports how many timeline frames were added. Safe to call
+// from another goroutine while the recording runs — the progress pulse
+// reads it live.
+func (s *PNGSink) Frames() int { return int(s.n.Load()) }
 
 func (s *PNGSink) writePNG(name string, img *image.RGBA) error {
 	f, err := os.Create(filepath.Join(s.opts.Dir, name)) //nolint:gosec // dir is caller-owned; name is generated or sanitized

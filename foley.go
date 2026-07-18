@@ -606,6 +606,10 @@ func (r *Recorder) Screenshot(path string) error {
 // elapsed wall time in Realtime).
 func (r *Recorder) Now() time.Duration { return r.timeline.Now() }
 
+// Frames reports how many timeline frames have been emitted so far.
+// Live: safe to read while the recording runs (a progress pulse).
+func (r *Recorder) Frames() int { return r.sink.Frames() }
+
 // RestlessSettles reports how many Deterministic-mode settle windows saw
 // the app writing with no input to answer (animation, background work).
 // Deterministic recordings collapse that self-paced motion into settled

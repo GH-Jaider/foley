@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/internal/execx"
@@ -236,6 +237,84 @@ Sleep 300ms
 	}
 }
 
+// TestProgressPulseEndToEnd records a real tape collecting the
+// progress pulse: phases in order (recording → developing per output),
+// a monotonic clock, the declared total as an exact promise, and a
+// growing frame count.
+func TestProgressPulseEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.gif
+Require bash
+Set Shell bash
+Set Width 480
+Set Height 200
+Set TypingSpeed 20ms
+Type "echo pulso"
+Enter
+Sleep 400ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var events []tape.ProgressEvent
+	rep, err := tape.Run(ctx, tp, tape.RunOptions{
+		FontsDir: fonts,
+		Progress: func(ev tape.ProgressEvent) { events = append(events, ev) },
+	})
+	if err != nil {
+		t.Fatalf("run: %v (warnings: %v)", err, rep.Warnings)
+	}
+	// One start pulse + one per command (3) + one developing per output.
+	if len(events) != 5 {
+		t.Fatalf("events = %d (%+v), want 5", len(events), events)
+	}
+	// "echo pulso" = 10 runes x 20ms + Enter 20ms + Sleep 400ms = 620ms.
+	want := 620 * time.Millisecond
+	prev := time.Duration(-1)
+	for i, ev := range events {
+		if ev.Total != want {
+			t.Fatalf("event %d total = %v, want %v", i, ev.Total, want)
+		}
+		if ev.Now < prev {
+			t.Fatalf("clock went backwards at event %d: %v after %v", i, ev.Now, prev)
+		}
+		prev = ev.Now
+		if wantPhase := tape.ProgressRecording; i == len(events)-1 {
+			wantPhase = tape.ProgressDeveloping
+			if ev.Output != "demo.gif" {
+				t.Fatalf("developing output = %q", ev.Output)
+			}
+			if ev.Frames == 0 {
+				t.Fatal("developing pulse reports zero frames")
+			}
+			if ev.Phase != wantPhase {
+				t.Fatalf("event %d phase = %v, want %v", i, ev.Phase, wantPhase)
+			}
+		} else if ev.Phase != tape.ProgressRecording {
+			t.Fatalf("event %d phase = %v, want recording", i, ev.Phase)
+		}
+	}
+	if final := events[len(events)-1]; final.Now < want {
+		t.Fatalf("final clock %v never reached the declared total %v", final.Now, want)
+	}
+}
+
 // TestZoomEndToEnd records a real tape through the camera (ADR-019):
 // the canvas keeps its DECLARED size while the master renders at 2×,
 // the transitions add their quantized frames — and, the constitutional
@@ -406,9 +485,12 @@ Sleep 400ms
 	if w, h := g.Config.Width, g.Config.Height; w != 1280 || h != 440 {
 		t.Fatalf("canvas = %dx%d, want 1280x440 — the master must stay internal in realtime too", w, h)
 	}
-	// The two 300ms transitions must materialize as frames even though
-	// the screen content is static during them (the overlay gating).
-	if len(g.Image) < 8 {
+	// The transitions must materialize as EXTRA frames beyond the
+	// static screen even though nothing typed during them (the overlay
+	// tick gating). Structural bound, not a count: under load (-race,
+	// busy CI) the wall-clock loop legitimately coalesces ticks — the
+	// exact quantization is pinned by the deterministic e2e instead.
+	if len(g.Image) < 4 {
 		t.Fatalf("gif has %d frames, want the zoom transitions captured", len(g.Image))
 	}
 }
