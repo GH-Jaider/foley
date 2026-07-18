@@ -1,22 +1,26 @@
-# The keys band (ADR-016): foley IS the one typing, so the input track
-# is emitted, not captured — one keycap per keystroke, repeats
-# coalesce (a ×3), chords are one cap (⌃C), phrases cut like
-# subtitles. VHS ignores both cues and still records this tape.
+# The keys reel (ADR-016): every injected keystroke on a film strip
+# under the window — arrows, chords and Enter as glyphs, coalescing
+# repeats. The canvas GROWS by the band: the footage is never covered.
 
 Output keys.gif
 # foley: dress macos
-# foley: keys
+# foley: keys small
 
-Set Width 700
-Set Height 240
-Set FontSize 16
+Set Shell bash
+Set Width 860
+Set Height 360
+Set FontSize 15
 Set TypingSpeed 90ms
 
-Type "echo holaaa"
-Sleep 400ms
+Type "seq 1 3"
 Enter
-Sleep 1s
+Sleep 700ms
 Up
-Sleep 600ms
-Ctrl+C
-Sleep 2500ms
+Sleep 400ms
+Ctrl+E
+Sleep 250ms
+Backspace
+Type "5"
+Sleep 300ms
+Enter
+Sleep 1500ms

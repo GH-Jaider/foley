@@ -1,20 +1,39 @@
 # The highlight cue (ADR-018): point the viewer's eye. It paints the
-# theme's Selection color under a /regex/ (or a COL,ROW WxH cell rect)
-# from its position in the script until `off` — pure post-production,
-# the terminal never knows. VHS ignores the cues and still records.
+# theme's Selection color under a /regex/ from its position in the
+# script until `off` — pure post-production, the terminal never knows.
 
 Output highlight.gif
-# foley: dress macos
+# foley: dress noir
 
-Set Width 700
-Set Height 260
-Set FontSize 16
-Set TypingSpeed 40ms
+Set Shell bash
+Set Width 860
+Set Height 380
+Set FontSize 15
+Set TypingSpeed 35ms
 
-Type "printf 'ok: build\ndone: tests\nerror: missing flag\n'"
+Hide
+Type@0ms "cd $(mktemp -d) && cat > run-tests.sh <<'SH'"
 Enter
-Sleep 800ms
-# foley: highlight /^error.*/
-Sleep 2s
+Type@0ms "#!/bin/sh"
+Enter
+Type@0ms "printf 'ok   api      412 passed  0.31s\n'"
+Enter
+Type@0ms "printf 'ok   auth     198 passed  0.22s\n'"
+Enter
+Type@0ms "printf 'FAIL store    check_retry: want 3, got 0\n'"
+Enter
+Type@0ms "printf 'ok   render    87 passed  0.09s\n'"
+Enter
+Type@0ms "SH"
+Enter
+Type@0ms "chmod +x run-tests.sh && clear"
+Enter
+Show
+
+Type "./run-tests.sh"
+Enter
+Sleep 900ms
+# foley: highlight /FAIL.*/
+Sleep 2200ms
 # foley: highlight off
-Sleep 1s
+Sleep 800ms

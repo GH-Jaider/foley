@@ -17,7 +17,6 @@ internal/vtengine/ghostty/testdata/bin/
 internal/fontpack/fonts/
 
 # salidas de correr los examples in-place
-examples/**/*.gif
 examples/**/*.mp4
 examples/**/*.webm
 assets/logo/logo-f*.png
