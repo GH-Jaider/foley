@@ -99,6 +99,18 @@ func assemble(ctx context.Context, framesDir, outPath string, codecArgs ...strin
 		"-i", filepath.Join(framesDir, manifestName),
 		"-fps_mode", "vfr",
 		"-t", fmt.Sprintf("%.6f", total.Seconds()),
+		// Reproducibility: without these, mp4 embeds `Lavf/Lavc<version>`
+		// tags and webm stamps Muxing/WritingApp with the ffmpeg version —
+		// the same recording would differ byte-for-byte across ffmpeg
+		// installs for no visual reason (probed live: Lavf62.12.101 in
+		// both containers). bitexact also pins mp4's creation_time to the
+		// epoch instead of "now". The CODEC bitstream still legitimately
+		// depends on the encoder library's version — full byte-identity
+		// holds per pinned ffmpeg, which is why the PNG frames, not the
+		// containers, are foley's ground truth.
+		"-map_metadata", "-1",
+		"-fflags", "+bitexact",
+		"-flags:v", "+bitexact",
 	}
 	args = append(args, codecArgs...)
 	args = append(args, outPath)
