@@ -2,9 +2,15 @@ package preview
 
 import (
 	"bytes"
+	"image"
+	"image/color"
+	"image/gif"
 	"strings"
 	"testing"
 )
+
+//nolint:gochecknoglobals // tiny fixed test palette
+var testPalette = []color.Color{color.Black, color.White}
 
 // TestKittyChunks pins the protocol framing: single-chunk payloads
 // carry the control keys alone, multi-chunk ones say m=1 on every
@@ -88,5 +94,47 @@ func TestTargetCols(t *testing.T) {
 	// Zeroed pixel info degrades to full width, never a crash.
 	if got := targetCols(80, 24, 0, 0, 1280, 440); got != 80 {
 		t.Fatalf("no-pixel-info cols = %d, want 80", got)
+	}
+}
+
+// TestAnimationChunks pins the kitty ANIMATION stream: root via a=T
+// sized in columns, every later frame appended with a=f and its gap in
+// ms, the root's own gap patched by r=1, and the loop set running.
+func TestAnimationChunks(t *testing.T) {
+	g := &gif.GIF{
+		Image: []*image.Paletted{
+			image.NewPaletted(image.Rect(0, 0, 4, 4), testPalette),
+			image.NewPaletted(image.Rect(0, 0, 4, 4), testPalette),
+			image.NewPaletted(image.Rect(0, 0, 4, 4), testPalette),
+		},
+		Delay: []int{45, 22, 90},
+	}
+	chunks, err := animationChunks(g, 18)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := ""
+	for _, c := range chunks {
+		all += string(c)
+	}
+	for _, want := range []string{
+		"a=T,q=2,o=z,s=4,v=4,i=1,C=1,c=18;",
+		"\x1b_Ga=a,q=2,v=1,r=1,i=1,z=450\x1b\\",
+		"a=f,q=2,o=z,s=4,v=4,c=1,i=1,z=220;",
+		"\x1b_Ga=a,q=2,s=2,v=1,r=1,i=1,z=450\x1b\\",
+		"a=f,q=2,o=z,s=4,v=4,c=2,i=1,z=900;",
+		"\x1b_Ga=a,q=2,s=3,v=1,r=1,i=1,z=450\x1b\\",
+	} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("animation stream lacks %q", want)
+		}
+	}
+	if strings.Count(all, "a=f") != 2 {
+		t.Fatalf("want exactly 2 appended frames:\n%q", all)
+	}
+	// ONE escape per payload — chunked a=f frames lose their keys in
+	// kitty and the animation freezes (found by live bisection).
+	if strings.Contains(all, "m=1") || strings.Contains(all, "m=0") {
+		t.Fatalf("animation payloads must never be chunked:\n%q", all)
 	}
 }

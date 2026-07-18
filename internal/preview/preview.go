@@ -7,13 +7,18 @@ package preview
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"image/gif"
 	"image/png"
 	"os"
+	"strings"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 
 	"github.com/GH-Jaider/foley/internal/encode"
@@ -37,11 +42,19 @@ const probe = "\x1b_Gi=" + probeID + ",s=1,v=1,a=q,f=24;AAAA\x1b\\" + "\x1b[c"
 // the runtime refuses deadlines there (ErrNoDeadline) and the probe
 // found Supported silently always-false on macOS.
 func Supported(tty *os.File, timeout time.Duration) bool {
-	st, err := term.MakeRaw(int(tty.Fd()))
+	fd := int(tty.Fd())
+	st, err := term.MakeRaw(fd)
 	if err != nil {
 		return false
 	}
-	defer func() { _ = term.Restore(int(tty.Fd()), st) }()
+	defer func() { _ = term.Restore(fd, st) }()
+	// Belt and braces against darwin's /dev/tty quirks: the fd goes
+	// nonblocking for the handshake, so even a lying readiness check
+	// yields EAGAIN instead of a read(2) blocked forever.
+	if err := unix.SetNonblock(fd, true); err != nil {
+		return false
+	}
+	defer func() { _ = unix.SetNonblock(fd, false) }()
 	if _, err := tty.WriteString(probe); err != nil {
 		return false
 	}
@@ -53,15 +66,21 @@ func Supported(tty *os.File, timeout time.Duration) bool {
 		if remain <= 0 {
 			break
 		}
-		ready, err := pollIn(int(tty.Fd()), remain)
-		if err != nil || !ready {
+		ready, err := waitReadable(fd, remain)
+		if err != nil {
 			break
 		}
-		n, err := tty.Read(tmp)
+		if !ready {
+			continue
+		}
+		n, rerr := unix.Read(fd, tmp)
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)
 		}
-		if da1Answered(buf) || err != nil {
+		if da1Answered(buf) {
+			break
+		}
+		if rerr != nil && !errors.Is(rerr, unix.EAGAIN) {
 			break
 		}
 	}
@@ -191,4 +210,98 @@ func targetCols(termCols, availRows, cellW, cellH, imgW, imgH int) int {
 		c = 1
 	}
 	return c
+}
+
+// ShowGIF plays an animated GIF at the cursor via the kitty graphics
+// ANIMATION protocol: root frame transmitted with a=T, the rest
+// appended as a=f with their gaps, then set running in a loop. A
+// terminal that speaks graphics but not animation simply shows the
+// root frame — degradation is built into the protocol (unknown APC
+// payloads are ignored). Frames are re-encoded as PNG (the only
+// payload format every implementation takes).
+func ShowGIF(tty *os.File, g *gif.GIF, cols int) error {
+	chunks, err := animationChunks(g, cols)
+	if err != nil {
+		return err
+	}
+	var out bytes.Buffer
+	for _, c := range chunks {
+		out.Write(c)
+	}
+	// C=1 keeps the cursor still, and WE move below the image —
+	// implementations disagree on how far a=T advances the cursor
+	// (found live: libghostty-vt left it at the top and the welcome
+	// text printed OVER the logo). Explicit rows are identical
+	// everywhere.
+	b := g.Image[0].Bounds()
+	cw, ch := cellPixels(tty)
+	rows := (cols*b.Dy()*cw + b.Dx()*ch - 1) / (b.Dx() * ch)
+	out.WriteString("\r" + strings.Repeat("\n", rows+1))
+	if _, err := tty.Write(out.Bytes()); err != nil {
+		return fmt.Errorf("preview: %w", err)
+	}
+	return nil
+}
+
+// animationChunks builds the escape stream for a looping GIF — pure,
+// so the tests pin the protocol without a terminal. The shape mirrors
+// kitten icat byte for byte, because three live findings say nothing
+// else survives:
+//
+//   - every payload goes in ONE escape: the 4096-byte chunking the
+//     spec recommends LOSES the z/c keys of a=f frames in kitty's
+//     accumulation — frames land with gap 0, the animation scanner
+//     skips them (`while (!current_frame->gap)`), and the image plays
+//     once through loading and freezes on the last frame;
+//   - frames are RGBA+zlib with explicit dims (no f key: 32 is the
+//     default), each composed onto the PREVIOUS frame via c=N —
+//     without c, consecutive frames PILE INTO SLOT 2 replacing each
+//     other (probed loud: every a=f answered r=2);
+//   - the controls ride a=a: r=1,z sets the root's gap, v=1 loops
+//     forever (kitty stores max_loops = v-1; 0 = infinite), s=2 while
+//     loading, s=3 to run — WITH q=2: terminals that answer the
+//     graphics query but not the animation actions (Warp) would
+//     otherwise error loudly into the shell (icat omits q there;
+//     proven live that kitty animates either way).
+func animationChunks(g *gif.GIF, cols int) ([][]byte, error) {
+	if len(g.Image) == 0 {
+		return nil, fmt.Errorf("preview: gif has no frames")
+	}
+	rootGap := 10 * g.Delay[0] // centiseconds → ms
+	single := func(ctrl string, payload []byte) []byte {
+		return []byte("\x1b_G" + ctrl + ";" + base64.StdEncoding.EncodeToString(payload) + "\x1b\\")
+	}
+	var out [][]byte
+	for i, frame := range g.Image {
+		b := frame.Bounds()
+		raw := make([]byte, 0, b.Dx()*b.Dy()*4)
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				r, gg, bl, a := frame.At(x, y).RGBA()
+				raw = append(raw, byte(r>>8), byte(gg>>8), byte(bl>>8), byte(a>>8)) //nolint:gosec // 16-bit color channels shifted into bytes
+			}
+		}
+		var z bytes.Buffer
+		zw := zlib.NewWriter(&z)
+		if _, err := zw.Write(raw); err != nil {
+			return nil, fmt.Errorf("preview: frame %d: %w", i, err)
+		}
+		if err := zw.Close(); err != nil {
+			return nil, fmt.Errorf("preview: frame %d: %w", i, err)
+		}
+		if i == 0 {
+			out = append(out,
+				single(fmt.Sprintf("a=T,q=2,o=z,s=%d,v=%d,i=1,C=1,c=%d", b.Dx(), b.Dy(), cols), z.Bytes()),
+				[]byte(fmt.Sprintf("\x1b_Ga=a,q=2,v=1,r=1,i=1,z=%d\x1b\\", rootGap)),
+			)
+			continue
+		}
+		out = append(out, single(
+			fmt.Sprintf("a=f,q=2,o=z,s=%d,v=%d,c=%d,i=1,z=%d", b.Dx(), b.Dy(), i, 10*g.Delay[i]), z.Bytes()))
+		if i == 1 {
+			out = append(out, []byte(fmt.Sprintf("\x1b_Ga=a,q=2,s=2,v=1,r=1,i=1,z=%d\x1b\\", rootGap)))
+		}
+	}
+	out = append(out, []byte(fmt.Sprintf("\x1b_Ga=a,q=2,s=3,v=1,r=1,i=1,z=%d\x1b\\", rootGap)))
+	return out, nil
 }

@@ -20,16 +20,21 @@ func cellPixels(tty *os.File) (w, h int) {
 	return 8, 16
 }
 
-// pollIn waits until the fd has readable data or the budget runs out.
-// Raw poll(2), not runtime deadlines: /dev/tty rejects them on darwin.
-func pollIn(fd int, budget time.Duration) (bool, error) {
-	ms := int(budget.Milliseconds())
-	if ms < 1 {
-		ms = 1
+// waitReadable waits until the fd has readable data or the budget runs
+// out. select(2), NOT poll and NOT runtime deadlines: /dev/tty rejects
+// Go's deadlines on darwin, and darwin's poll(2) on the /dev/tty ALIAS
+// reports false readiness (found live: a silent terminal left the
+// handshake blocked in read(2) forever). select is the one primitive
+// that answers honestly for that device.
+func waitReadable(fd int, budget time.Duration) (bool, error) {
+	if budget < time.Millisecond {
+		budget = time.Millisecond
 	}
 	for {
-		fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}} //nolint:gosec // tty fds are tiny
-		n, err := unix.Poll(fds, ms)
+		var set unix.FdSet
+		set.Set(fd)
+		tv := unix.NsecToTimeval(budget.Nanoseconds())
+		n, err := unix.Select(fd+1, &set, nil, nil, &tv)
 		if errors.Is(err, unix.EINTR) {
 			continue
 		}
