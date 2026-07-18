@@ -47,6 +47,11 @@ type Options struct {
 	FontSizePx int
 	// Scale multiplies every metric (2 = native supersampling).
 	Scale int
+	// SuperSample renders the frame at N× the output for the camera's
+	// master (ADR-019); 0/1 = none. Cell METRICS still derive at the
+	// base Scale and multiply exactly — the logical grid (and so the
+	// footage) is identical with or without a camera.
+	SuperSample int
 	// Window configures the chrome around the grid (VHS parity: margin,
 	// window bar, padding, rounded corners). Zero value = no chrome, the
 	// canvas is exactly the grid.
@@ -68,6 +73,9 @@ type Options struct {
 // use (one rasterizer per recording, like the engine).
 type Rasterizer struct {
 	opts Options
+	// s is the EFFECTIVE pixel multiplier: Scale × SuperSample. Every
+	// pixel computation uses it; metrics multiply up from base Scale.
+	s int
 
 	text, bold, italic, boldItalic *font.Face
 	emoji                          *font.Face
@@ -140,9 +148,14 @@ func New(opts Options) (*Rasterizer, error) {
 	if opts.FontSizePx <= 0 || opts.Scale <= 0 {
 		return nil, fmt.Errorf("raster: invalid size/scale %d/%d", opts.FontSizePx, opts.Scale)
 	}
+	ss := opts.SuperSample
+	if ss < 1 {
+		ss = 1
+	}
 	r := &Rasterizer{
 		opts:       opts,
-		sizePx:     opts.FontSizePx * opts.Scale,
+		s:          opts.Scale * ss,
+		sizePx:     opts.FontSizePx * opts.Scale * ss,
 		glyphs:     make(map[glyphKey]*glyphMask),
 		sprites:    make(map[rune]*glyphMask),
 		emojis:     make(map[font.GID]*image.RGBA),
@@ -154,7 +167,7 @@ func New(opts Options) (*Rasterizer, error) {
 	}
 	r.keysCapPx = r.sizePx
 	if opts.KeysFontPx > 0 {
-		r.keysCapPx = opts.KeysFontPx * opts.Scale
+		r.keysCapPx = opts.KeysFontPx * r.s
 	}
 	var err error
 	if r.text, err = font.ParseTTF(bytes.NewReader(opts.Pack.Text)); err != nil {
@@ -215,7 +228,7 @@ func New(opts Options) (*Rasterizer, error) {
 		opts.Keys.setCapacity((opts.Window.CanvasW - 2*opts.Window.Margin) / (frameH + keysCapGap))
 	}
 	ox, oy := opts.Window.contentOrigin()
-	r.orgX, r.orgY = ox*opts.Scale, oy*opts.Scale
+	r.orgX, r.orgY = ox*r.s, oy*r.s
 	return r, nil
 }
 
@@ -285,7 +298,7 @@ func (r *Rasterizer) CellSize() (w, h int) { return r.cellW, r.cellH }
 // the engine geometry and the pty winsize must use (kitty-graphics math
 // happens in logical space; Render multiplies by Scale).
 func (r *Rasterizer) LogicalCellSize() (w, h int) {
-	return r.cellW / r.opts.Scale, r.cellH / r.opts.Scale
+	return r.cellW / r.s, r.cellH / r.s
 }
 
 // Render draws the frame into dst (reused when it has the right bounds,
@@ -294,7 +307,7 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 	w := f.Geometry.Cols * r.cellW
 	h := f.Geometry.Rows * r.cellH
 	if win := r.opts.Window; win.enabled() {
-		w, h = win.CanvasW*r.opts.Scale, win.CanvasH*r.opts.Scale
+		w, h = win.CanvasW*r.s, win.CanvasH*r.s
 	}
 	if dst == nil || dst.Bounds().Dx() != w || dst.Bounds().Dy() != h {
 		dst = image.NewRGBA(image.Rect(0, 0, w, h))

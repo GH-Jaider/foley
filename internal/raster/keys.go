@@ -386,7 +386,7 @@ func (r *Rasterizer) drawKeyChips(dst *image.RGBA, f *vtengine.Frame) {
 		return
 	}
 	t := r.keys.t
-	s := r.opts.Scale
+	s := r.s
 	gap := keysCapGap * s
 	frameH := r.bandRect.Dy() - 2*(keysSprocketH+2*keysSprocketPad)*s
 

@@ -110,7 +110,7 @@ func (r *Rasterizer) drawChrome(dst *image.RGBA, bg, fg color.RGBA) {
 	if !w.enabled() {
 		return
 	}
-	s := r.opts.Scale
+	s := r.s
 	cw, ch := w.CanvasW*s, w.CanvasH*s
 	m := w.Margin * s
 
@@ -202,7 +202,7 @@ func (r *Rasterizer) resolvedBarColor(contentBG color.RGBA) color.RGBA {
 // terminal draws under its bar.
 func (r *Rasterizer) drawBar(dst *image.RGBA, rect image.Rectangle, contentBG color.RGBA) {
 	w := r.opts.Window
-	s := r.opts.Scale
+	s := r.s
 	barBG := r.resolvedBarColor(contentBG)
 	fillRect(dst, rect, barBG)
 	// Divider: a subtle dark edge between bar and content.
@@ -300,13 +300,13 @@ func (r *Rasterizer) drawBarTitle(dst *image.RGBA, rect image.Rectangle, barBG c
 		return
 	}
 	if r.titleMask == nil {
-		r.titleMask = r.renderTitleStrip(w.Title, w.BarSize*r.opts.Scale)
+		r.titleMask = r.renderTitleStrip(w.Title, w.BarSize*r.s)
 	}
 	if r.titleMask == nil {
 		return
 	}
 	b := r.titleMask.alpha.Bounds()
-	barSize := w.BarSize * r.opts.Scale
+	barSize := w.BarSize * r.s
 	// Keep clear of the controls: one bar-height is enough when they sit
 	// right (or there are none), but LEFT controls span 5/3·barSize (VHS
 	// dot geometry: gap ⅓ + radius ⅙ + two ½ spacings + radius ⅙), so a
@@ -325,7 +325,7 @@ func (r *Rasterizer) drawBarTitle(dst *image.RGBA, rect image.Rectangle, barBG c
 // renderTitleStrip shapes and rasters the title once, at a size derived
 // from the bar (55% of its height), into an alpha strip.
 func (r *Rasterizer) renderTitleStrip(title string, barPx int) *glyphMask {
-	m, _ := r.renderTextStrip(title, max(8*r.opts.Scale, (barPx*11)/20))
+	m, _ := r.renderTextStrip(title, max(8*r.s, (barPx*11)/20))
 	return m
 }
 
@@ -505,7 +505,7 @@ func (r *Rasterizer) roundCorners(dst *image.RGBA) {
 	if !w.enabled() || radius <= 0 {
 		return
 	}
-	s := r.opts.Scale
+	s := r.s
 	rad := radius * s
 	m := w.Margin * s
 	cw, ch := w.CanvasW*s, w.CanvasH*s

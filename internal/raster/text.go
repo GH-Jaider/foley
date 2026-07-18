@@ -36,23 +36,34 @@ func (r *Rasterizer) gridFace() *font.Face {
 }
 
 func (r *Rasterizer) computeMetrics() {
-	out := r.shape(r.gridFace(), []rune{'M'})
-	r.cellW = out.Glyphs[0].Advance.Round()
+	// Metrics derive at the BASE scale and multiply by the supersample
+	// (ADR-019): the master's geometry is EXACTLY SS× the output's, so
+	// the logical grid — the pty winsize, the footage — is identical
+	// with or without a camera. Shaping at the doubled size could
+	// round advances differently; deriving-then-multiplying cannot.
+	base := r.opts.FontSizePx * r.opts.Scale
+	ss := r.s / r.opts.Scale
+	out := r.shapeAt(r.gridFace(), []rune{'M'}, base)
+	cellW := out.Glyphs[0].Advance.Round()
 	asc := out.LineBounds.Ascent.Round()
 	desc := -out.LineBounds.Descent.Round() // Descent is negative-down in typesetting
 	gap := out.LineBounds.Gap.Round()
-	r.cellH = asc + desc + gap
+	cellH := asc + desc + gap
 	// Cells must be exact multiples of Scale: the geometry the app sees
 	// is LOGICAL (cell/Scale via winsize) and kitty placements come back
 	// in those logical pixels — an odd scaled cell makes logical*Scale
 	// fall 1px short PER ROW, slicing seams through row-strip images
 	// (found live by tenten's studio demo). Round UP: growing a cell
 	// never clips glyphs.
-	r.cellW += (r.opts.Scale - r.cellW%r.opts.Scale) % r.opts.Scale
-	r.cellH += (r.opts.Scale - r.cellH%r.opts.Scale) % r.opts.Scale
-	r.baseline = asc + gap/2
-	r.underline = r.baseline + max(2*r.opts.Scale, desc/2)
-	r.thickness = max(r.opts.Scale, r.sizePx/16)
+	cellW += (r.opts.Scale - cellW%r.opts.Scale) % r.opts.Scale
+	cellH += (r.opts.Scale - cellH%r.opts.Scale) % r.opts.Scale
+	// EVERY metric derives at base then multiplies — the paint ones
+	// (underline, thickness) too, so the master is an exact scale-up of
+	// the plain render, not a re-derivation that rounds differently.
+	r.cellW, r.cellH = cellW*ss, cellH*ss
+	r.baseline = (asc + gap/2) * ss
+	r.underline = r.baseline + max(2*r.opts.Scale, desc/2)*ss
+	r.thickness = max(r.opts.Scale, base/16) * ss
 }
 
 func (r *Rasterizer) shape(face *font.Face, runes []rune) shaping.Output {
