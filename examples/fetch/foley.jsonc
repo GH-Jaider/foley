@@ -1,0 +1,11 @@
+// The foley fetch look: the film chip as logo, the modules that
+// matter. `Terminal: foley` is not styling — foley IS the terminal
+// the demo runs in (ADR-021); fastfetch simply reports it.
+{
+  "logo": {
+    "type": "file-raw",
+    "source": "../../assets/logo/foley.ans",
+    "padding": { "top": 1, "right": 4 }
+  },
+  "modules": ["os", "shell", "terminal", "cpu", "gpu", "memory", "break", "colors"]
+}
