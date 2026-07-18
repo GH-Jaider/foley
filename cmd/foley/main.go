@@ -1,4 +1,4 @@
-// Command foley renders a VHS .tape script into gif/mp4/webm/txt/frames
+// Command foley renders a VHS .tape script into gif/mp4/webm/webp/cast/txt/frames
 // without a terminal window: the demo runs on a real pty against an
 // embedded terminal engine and foley rasterizes every frame itself. It
 // is a thin consumer of the public API (library first): flags in,
@@ -49,11 +49,11 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-// outputsFlag collects repeated -o values.
-type outputsFlag []string
+// repeatFlag collects a repeatable string flag (-o, -env).
+type repeatFlag []string
 
-func (o *outputsFlag) String() string { return strings.Join(*o, ", ") }
-func (o *outputsFlag) Set(v string) error {
+func (o *repeatFlag) String() string { return strings.Join(*o, ", ") }
+func (o *repeatFlag) Set(v string) error {
 	*o = append(*o, v)
 	return nil
 }
@@ -131,13 +131,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fonts := fs.String("fonts", "",
 		"directory holding the pinned fonts (default: $FOLEY_FONTS, then ./fonts)")
 	showVersion := fs.Bool("version", false, "print the foley version and exit")
-	var outs outputsFlag
+	var outs repeatFlag
 	fs.Var(&outs, "o",
 		"write the recording to this path (repeatable; format by extension, replaces the tape's Output declarations)")
 	dress := fs.String("dress", "",
-		"replace the tape's dress layer: a built-in name (see `foley wardrobe`), a .json path, an inline {json}, or none — the tape's explicit Sets still win")
+		"replace the tape's dress layer: a built-in name (list: foley wardrobe), a .json path, an inline {json}, or none — the tape's explicit Sets still win")
 	keys := fs.String("keys", "",
-		"replace the tape's keys layer: off, or on|small|medium|large to draw the input reel at that size (default: the tape's `# foley: keys` cue decides)")
+		"replace the tape's keys layer: off, or on|small|medium|large to draw the input reel at that size (default: the tape's keys cue decides)")
 	watch := fs.Bool("watch", false,
 		"re-record every time the tape (or a Source'd tape or dress file it uses) is saved; ctrl-c stops")
 	themeFlag := fs.String("theme", "",
@@ -146,7 +146,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"output resolution: 2 = retina (the default), 1 = logical size (about a quarter of the file weight; hairlines soften)")
 	dirFlag := fs.String("dir", "",
 		"working directory for the tape's command (default: the current directory)")
-	var extraEnv outputsFlag
+	var extraEnv repeatFlag
 	fs.Var(&extraEnv, "env",
 		"add KEY=VALUE to the recording's environment without writing it into the tape (repeatable; wins over the tape's Env)")
 	gifLoop := fs.Int("gif-loop", 0,
@@ -249,7 +249,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
 			switch fs.Arg(0) {
-			case "validate", "themes", "doctor", "new":
+			case "play", "validate", "themes", "doctor", "new", "sew", "fonts", "wardrobe":
 				_, _ = fmt.Fprintf(stderr, "foley: (did you mean `foley %s …`? subcommands go before flags)\n", fs.Arg(0))
 			}
 			return watchPaths, 1
@@ -414,7 +414,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 		if runtime.GOOS == "darwin" {
 			hint = "brew install ffmpeg"
 		}
-		_, _ = fmt.Fprintf(stdout, "  gif/mp4/webm outputs need it — install: %s\n", hint)
+		_, _ = fmt.Fprintf(stdout, "  gif/mp4/webm/webp outputs need it — install: %s\n", hint)
 	} else {
 		// No verification claim: execx deliberately passes unparseable
 		// version strings (git builds), so "verified" would sometimes lie.

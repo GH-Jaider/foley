@@ -5,7 +5,8 @@
 //
 // A Recorder is created with New, driven with Timeline actions (Type,
 // Press, Sleep, WaitText, Hide/Show, Screenshot) and closed into files
-// with Output — the format follows the extension (.gif, .mp4, .webm):
+// with Output — the format follows the extension (.gif, .mp4, .webm,
+// .webp, .cast, .txt):
 //
 //	rec, err := foley.New(foley.Options{Command: []string{"my-tui"}})
 //	// handle err, defer rec.Close()
@@ -670,9 +671,10 @@ func (r *Recorder) FramesDir() string { return r.framesDir }
 func (r *Recorder) RestlessSettles() int { return r.timeline.RestlessSettles() }
 
 // Output finishes the timeline (first call) and encodes the recording to
-// path; the format follows the extension: .gif, .mp4, .webm, .txt (the
-// final screen as text) — or a PNG frame sequence into a directory when
-// the path has no extension or ends in .png (VHS's frames output).
+// path; the format follows the extension: .gif, .mp4, .webm, .webp,
+// .cast (asciicast v2 — needs Options.CaptureCast), .txt (the final
+// screen as text) — or a PNG frame sequence into a directory when the
+// path has no extension or ends in .png (VHS's frames output).
 // Multiple Output calls encode the same recording to multiple formats;
 // timeline actions are invalid afterwards.
 func (r *Recorder) Output(ctx context.Context, path string) error {
