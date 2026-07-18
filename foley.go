@@ -139,6 +139,52 @@ const (
 	KeysLarge
 )
 
+// KeysNotation picks the reel's cap vocabulary (ADR-016 v3): what a
+// cap prints for named keys. The zero value is keycap.
+type KeysNotation uint8
+
+// The notations.
+const (
+	// KeysKeycap prints what a real keycap prints: lowercase words in
+	// the grid font (esc, enter, tab…), drawn arrows, a blank spacebar.
+	KeysKeycap KeysNotation = iota
+	// KeysIcons swaps the words for compact drawn symbols (enter, tab,
+	// bksp, del) — esc stays a word: keyboards never icon it.
+	KeysIcons
+)
+
+// keysAccentNames maps a KeysAccent ANSI color name to its BRIGHT
+// palette slot (8–15) — the reel's default is the theme's bright
+// magenta, so names resolve in the same register.
+func keysAccentSlot(name string) (int, bool) {
+	names := [8]string{"black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"}
+	for i, n := range names {
+		if name == n {
+			return 8 + i, true
+		}
+	}
+	return 0, false
+}
+
+// ParseKeysAccent validates a KeysAccent value without a theme: ""
+// (the theme's bright magenta), "off", "#hex", or an ANSI color name.
+// foley.New resolves it against the recording's theme; `foley
+// validate` calls this so a typo dies before anything records.
+func ParseKeysAccent(s string) error {
+	switch {
+	case s == "" || s == "off":
+		return nil
+	case strings.HasPrefix(s, "#"):
+		_, err := parseVHSHex(s)
+		return err
+	default:
+		if _, ok := keysAccentSlot(s); !ok {
+			return fmt.Errorf("keys accent %q: an ANSI color name (black|red|green|yellow|blue|magenta|cyan|white), #hex, or off", s)
+		}
+		return nil
+	}
+}
+
 // Mode selects the recording clock.
 type Mode uint8
 
@@ -214,8 +260,18 @@ type Options struct {
 	// never shrinks (a deliberate, documented divergence from VHS's
 	// "declared size = canvas": VHS has no such feature). KeysSize
 	// picks the reel size; zero = medium.
-	KeysOverlay  bool
-	KeysSize     KeysSize
+	KeysOverlay bool
+	KeysSize    KeysSize
+	// KeysNotation picks the cap vocabulary (ADR-016 v3); zero =
+	// keycap (words + drawn arrows).
+	KeysNotation KeysNotation
+	// KeysAccent colors the special/chord caps: empty = the theme's
+	// bright magenta; an ANSI color name ("blue"), a "#hex", or "off"
+	// to mute the hierarchy. (The MarginFill string idiom.)
+	KeysAccent string
+	// KeysPlain drops the film strip: caps float straight on the
+	// margin fill.
+	KeysPlain    bool
 	BorderRadius int
 	// GIFLoop is the gif's loop count, ffmpeg semantics (#633): 0 =
 	// loop forever (the default), -1 = play once, N = repeat N more
@@ -506,6 +562,35 @@ const defaultWindowBarSize = 30
 // parseVHSHex parses VHS's accepted hex color forms: #RGB, RGB, #RRGGBB,
 // RRGGBB (draw.go parseHexColor of the pin) — but errors LOUDLY instead
 // of silently falling back to near-black.
+// keysStyleFor resolves the keys style knobs (ADR-016 v3) against the
+// recording's theme. Validation is loud even with the reel off — a
+// typo'd accent must never pass silently.
+func keysStyleFor(opts Options) (raster.KeysStyle, error) {
+	st := raster.KeysStyle{Plain: opts.KeysPlain}
+	if opts.KeysNotation == KeysIcons {
+		st.Notation = raster.KeysIcons
+	}
+	switch a := opts.KeysAccent; {
+	case a == "":
+	case a == "off":
+		st.AccentOff = true
+	case strings.HasPrefix(a, "#"):
+		c, err := parseVHSHex(a)
+		if err != nil {
+			return raster.KeysStyle{}, fmt.Errorf("foley: KeysAccent: %w", err)
+		}
+		st.Accent = &c
+	default:
+		slot, ok := keysAccentSlot(a)
+		if !ok {
+			return raster.KeysStyle{}, fmt.Errorf("foley: KeysAccent %q: an ANSI color name (black|red|green|yellow|blue|magenta|cyan|white), #hex, or off", a)
+		}
+		rgb := opts.Theme.ANSI[slot]
+		st.Accent = &color.RGBA{R: rgb.R, G: rgb.G, B: rgb.B, A: 0xff}
+	}
+	return st, nil
+}
+
 func parseVHSHex(s string) (color.RGBA, error) {
 	c := color.RGBA{A: 0xff}
 	var err error
@@ -1021,9 +1106,17 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		}
 	}
 
+	keysStyle, err := keysStyleFor(opts)
+	if err != nil {
+		return nil, err
+	}
 	var keysTrack *raster.KeysTrack
 	if opts.KeysOverlay {
-		keysTrack = raster.NewKeysTrack()
+		notation := raster.KeysKeycap
+		if opts.KeysNotation == KeysIcons {
+			notation = raster.KeysIcons
+		}
+		keysTrack = raster.NewKeysTrack(notation)
 	}
 	// The highlight track always exists — Recorder.Highlight is public
 	// API, tape or no tape (ADR-018).
@@ -1039,7 +1132,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		Pack: pack, UserFonts: userFonts,
 		FontSizePx: opts.FontSize, Scale: opts.Scale, SuperSample: ssample,
 		Window: win,
-		Keys:   keysTrack, KeysFontPx: keysFontPx,
+		Keys:   keysTrack, KeysFontPx: keysFontPx, KeysStyle: keysStyle,
 		Highlights:     highlightTrack,
 		SelectionColor: color.RGBA{R: selRGB.R, G: selRGB.G, B: selRGB.B, A: 0xff},
 	})

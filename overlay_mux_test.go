@@ -15,7 +15,7 @@ func TestOverlayMux(t *testing.T) {
 	hl := raster.NewHighlightTrack()
 	hl.Activate(raster.HighlightSpec{Pattern: regexp.MustCompile("x")}, time.Second)
 	hl.Clear(2 * time.Second)
-	keys := raster.NewKeysTrack()
+	keys := raster.NewKeysTrack(raster.KeysKeycap)
 	keys.AddKey(key.RuneKey('a'), 1500*time.Millisecond, false)
 
 	m := overlayMux{hl, keys}

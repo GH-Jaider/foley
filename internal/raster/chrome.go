@@ -140,30 +140,43 @@ func (r *Rasterizer) drawChrome(dst *image.RGBA, bg, fg color.RGBA) {
 	}
 	fillRect(dst, image.Rect(m, winTop, cw-m, ch-kb-m), bg)
 	if kb > 0 {
-		// The input reel (ADR-016): the whole band is STAGE — a darker
-		// surface that is clearly not the terminal — with the film
-		// strip running square, edge to edge across it (tape shape:
-		// straight cuts, no rounded corners), sprocket rows committed.
-		// The key frames draw per RECORDING frame; this is chrome.
+		// The input reel (ADR-016 v3): the band is the MARGIN running
+		// under the window — the dress is the desk, the theme the film
+		// (the stage died: three near-blacks read as mud) — with the
+		// strip square edge to edge and its perforations PUNCHED
+		// through to the fill behind it: a hole shows what is behind,
+		// never an invented gray. Step 1 already painted the margin
+		// across the band. Plain drops the celluloid entirely; the key
+		// frames draw per RECORDING frame — this is chrome.
 		bandTop := ch - kb
-		stage := stageShade(bg)
-		r.stageBG = stage
-		fillRect(dst, image.Rect(0, bandTop, cw, ch), stage)
-		stripTop := bandTop + keysStageTop*s
-		stripBot := ch - keysStageBot*s
-		strip := filmShade(bg)
-		fillRect(dst, image.Rect(0, stripTop, cw, stripBot), strip)
+		stripTop := bandTop + keysBandPadTop*s
+		stripBot := ch - keysBandPadBot*s
 		r.bandRect = image.Rect(m, stripTop, cw-m, stripBot)
-		hole := mixRGBA(strip, bg, 50)
-		hw, hh := keysSprocketW*s, keysSprocketH*s
-		pitch := (keysSprocketW + keysSprocketGap) * s
-		topY := stripTop + keysSprocketPad*s
-		botY := stripBot - keysSprocketPad*s - hh
-		for x := pitch / 2; x+hw <= cw; x += pitch {
-			fillRoundedRect(dst, image.Rect(x, topY, x+hw, topY+hh), s, hole, 255)
-			fillRoundedRect(dst, image.Rect(x, botY, x+hw, botY+hh), s, hole, 255)
+		if !r.keysStyle.Plain {
+			fillRect(dst, image.Rect(0, stripTop, cw, stripBot), filmShade(bg))
+			hw, hh := keysSprocketW*s, keysSprocketH*s
+			pitch := (keysSprocketW + keysSprocketGap) * s
+			topY := stripTop + keysSprocketPad*s
+			botY := stripBot - keysSprocketPad*s - hh
+			for x := pitch / 2; x+hw <= cw; x += pitch {
+				r.punchHole(dst, image.Rect(x, topY, x+hw, topY+hh))
+				r.punchHole(dst, image.Rect(x, botY, x+hw, botY+hh))
+			}
 		}
 	}
+}
+
+// punchHole paints one sprocket perforation with the margin fill
+// behind the strip — the fill's color, or the image fill's own pixels
+// (the same cached buffer the corner reveals sample). A hole is a
+// hole (ADR-016 v3).
+func (r *Rasterizer) punchHole(dst *image.RGBA, rect image.Rectangle) {
+	rad := keysSprocketRad * r.s
+	if r.marginBuf == nil {
+		fillRoundedRect(dst, rect, rad, r.opts.Window.MarginFill.Color, 255)
+		return
+	}
+	fillRoundedRectAt(dst, rect, rad, func(x, y int) color.RGBA { return r.marginBuf.RGBAAt(x, y) })
 }
 
 // barShade derives a bar background that READS as a bar over any theme:
@@ -421,6 +434,41 @@ func fillRoundedRect(dst *image.RGBA, rect image.Rectangle, rad int, c color.RGB
 	}
 }
 
+// fillRoundedRectAt is fillRoundedRect with a per-pixel color source —
+// punching sprocket holes through to an image margin fill. Opaque:
+// what shows through a hole is the fill itself, not a blend of it.
+func fillRoundedRectAt(dst *image.RGBA, rect image.Rectangle, rad int, at func(x, y int) color.RGBA) {
+	b := dst.Bounds()
+	for y := max(rect.Min.Y, 0); y < min(rect.Max.Y, b.Max.Y); y++ {
+		for x := max(rect.Min.X, 0); x < min(rect.Max.X, b.Max.X); x++ {
+			cov := 1.0
+			left, right := x < rect.Min.X+rad, x >= rect.Max.X-rad
+			top, bot := y < rect.Min.Y+rad, y >= rect.Max.Y-rad
+			if (left || right) && (top || bot) {
+				cx, cy := rect.Min.X+rad, rect.Min.Y+rad
+				if right {
+					cx = rect.Max.X - rad
+				}
+				if bot {
+					cy = rect.Max.Y - rad
+				}
+				cov = circleCoverage(x, y, cx, cy, rad+1)
+			}
+			a := int(math.Round(cov * 255))
+			if a <= 0 {
+				continue
+			}
+			c := at(x, y)
+			o := dst.PixOffset(x, y)
+			ia := 255 - a
+			dst.Pix[o] = uint8((int(c.R)*a + int(dst.Pix[o])*ia) / 255)     //nolint:gosec // bounded by construction
+			dst.Pix[o+1] = uint8((int(c.G)*a + int(dst.Pix[o+1])*ia) / 255) //nolint:gosec
+			dst.Pix[o+2] = uint8((int(c.B)*a + int(dst.Pix[o+2])*ia) / 255) //nolint:gosec
+			dst.Pix[o+3] = 0xff
+		}
+	}
+}
+
 // blitMaskFaded is blitMask with an extra opacity multiplier — fading
 // chip labels.
 func blitMaskFaded(dst *image.RGBA, m *glyphMask, x, y int, c color.RGBA, alpha int) {
@@ -526,10 +574,10 @@ func (r *Rasterizer) roundCorners(dst *image.RGBA) {
 		// Sample the cached canvas-scaled fill drawChrome built.
 		return r.marginBuf.RGBAAt(x, y)
 	}
-	for ci, c := range corners {
-		// With the reel below, the block's bottom corners border the
-		// STAGE, not the margin — they reveal the stage shade.
-		stage := w.KeysBand > 0 && ci >= 2
+	for _, c := range corners {
+		// The block's bottom corners reveal the margin too: with the
+		// reel below, the margin RUNS under the window into the band
+		// (ADR-016 v3 — the stage died).
 		for y := c.y; y < c.y+rad; y++ {
 			for x := c.x; x < c.x+rad; x++ {
 				if x < 0 || y < 0 || x >= cw || y >= ch {
@@ -541,9 +589,6 @@ func (r *Rasterizer) roundCorners(dst *image.RGBA) {
 					continue // fully inside the window: untouched
 				}
 				fill := marginAt(x, y)
-				if stage {
-					fill = r.stageBG
-				}
 				a := int(math.Round((1 - cov) * 255))
 				o := dst.PixOffset(x, y)
 				ia := 255 - a

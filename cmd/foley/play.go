@@ -37,7 +37,7 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	dress := fs.String("dress", "",
 		"replace the tape's dress layer (same forms as the record flag)")
 	keys := fs.String("keys", "",
-		"replace the tape's keys layer: off, or on|small|medium|large")
+		"replace the tape's keys layer: off, or comma-separated keys tokens (on, small|medium|large, notation=keycap|icons, accent=<ansi|#hex|off>, plain)")
 	themeFlag := fs.String("theme", "",
 		"replace the recording's theme (a curated name or an inline {json})")
 	fs.Usage = func() {
@@ -72,9 +72,9 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
-	keysOverride, ok := parseKeysOverride(*keys)
-	if !ok {
-		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: off, on, small, medium or large\n", *keys)
+	keysOverride, err := parseKeysOverride(*keys)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: %v\n", *keys, err)
 		return 2
 	}
 	var themeRef tape.ThemeRef

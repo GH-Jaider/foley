@@ -1,6 +1,9 @@
 # The keys reel (ADR-016): every injected keystroke on a film strip
-# under the window — arrows, chords and Enter as glyphs, coalescing
-# repeats. The canvas GROWS by the band: the footage is never covered.
+# under the window — keycap words (esc is esc), drawn arrows, a blank
+# spacebar, coalescing repeats; the perforations are punched through
+# to the margin fill. The canvas GROWS by the band: the footage is
+# never covered. Knobs: small|medium|large, notation=keycap|icons,
+# accent=<ansi|#hex|off>, plain.
 
 Output keys.gif
 # foley: dress macos

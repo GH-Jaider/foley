@@ -10,41 +10,49 @@ import (
 	"github.com/GH-Jaider/foley/key"
 )
 
-// The keys band (ADR-016, geometry and behavior from Jaider's mockup):
-// keycap chips floating UNDER the window — one cap per keystroke,
-// repeats coalesce ("j ×4"), chords are one cap ("⌃C"). foley is the
-// one typing, so the input track is emitted, not captured — exact
-// virtual timestamps, zero hooks, deterministic by construction.
+// The keys band (ADR-016, v3 geometry and vocabulary): keycap chips on
+// a film strip UNDER the window — one cap per keystroke, repeats
+// coalesce ("j ×4"), chords are one cap ("^C"). foley is the one
+// typing, so the input track is emitted, not captured — exact virtual
+// timestamps, zero hooks, deterministic by construction.
 //
 // The band's three laws (the mockup's own manifesto):
 //   - a cap NEVER moves once placed: it appears, lives and fades in
 //     place — each keypress touches only its own pixels;
 //   - the band clears by CUTS, never by scroll: a phrase flush (idle of
-//     the virtual clock) or a width cut (capacity reached) — like
-//     subtitling;
-//   - the pty never knows: keys is a cue, the canvas grows Height+52.
+//     the virtual clock; Enter closes the shell's natural take sooner)
+//     or a width cut (capacity reached) — like subtitling;
+//   - the pty never knows: keys is a cue, the canvas grows by the band.
+//
+// v3 doctrine: the dress is the desk, the theme is the film. The band
+// area is the margin fill running under the window; the strip floats
+// on it and its perforations are HOLES — painted with the fill behind
+// them, never an invented gray. Caps print what a real keycap prints.
 
 // Strip geometry (logical px) and timing (virtual time).
 const (
 	keysCapPad = 8 // frame horizontal padding
 	keysCapGap = 7 // gap between frames
-	keysCapRad = 2 // softly squared, like a film frame
+	keysCapRad = 3 // softly squared, like a film frame
 
-	// The stage: the band area is a distinct surface OUTSIDE the
-	// terminal (darker than the window in every theme), with the strip
-	// floating on it — breathing room above and below. That is what
-	// reads as "fuera del terminal".
-	keysStageTop = 12
-	keysStageBot = 8
+	// Breathing room between the margin's matte and the strip: the
+	// celluloid floats on the margin (the stage died in v3 — the margin
+	// IS the stage), balanced above and below.
+	keysBandPadTop = 12
+	keysBandPadBot = 12
 
-	// Sprocket geometry: committed perforations — big enough to read
-	// as film holes at 1×, generously and regularly spaced.
-	keysSprocketW   = 8
-	keysSprocketH   = 5
-	keysSprocketPad = 3  // above and below each sprocket row
-	keysSprocketGap = 12 // between holes
+	// Sprocket geometry (v3, from a real strip): square holes with a
+	// small radius, tight pitch (~2× the hole width), rows hugging the
+	// strip edges. The hole COLOR is not here: a hole is painted with
+	// the margin fill behind the strip (punchHole), Jaider's rule.
+	keysSprocketW   = 7
+	keysSprocketH   = 7
+	keysSprocketPad = 2
+	keysSprocketGap = 7
+	keysSprocketRad = 2
 
 	keysIdle      = 1500 * time.Millisecond // take flush: strip idle this long → fade
+	keysIdleEnter = 600 * time.Millisecond  // after Enter — the shell's take ended
 	keysFlushFade = 450 * time.Millisecond  // gentle take fade...
 	keysFlushStep = 4                       // ...quantized (bounded frames)
 	keysCutFade   = 150 * time.Millisecond  // width cut (the splice): one quick step
@@ -56,21 +64,65 @@ const (
 )
 
 // KeysBandFor is the band's logical height for a cap cell height
-// (the grid cell scaled by the chosen size): stage above, the strip —
-// a frame row between two sprocket rows — and stage below.
+// (the grid cell scaled by the chosen size): matte above, the strip —
+// a frame row between two sprocket rows — and matte below.
 func KeysBandFor(capCell int) int {
-	return keysStageTop + capCell + 6 + 2*(keysSprocketH+2*keysSprocketPad) + keysStageBot
+	return keysBandPadTop + capCell + 6 + 2*(keysSprocketH+2*keysSprocketPad) + keysBandPadBot
+}
+
+// KeysNotation is the cap vocabulary (ADR-016 v3).
+type KeysNotation uint8
+
+const (
+	// KeysKeycap prints what a real keycap prints: lowercase words in
+	// the grid font, drawn arrows, a blank spacebar.
+	KeysKeycap KeysNotation = iota
+	// KeysIcons swaps the words for compact drawn symbols (enter, tab,
+	// bksp, del) — esc stays a word: keyboards never icon it.
+	KeysIcons
+)
+
+// KeysStyle is the band's styling knobs (ADR-016 v3): notation, accent
+// override, and the plain (stripless) variant.
+type KeysStyle struct {
+	// Notation picks the cap vocabulary.
+	Notation KeysNotation
+	// Accent overrides the special-cap color; nil keeps the theme's
+	// bright magenta. AccentOff mutes the hierarchy entirely.
+	Accent    *color.RGBA
+	AccentOff bool
+	// Plain drops the celluloid: caps float straight on the margin.
+	Plain bool
 }
 
 // keyCap is one keycap: a keystroke, or a coalesced run of the same
-// keystroke.
+// keystroke. Its face is either a text label (the grid font), a drawn
+// icon, or the blank spacebar — never a mix (ADR-016 v3).
 type keyCap struct {
-	sym   string // symbol form (⌃C, ⏎, ␣) — used when the face covers it
-	ascii string // fallback form (Ctrl+C, Enter, Space)
-	mod   bool   // chord/special: accent styling
-	count int    // coalesced repeats (label gains " ×N")
+	label string
+	icon  keyIcon
+	space bool
+	mod   bool // special/chord: accent styling
+	enter bool // closes the take: shorter flush idle
+	count int  // coalesced repeats (label gains " ×N")
 	first time.Duration
 	last  time.Duration
+}
+
+// sameFace reports whether a new keystroke repeats this cap's face —
+// the coalescing identity.
+func (c *keyCap) sameFace(o keyCap) bool {
+	return c.label == o.label && c.icon == o.icon && c.space == o.space && c.mod == o.mod
+}
+
+// idleAfter is the flush idle measured from this cap: Enter closed the
+// shell's natural take, so the strip breathes sooner; anything else
+// waits the general idle (TUIs have no terminator key).
+func (c *keyCap) idleAfter() time.Duration {
+	if c.enter {
+		return keysIdleEnter
+	}
+	return keysIdle
 }
 
 // phrase is one run of caps between cuts. Closed phrases carry their
@@ -89,11 +141,16 @@ type phrase struct {
 type KeysTrack struct {
 	phrases  []phrase
 	capacity int // caps per phrase; assembly sets it from the band width
+	notation KeysNotation
 	t        time.Duration
 }
 
-// NewKeysTrack returns an empty input track.
-func NewKeysTrack() *KeysTrack { return &KeysTrack{capacity: keysMaxCaps} }
+// NewKeysTrack returns an empty input track speaking the given
+// notation (the cap face derives at AddKey time — coalescing compares
+// faces, so the vocabulary is fixed per recording).
+func NewKeysTrack(notation KeysNotation) *KeysTrack {
+	return &KeysTrack{capacity: keysMaxCaps, notation: notation}
+}
 
 // setCapacity bounds phrase length to what the band actually fits
 // (called once at assembly — same inputs, same capacity: deterministic).
@@ -109,20 +166,24 @@ func (kt *KeysTrack) AddKey(k key.Key, at time.Duration, hidden bool) {
 	if hidden {
 		return
 	}
-	sym, ascii, mod := keyCapLabel(k)
-	if sym == "" {
+	c, ok := keyCapFor(k, kt.notation)
+	if !ok {
 		return
 	}
+	c.count, c.first, c.last = 1, at, at
 	cur := kt.open()
 	// An idle gap flushes the phrase: it faded out before this key.
-	if cur != nil && at-cur.caps[len(cur.caps)-1].last >= keysIdle {
-		cur.end = cur.caps[len(cur.caps)-1].last + keysIdle
-		cur = nil
+	if cur != nil {
+		lc := &cur.caps[len(cur.caps)-1]
+		if at-lc.last >= lc.idleAfter() {
+			cur.end = lc.last + lc.idleAfter()
+			cur = nil
+		}
 	}
 	if cur != nil {
 		// Coalesce a repeat of the SAME cap inside the window.
 		lc := &cur.caps[len(cur.caps)-1]
-		if lc.sym == sym && lc.mod == mod && at-lc.last <= keysRepeat {
+		if lc.sameFace(c) && at-lc.last <= keysRepeat {
 			lc.count++
 			lc.last = at
 			return
@@ -139,7 +200,7 @@ func (kt *KeysTrack) AddKey(k key.Key, at time.Duration, hidden bool) {
 		kt.phrases = append(kt.phrases, phrase{end: -1})
 		cur = &kt.phrases[len(kt.phrases)-1]
 	}
-	cur.caps = append(cur.caps, keyCap{sym: sym, ascii: ascii, mod: mod, count: 1, first: at, last: at})
+	cur.caps = append(cur.caps, c)
 }
 
 func (kt *KeysTrack) open() *phrase {
@@ -166,7 +227,8 @@ func (p *phrase) alphaAt(t time.Duration) int {
 	}
 	end, quick := p.end, p.quick
 	if end < 0 {
-		end, quick = p.caps[len(p.caps)-1].last+keysIdle, false
+		lc := &p.caps[len(p.caps)-1]
+		end, quick = lc.last+lc.idleAfter(), false
 	}
 	if t < end {
 		return 255
@@ -186,9 +248,8 @@ func (p *phrase) alphaAt(t time.Duration) int {
 }
 
 // Breakpoints reports every overlay-state change taking effect in
-// [from, to): cap births and pop-ends, phrase reveals, fade steps. The
-// driver splits time advances there so the animation lands on exact
-// frames.
+// [from, to): cap births, phrase reveals, fade steps. The driver
+// splits time advances there so the animation lands on exact frames.
 func (kt *KeysTrack) Breakpoints(from, to time.Duration) []time.Duration {
 	var out []time.Duration
 	add := func(t time.Duration) {
@@ -207,7 +268,8 @@ func (kt *KeysTrack) Breakpoints(from, to time.Duration) []time.Duration {
 		}
 		end, quick := p.end, p.quick
 		if end < 0 {
-			end = p.caps[len(p.caps)-1].last + keysIdle
+			lc := &p.caps[len(p.caps)-1]
+			end = lc.last + lc.idleAfter()
 		}
 		if quick {
 			add(end)
@@ -229,96 +291,119 @@ func (kt *KeysTrack) Breakpoints(from, to time.Duration) []time.Duration {
 	return dedup
 }
 
-// keyCapLabel renders a key as a cap: symbol form, ASCII fallback (for
-// fonts without the symbols), and whether it takes accent styling.
-// Every keystroke is one cap — the mockup's anatomy.
-func keyCapLabel(k key.Key) (sym, ascii string, mod bool) {
-	// Notation (ADR-016): CARET for control combos (^C — the way the
-	// terminal itself echoes them; authenticity over mac aesthetics),
-	// Unicode glyphs for named keys and the other modifiers.
-	var symMods, asciiMods string
+// keyCapFor renders a key as a cap face (ADR-016 v3): what a real
+// keycap prints. Lowercase words in the grid font for named keys —
+// ASCII, so coverage never gambles on a cmap — and drawn sprites only
+// where keyboards draw: the arrows (plus enter/tab/bksp/del under
+// KeysIcons; esc stays a word, keyboards never icon it). Chords are
+// always TEXT (`^E`, `alt+b`, `shift+tab`): a cap never mixes an icon
+// with a prefix. ok=false drops the keystroke (nothing to show).
+func keyCapFor(k key.Key, notation KeysNotation) (keyCap, bool) {
+	// Notation for modifiers (ADR-016): CARET for control — the way
+	// the terminal itself echoes it — and lowercase words for the rest.
+	var prefix string
 	if k.Mods&key.ModCtrl != 0 {
-		symMods, asciiMods = symMods+"^", asciiMods+"Ctrl+"
+		prefix += "^"
 	}
 	if k.Mods&key.ModAlt != 0 {
-		symMods, asciiMods = symMods+"⌥", asciiMods+"Alt+"
+		prefix += "alt+"
 	}
 	if k.Mods&key.ModShift != 0 {
-		symMods, asciiMods = symMods+"⇧", asciiMods+"Shift+"
+		prefix += "shift+"
 	}
-	var base, baseASCII string
-	special := true
+
+	word, icon, special := keyFace(k, notation)
+	if word == "" && icon == iconNone {
+		return keyCap{}, false
+	}
+	enter := k.Name == key.NameEnter
+	if prefix == "" {
+		if k.Name == key.NameSpace || (k.Name == key.NameNone && k.Rune == ' ') {
+			// The spacebar is a BLANK cap, wider than the rest — the
+			// most recognizable key precisely because it says nothing.
+			return keyCap{space: true}, true
+		}
+		if icon != iconNone {
+			return keyCap{icon: icon, mod: true, enter: enter}, true
+		}
+		return keyCap{label: word, mod: special, enter: enter}, true
+	}
+	if k.Rune >= 'a' && k.Rune <= 'z' {
+		// ^E, not ^e: control chords echo uppercase, terminal custom.
+		word = string(k.Rune - 'a' + 'A')
+	}
+	return keyCap{label: prefix + word, mod: true, enter: enter}, true
+}
+
+// keyFace is the bare key's face: its word form (a real keycap's
+// print), its drawn form where one exists for the notation, and
+// whether it takes accent styling.
+func keyFace(k key.Key, notation KeysNotation) (word string, icon keyIcon, special bool) {
+	icons := notation == KeysIcons
 	switch k.Name {
 	case key.NameNone:
 		if k.Rune == 0 {
-			return "", "", false
+			return "", iconNone, false
 		}
-		special = false
-		base = string(k.Rune)
-		if k.Rune == ' ' {
-			base, baseASCII, special = "␣", "Space", true
-		} else if k.Mods != 0 && k.Rune >= 'a' && k.Rune <= 'z' {
-			base = string(k.Rune - 'a' + 'A')
-		}
+		return string(k.Rune), iconNone, false
 	case key.NameEnter:
-		base, baseASCII = "↩", "Enter"
+		if icons {
+			return "enter", iconEnter, true
+		}
+		return "enter", iconNone, true
 	case key.NameEscape:
-		base, baseASCII = "⎋", "Esc"
+		return "esc", iconNone, true // esc is esc — never an icon
 	case key.NameBackspace:
-		base, baseASCII = "⌫", "Bksp"
+		if icons {
+			return "bksp", iconBksp, true
+		}
+		return "bksp", iconNone, true
 	case key.NameTab:
-		base, baseASCII = "⇥", "Tab"
+		if icons {
+			return "tab", iconTab, true
+		}
+		return "tab", iconNone, true
 	case key.NameSpace:
-		base, baseASCII = "␣", "Space"
+		return "space", iconNone, true // the word serves chords: ^space
 	case key.NameDelete:
-		base, baseASCII = "⌦", "Del"
+		if icons {
+			return "del", iconDel, true
+		}
+		return "del", iconNone, true
 	case key.NameInsert:
-		base, baseASCII = "Ins", "Ins"
+		return "ins", iconNone, true
 	case key.NameUp:
-		base, baseASCII = "↑", "Up"
+		return "up", iconUp, true
 	case key.NameDown:
-		base, baseASCII = "↓", "Down"
+		return "down", iconDown, true
 	case key.NameLeft:
-		base, baseASCII = "←", "Left"
+		return "left", iconLeft, true
 	case key.NameRight:
-		base, baseASCII = "→", "Right"
+		return "right", iconRight, true
 	case key.NameHome:
-		base, baseASCII = "Home", "Home"
+		return "home", iconNone, true
 	case key.NameEnd:
-		base, baseASCII = "End", "End"
+		return "end", iconNone, true
 	case key.NamePageUp:
-		base, baseASCII = "PgUp", "PgUp"
+		return "pgup", iconNone, true
 	case key.NamePageDown:
-		base, baseASCII = "PgDn", "PgDn"
+		return "pgdn", iconNone, true
 	}
-	if baseASCII == "" {
-		baseASCII = base
-	}
-	return symMods + base, asciiMods + baseASCII, k.Mods != 0 || special
+	return "", iconNone, false
 }
 
-// capText picks the cap's label forms: the main label (symbol form
-// when the grid face covers every rune, ASCII otherwise) and the
-// coalescing counter, separately — the key is the DATA, the counter is
-// metadata and draws smaller, in subtext. The coverage scan runs once
-// per distinct label, memoized — not once per frame.
-func (r *Rasterizer) capText(c keyCap) (main, counter string) {
-	main, ok := r.capLabels[c.sym]
-	if !ok {
-		main = c.sym
-		face := r.gridFace()
-		for _, rn := range c.sym {
-			if _, covered := face.NominalGlyph(rn); !covered {
-				main = c.ascii
-				break
-			}
-		}
-		r.capLabels[c.sym] = main
+// capStrip is the cap's rendered face: the label at its size (single
+// runes at the reel's cap size, words and chords a step smaller — like
+// the small print on a physical keycap) or the drawn icon.
+func (r *Rasterizer) capStrip(c keyCap) textStrip {
+	if c.icon != iconNone {
+		return r.keyIconStrip(c.icon, r.keysCapPx)
 	}
-	if c.count > 1 {
-		counter = r.keysMult + itoa(c.count)
+	px := r.keysCapPx
+	if len([]rune(c.label)) > 1 {
+		px = px * 4 / 5
 	}
-	return main, counter
+	return r.keyStrip(c.label, px)
 }
 
 // textStrip pairs a rendered label with its baseline ascent, so caps
@@ -329,7 +414,7 @@ type textStrip struct {
 }
 
 // keyStrip shapes a label once per size and caches it (labels repeat:
-// ↵, arrows, common letters). Main labels use the reel's cap size —
+// letters, enter, the arrows' chord words). Labels are the grid face —
 // the strip speaks the terminal's own type; counters go smaller.
 func (r *Rasterizer) keyStrip(label string, px int) textStrip {
 	ck := label + "\x00" + itoa(px)
@@ -356,24 +441,17 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
-// stageShade is the surface the band lives on — clearly NOT the
-// terminal: darker than the window in every theme.
-func stageShade(bg color.RGBA) color.RGBA {
-	black := color.RGBA{A: 0xff}
-	if lum := (299*int(bg.R) + 587*int(bg.G) + 114*int(bg.B)) / 1000; lum < 128 {
-		return mixRGBA(bg, black, 65)
-	}
-	return mixRGBA(bg, black, 18)
+// filmShade is the strip's celluloid tone (v3: COMMITTED — near-black
+// on dark themes and still a dark strip on paper; a strip on a light
+// table is still a strip. The frames and the punched holes carry the
+// read, not the celluloid's tone).
+func filmShade(bg color.RGBA) color.RGBA {
+	return mixRGBA(bg, color.RGBA{A: 0xff}, 72)
 }
 
-// filmShade is the strip's celluloid tone: between the stage and the
-// window — a strip of tape lying on the stage.
-func filmShade(bg color.RGBA) color.RGBA {
-	black := color.RGBA{A: 0xff}
-	if lum := (299*int(bg.R) + 587*int(bg.G) + 114*int(bg.B)) / 1000; lum < 128 {
-		return mixRGBA(bg, black, 40)
-	}
-	return mixRGBA(bg, black, 38)
+// lumOf is the integer perceptual luminance the shade derivations use.
+func lumOf(c color.RGBA) int {
+	return (299*int(c.R) + 587*int(c.G) + 114*int(c.B)) / 1000
 }
 
 // drawKeyChips composites the frames onto the film strip for the
@@ -393,12 +471,21 @@ func (r *Rasterizer) drawKeyChips(dst *image.RGBA, f *vtengine.Frame) {
 	bg, fg := rgba(f.Colors.BG), rgba(f.Colors.FG)
 	// Inverted hierarchy: the INVISIBLE keys carry the accent — they
 	// are what the band exists to show; plain characters already echo
-	// in the footage, so they stay muted neutral. The hierarchy codes
-	// the thesis in color.
+	// in the footage, so they stay muted neutral. v3 commits the
+	// accent: near-pure on dark, pulled toward fg on light (contrast).
 	accent := color.RGBA{R: f.Colors.Palette[13].R, G: f.Colors.Palette[13].G, B: f.Colors.Palette[13].B, A: 0xff}
-	txt := mixRGBA(bg, fg, 68)
-	modTxt := mixRGBA(accent, fg, 18)
-	subTxt := mixRGBA(bg, fg, 45)
+	if r.keysStyle.Accent != nil {
+		accent = *r.keysStyle.Accent
+	}
+	txt := mixRGBA(bg, fg, 80)
+	modTxt := mixRGBA(accent, fg, 6)
+	if lumOf(bg) >= 128 {
+		modTxt = mixRGBA(accent, fg, 25)
+	}
+	if r.keysStyle.AccentOff {
+		modTxt = txt
+	}
+	subTxt := mixRGBA(bg, fg, 50)
 
 	cy := r.bandRect.Min.Y + r.bandRect.Dy()/2
 	for pi := range r.keys.phrases {
@@ -419,8 +506,29 @@ func (r *Rasterizer) drawKeyChips(dst *image.RGBA, f *vtengine.Frame) {
 			if t < birth {
 				break // frames are chronological: nothing later is born
 			}
-			main, counter := r.capText(c)
-			strip := r.keyStrip(main, r.keysCapPx)
+			var counter string
+			if c.count > 1 {
+				counter = r.keysMult + itoa(c.count)
+			}
+			if c.space {
+				// The blank spacebar: 1.5× wide, window-toned, no face.
+				w := frameH * 3 / 2
+				if x+w > r.bandRect.Max.X {
+					break
+				}
+				rect := image.Rect(x, cy-frameH/2, x+w, cy+frameH/2)
+				fillRoundedRect(dst, rect, keysCapRad*s, bg, alpha)
+				if counter != "" {
+					cnt := r.keyStrip(counter, r.keysCapPx*7/10)
+					if cnt.mask != nil {
+						cb := cnt.mask.alpha.Bounds()
+						blitMaskFaded(dst, cnt.mask, rect.Min.X+(w-cb.Dx())/2, rect.Min.Y+(frameH-cb.Dy())/2, subTxt, alpha)
+					}
+				}
+				x += w + gap
+				continue
+			}
+			strip := r.capStrip(c)
 			if strip.mask == nil {
 				continue
 			}
@@ -435,11 +543,6 @@ func (r *Rasterizer) drawKeyChips(dst *image.RGBA, f *vtengine.Frame) {
 			w := contentW + 2*keysCapPad*s
 			if w < frameH {
 				w = frameH // square minimum, like a film frame
-			}
-			if c.sym == "␣" && w < 2*frameH {
-				// The spacebar is WIDE — the band reads by words, the
-				// way a real keyboard separates them.
-				w = 2 * frameH
 			}
 			if x+w > r.bandRect.Max.X {
 				break // clip guard; capacity should prevent this

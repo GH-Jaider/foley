@@ -60,21 +60,25 @@ func (o *repeatFlag) Set(v string) error {
 
 // parseKeysOverride maps the -keys flag values shared by record and
 // play; false means an unknown value (the caller prints the menu).
-func parseKeysOverride(s string) (tape.KeysOverride, bool) {
-	switch s {
-	case "":
-		return tape.KeysDefault, true
-	case "off":
-		return tape.KeysOff, true
-	case "on", "medium":
-		return tape.KeysOnMedium, true
-	case "small":
-		return tape.KeysOnSmall, true
-	case "large":
-		return tape.KeysOnLarge, true
-	default:
-		return tape.KeysDefault, false
+func parseKeysOverride(s string) (tape.KeysOverride, error) {
+	if s == "" {
+		return tape.KeysOverride{}, nil
 	}
+	if s == "off" {
+		return tape.KeysOverride{Off: true}, nil
+	}
+	// The comma form ("on,large,notation=icons") speaks the cue's own
+	// token grammar — one grammar, two doors. A leading "on" is
+	// optional: any styling token implies the reel is wanted.
+	toks := strings.Split(s, ",")
+	if toks[0] == "on" {
+		toks = toks[1:]
+	}
+	kc, err := tape.ParseKeysArgs(strings.Join(toks, " "))
+	if err != nil {
+		return tape.KeysOverride{}, err
+	}
+	return tape.KeysOverride{On: true, Cue: kc}, nil
 }
 
 func parseMode(s string) (foley.Mode, bool) {
@@ -137,7 +141,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	dress := fs.String("dress", "",
 		"replace the tape's dress layer: a built-in name (list: foley wardrobe), a .json path, an inline {json}, or none — the tape's explicit Sets still win")
 	keys := fs.String("keys", "",
-		"replace the tape's keys layer: off, or on|small|medium|large to draw the input reel at that size (default: the tape's keys cue decides)")
+		"replace the tape's keys layer: off, or comma-separated keys tokens — on, small|medium|large, notation=keycap|icons, accent=<ansi|#hex|off>, plain (default: the tape's keys cue decides)")
 	watch := fs.Bool("watch", false,
 		"re-record every time the tape (or a Source'd tape or dress file it uses) is saved; ctrl-c stops")
 	themeFlag := fs.String("theme", "",
@@ -231,9 +235,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
-	keysOverride, ok := parseKeysOverride(*keys)
-	if !ok {
-		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: off, on, small, medium or large\n", *keys)
+	keysOverride, err := parseKeysOverride(*keys)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: %v\n", *keys, err)
 		return 2
 	}
 	var themeRef tape.ThemeRef

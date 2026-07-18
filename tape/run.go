@@ -15,17 +15,15 @@ import (
 )
 
 // KeysOverride is the CLI's replacement for the tape's keys layer
-// (ADR-016). The zero value defers to the tape.
-type KeysOverride uint8
-
-// The keys overrides.
-const (
-	KeysDefault KeysOverride = iota
-	KeysOff
-	KeysOnSmall
-	KeysOnMedium
-	KeysOnLarge
-)
+// (ADR-016): the zero value defers to the tape's own cue; Off forces
+// the reel off; On replaces the whole layer with Cue — the -keys
+// tokens, ParseKeysArgs' grammar, defaults where unspecified (like
+// dress: a replacement, never a merge).
+type KeysOverride struct {
+	Off bool
+	On  bool
+	Cue KeysCue
+}
 
 // RunOptions configures an execution. The zero value records in
 // Deterministic mode with foley's font resolution and collects warnings
@@ -46,10 +44,9 @@ type RunOptions struct {
 	// layer. Explicit `Set`s in the tape always win over either. Build
 	// one from CLI-style input with ParseDressRef.
 	Dress DressRef
-	// Keys REPLACES the tape's keys switch (ADR-016): the zero value
-	// keeps the tape's own `# foley: keys` cue; the others force the
-	// reel off or on at a size (the CLI's -keys off|on|small|medium|
-	// large).
+	// Keys REPLACES the tape's keys layer (ADR-016): the zero value
+	// keeps the tape's own `# foley: keys` cue; Off/On force the reel
+	// off or on with On's knobs (the CLI's -keys value).
 	Keys KeysOverride
 	// Theme REPLACES the recording's theme — explicit Sets included,
 	// unlike Dress: its whole purpose is recording the SAME tape in
@@ -239,7 +236,10 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		WindowTitle:     settings.WindowTitle,
 		WindowTitleLeft: settings.TitleAlign == "left",
 		KeysOverlay:     settings.KeysOverlay,
-		KeysSize:        settings.KeysSize,
+		KeysSize:        settings.Keys.Size,
+		KeysNotation:    settings.Keys.Notation,
+		KeysAccent:      settings.Keys.Accent,
+		KeysPlain:       settings.Keys.Plain,
 		BorderRadius:    settings.BorderRadius,
 		FontSize:        settings.FontSize,
 		FontFamily:      fontFamilyFor(settings.FontFamily),
@@ -475,17 +475,12 @@ func declaredTotal(t *Tape, settings Settings) time.Duration {
 // opts.Keys replaces that switch (ADR-016).
 func effectiveSettings(t *Tape, opts RunOptions) (Settings, error) {
 	settings := t.Settings
-	settings.KeysOverlay, settings.KeysSize = t.KeysCue()
-	switch opts.Keys {
-	case KeysDefault:
-	case KeysOff:
+	settings.KeysOverlay, settings.Keys = t.KeysCue()
+	switch {
+	case opts.Keys.Off:
 		settings.KeysOverlay = false
-	case KeysOnSmall:
-		settings.KeysOverlay, settings.KeysSize = true, foley.KeysSmall
-	case KeysOnMedium:
-		settings.KeysOverlay, settings.KeysSize = true, foley.KeysMedium
-	case KeysOnLarge:
-		settings.KeysOverlay, settings.KeysSize = true, foley.KeysLarge
+	case opts.Keys.On:
+		settings.KeysOverlay, settings.Keys = true, opts.Keys.Cue
 	}
 	ref := t.DressCue()
 	if !opts.Dress.IsZero() {

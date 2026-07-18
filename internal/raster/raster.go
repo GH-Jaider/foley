@@ -62,6 +62,10 @@ type Options struct {
 	// KeysFontPx is the cap label size in logical px (the reel's
 	// small/medium/large); zero = FontSizePx.
 	KeysFontPx int
+	// KeysStyle tunes the band's look and vocabulary (ADR-016 v3):
+	// accent override and the plain (stripless) variant. The notation
+	// lives on the KeysTrack — cap faces derive as keys arrive.
+	KeysStyle KeysStyle
 	// Highlights is the highlight track (ADR-018); nil = none.
 	// SelectionColor paints the matches — the theme's Selection.
 	Highlights     *HighlightTrack
@@ -111,15 +115,14 @@ type Rasterizer struct {
 	titleMask *glyphMask
 	titleFG   color.RGBA
 	// The keys band (ADR-016): the track feeding the frames, the film
-	// strip's rect and the stage shade (set by drawChrome — the block's
-	// bottom corners reveal the stage), the cap font size, and the
-	// label cache.
+	// strip's rect (set by drawChrome), the style knobs, the cap font
+	// size, and the label/icon strip caches.
 	keys      *KeysTrack
 	bandRect  image.Rectangle
-	stageBG   color.RGBA
+	keysStyle KeysStyle
 	keysCapPx int
 	keyStrips map[string]textStrip
-	capLabels map[string]string
+	keyIcons  map[keyIconKey]textStrip
 	keysMult  string
 	// highlights paints the Selection color under matched cells
 	// (ADR-018), between cell backgrounds and text.
@@ -161,8 +164,9 @@ func New(opts Options) (*Rasterizer, error) {
 		emojis:     make(map[font.GID]*image.RGBA),
 		kitty:      make(map[kittyKey]*image.RGBA),
 		keys:       opts.Keys,
+		keysStyle:  opts.KeysStyle,
 		keyStrips:  make(map[string]textStrip),
-		capLabels:  make(map[string]string),
+		keyIcons:   make(map[keyIconKey]textStrip),
 		highlights: opts.Highlights,
 	}
 	r.keysCapPx = r.sizePx
@@ -224,7 +228,7 @@ func New(opts Options) (*Rasterizer, error) {
 	if opts.Keys != nil && opts.Window.KeysBand > 0 {
 		// Take capacity from what the strip actually fits (a square
 		// frame is the minimum): same inputs, same capacity.
-		frameH := opts.Window.KeysBand - keysStageTop - keysStageBot - 2*(keysSprocketH+2*keysSprocketPad)
+		frameH := opts.Window.KeysBand - keysBandPadTop - keysBandPadBot - 2*(keysSprocketH+2*keysSprocketPad)
 		opts.Keys.setCapacity((opts.Window.CanvasW - 2*opts.Window.Margin) / (frameH + keysCapGap))
 	}
 	ox, oy := opts.Window.contentOrigin()

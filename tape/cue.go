@@ -28,8 +28,8 @@ type Cue struct {
 	AfterCommand int
 	// Dress carries the payload when Kind == CueDress.
 	Dress DressRef
-	// KeysSize carries the reel size when Kind == CueKeys.
-	KeysSize foley.KeysSize
+	// Keys carries the reel's knobs when Kind == CueKeys.
+	Keys KeysCue
 	// Highlight and HighlightOff carry the payload when Kind ==
 	// CueHighlight.
 	Highlight    foley.HighlightSpec
@@ -144,17 +144,11 @@ func scanCues(src string) ([]Cue, error) {
 			}
 			cues = append(cues, Cue{Line: i + 1, Kind: CueDress, Dress: ref})
 		case "keys":
-			size := foley.KeysMedium
-			switch rest {
-			case "", "medium":
-			case "small":
-				size = foley.KeysSmall
-			case "large":
-				size = foley.KeysLarge
-			default:
-				return nil, fmt.Errorf("tape: %d: keys size %q unknown (small|medium|large)", i+1, rest)
+			kc, err := ParseKeysArgs(rest)
+			if err != nil {
+				return nil, fmt.Errorf("tape: %d: %w", i+1, err)
 			}
-			cues = append(cues, Cue{Line: i + 1, Kind: CueKeys, KeysSize: size})
+			cues = append(cues, Cue{Line: i + 1, Kind: CueKeys, Keys: kc})
 		case "highlight":
 			spec, off, err := parseHighlight(rest)
 			if err != nil {
@@ -172,6 +166,78 @@ func scanCues(src string) ([]Cue, error) {
 		}
 	}
 	return cues, nil
+}
+
+// KeysCue is the keys layer's payload (ADR-016 v3): reel size, cap
+// notation, accent override and the plain (stripless) variant.
+type KeysCue struct {
+	Size     foley.KeysSize
+	Notation foley.KeysNotation
+	Accent   string
+	Plain    bool
+}
+
+// ParseKeysArgs parses the keys layer's token list — the cue's
+// arguments and the CLI's -keys value share it: one grammar, two
+// doors. Every value is validated HERE so `foley validate` catches a
+// typo before anything records:
+//
+//	[small|medium|large] [notation=keycap|icons] [accent=<ansi|#hex|off>] [plain]
+func ParseKeysArgs(rest string) (KeysCue, error) {
+	kc := KeysCue{Size: foley.KeysMedium}
+	var sizeSet, notationSet, accentSet, plainSet bool
+	dup := func(what string, set *bool) error {
+		if *set {
+			return fmt.Errorf("keys: %s given twice", what)
+		}
+		*set = true
+		return nil
+	}
+	for _, tok := range strings.Fields(rest) {
+		switch {
+		case tok == "small" || tok == "medium" || tok == "large":
+			if err := dup("the size", &sizeSet); err != nil {
+				return KeysCue{}, err
+			}
+			switch tok {
+			case "small":
+				kc.Size = foley.KeysSmall
+			case "large":
+				kc.Size = foley.KeysLarge
+			}
+		case tok == "plain":
+			if err := dup("plain", &plainSet); err != nil {
+				return KeysCue{}, err
+			}
+			kc.Plain = true
+		case strings.HasPrefix(tok, "notation="):
+			if err := dup("notation", &notationSet); err != nil {
+				return KeysCue{}, err
+			}
+			switch v := strings.TrimPrefix(tok, "notation="); v {
+			case "keycap":
+			case "icons":
+				kc.Notation = foley.KeysIcons
+			default:
+				return KeysCue{}, fmt.Errorf("keys: notation %q unknown (keycap|icons)", v)
+			}
+		case strings.HasPrefix(tok, "accent="):
+			if err := dup("accent", &accentSet); err != nil {
+				return KeysCue{}, err
+			}
+			v := strings.TrimPrefix(tok, "accent=")
+			if v == "" {
+				return KeysCue{}, errors.New("keys: accent needs a value (an ANSI color name, #hex, or off)")
+			}
+			if err := foley.ParseKeysAccent(v); err != nil {
+				return KeysCue{}, fmt.Errorf("keys: %w", err)
+			}
+			kc.Accent = v
+		default:
+			return KeysCue{}, fmt.Errorf("keys: %q unknown (small|medium|large, notation=keycap|icons, accent=<ansi|#hex|off>, plain)", tok)
+		}
+	}
+	return kc, nil
 }
 
 // ParseDressRef classifies a dress argument (the same four forms a

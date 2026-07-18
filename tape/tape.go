@@ -14,7 +14,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/key"
 	"github.com/GH-Jaider/foley/tape/internal/vhsgrammar/lexer"
 	"github.com/GH-Jaider/foley/tape/internal/vhsgrammar/parser"
@@ -82,11 +81,11 @@ type Settings struct {
 	// FontFiles is a per-style user font family (foley-only: reachable
 	// through a dress, no VHS Set exists — ADR-015).
 	FontFiles FontFiles
-	// KeysOverlay turns on the input reel, KeysSize picks its size
-	// (foley-only: the `# foley: keys` cue or the CLI override —
-	// ADR-016).
+	// KeysOverlay turns on the input reel, Keys carries its knobs —
+	// size, notation, accent, plain (foley-only: the `# foley: keys`
+	// cue or the CLI override — ADR-016).
 	KeysOverlay   bool
-	KeysSize      foley.KeysSize
+	Keys          KeysCue
 	FontSize      int
 	LetterSpacing float64
 	LineHeight    float64
@@ -157,14 +156,14 @@ func (t *Tape) DressCue() DressRef {
 }
 
 // KeysCue reports whether the tape asks for the input reel (ADR-016)
-// and at which size. Parse guarantees at most one keys cue.
-func (t *Tape) KeysCue() (bool, foley.KeysSize) {
+// and with which knobs. Parse guarantees at most one keys cue.
+func (t *Tape) KeysCue() (bool, KeysCue) {
 	for _, c := range t.Cues {
 		if c.Kind == CueKeys {
-			return true, c.KeysSize
+			return true, c.Keys
 		}
 	}
-	return false, foley.KeysMedium
+	return false, KeysCue{}
 }
 
 // vhsDefaults are VHS's own default options (vhs.go/style.go/video.go of

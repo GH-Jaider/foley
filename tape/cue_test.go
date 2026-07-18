@@ -373,44 +373,64 @@ func TestSourcedCuesAreLoud(t *testing.T) {
 	}
 }
 
-// TestKeysCue: the second cue (ADR-016) — parses bare and with a size,
-// rejects unknown sizes and duplicates, layers under the CLI override.
+// TestKeysCue: the second cue (ADR-016) — parses bare and with knobs,
+// rejects unknown tokens and duplicates, layers under the CLI override.
 func TestKeysCue(t *testing.T) {
 	tp, err := tape.Parse("Output d.gif\n# foley: keys\nType \"x\"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if on, size := tp.KeysCue(); !on || size != foley.KeysMedium {
-		t.Fatalf("bare keys cue = %v %v, want on medium", on, size)
+	if on, kc := tp.KeysCue(); !on || kc.Size != foley.KeysMedium || kc.Notation != foley.KeysKeycap || kc.Plain {
+		t.Fatalf("bare keys cue = %v %+v, want on with defaults", on, kc)
 	}
 	settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{})
 	if err != nil || !settings.KeysOverlay {
 		t.Fatalf("effective keys: err=%v on=%v", err, settings.KeysOverlay)
 	}
-	settings, err = tape.EffectiveSettingsForTest(tp, tape.RunOptions{Keys: tape.KeysOff})
+	settings, err = tape.EffectiveSettingsForTest(tp, tape.RunOptions{Keys: tape.KeysOverride{Off: true}})
 	if err != nil || settings.KeysOverlay {
 		t.Fatal("-keys off must strip the reel")
 	}
 
-	small, err := tape.Parse("Output d.gif\n# foley: keys small\nType \"x\"\n")
+	knobs, err := tape.Parse("Output d.gif\n# foley: keys small notation=icons accent=#ff4f45 plain\nType \"x\"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if on, size := small.KeysCue(); !on || size != foley.KeysSmall {
-		t.Fatalf("keys small = %v %v", on, size)
+	if on, kc := knobs.KeysCue(); !on || kc.Size != foley.KeysSmall || kc.Notation != foley.KeysIcons ||
+		kc.Accent != "#ff4f45" || !kc.Plain {
+		t.Fatalf("keys knobs = %v %+v", on, kc)
 	}
 
-	plain, err := tape.Parse("Output d.gif\nType \"x\"\n")
+	bare, err := tape.Parse("Output d.gif\nType \"x\"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings, err = tape.EffectiveSettingsForTest(plain, tape.RunOptions{Keys: tape.KeysOnLarge})
-	if err != nil || !settings.KeysOverlay || settings.KeysSize != foley.KeysLarge {
-		t.Fatalf("-keys large must add the reel: %+v", settings.KeysSize)
+	override := tape.KeysOverride{On: true, Cue: tape.KeysCue{Size: foley.KeysLarge, Accent: "blue"}}
+	settings, err = tape.EffectiveSettingsForTest(bare, tape.RunOptions{Keys: override})
+	if err != nil || !settings.KeysOverlay || settings.Keys.Size != foley.KeysLarge || settings.Keys.Accent != "blue" {
+		t.Fatalf("-keys large must add the reel: %+v", settings.Keys)
+	}
+	// The override REPLACES the layer, dress-style: the cue's knobs
+	// never bleed through.
+	withCue, err := tape.Parse("Output d.gif\n# foley: keys small plain\nType \"x\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, err = tape.EffectiveSettingsForTest(withCue, tape.RunOptions{Keys: override})
+	if err != nil || settings.Keys.Plain || settings.Keys.Size != foley.KeysLarge {
+		t.Fatalf("override must replace the cue wholesale: %+v", settings.Keys)
 	}
 
-	if _, err := tape.Parse("Output d.gif\n# foley: keys bottom\nType \"x\"\n"); err == nil || !strings.Contains(err.Error(), "small|medium|large") {
-		t.Fatalf("unknown keys size must fail loudly, got %v", err)
+	for src, frag := range map[string]string{
+		"# foley: keys bottom":            "small|medium|large",
+		"# foley: keys notation=mac":      "keycap|icons",
+		"# foley: keys accent=chartreuse": "ANSI color name",
+		"# foley: keys small large":       "twice",
+		"# foley: keys accent=":           "accent needs a value",
+	} {
+		if _, err := tape.Parse("Output d.gif\n" + src + "\nType \"x\"\n"); err == nil || !strings.Contains(err.Error(), frag) {
+			t.Fatalf("%s must fail with %q, got %v", src, frag, err)
+		}
 	}
 	if _, err := tape.Parse("Output d.gif\n# foley: keys\n# foley: keys\nType \"x\"\n"); err == nil || !strings.Contains(err.Error(), "lines 2 and 3") {
 		t.Fatalf("two keys cues must fail with lines, got %v", err)
