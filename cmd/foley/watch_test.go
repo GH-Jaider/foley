@@ -126,7 +126,7 @@ func TestWatchLoopRerecords(t *testing.T) {
 	if got := runs.Load(); got < 3 {
 		t.Fatalf("recordings = %d, want >= 3 (initial + mid-render save + normal save)", got)
 	}
-	if !strings.Contains(out.String(), "mid-recording") {
-		t.Fatalf("mid-render path not taken: %q", out.String())
+	if !strings.Contains(out.String(), "mid-take") {
+		t.Fatalf("mid-take path not taken: %q", out.String())
 	}
 }

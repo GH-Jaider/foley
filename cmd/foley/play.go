@@ -42,10 +42,10 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"replace the recording's theme (a curated name or an inline {json})")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley play [flags] <file.tape | ->\n\n"+
-			"Records the tape and replays it RIGHT HERE, in your terminal, via\n"+
-			"kitty graphics — no files opened, no windows. The tape's declared\n"+
-			"outputs are still written. Terminals without kitty graphics get the\n"+
-			"first output opened with the system viewer instead.\n\n")
+			"Your terminal is the screen: records the tape and replays it right\n"+
+			"here via kitty graphics — no files opened, no windows. The tape's\n"+
+			"declared outputs are still written. A terminal without kitty\n"+
+			"graphics gets the first output screened in the system viewer.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -142,10 +142,10 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 0
 	}
 	if len(rep.Outputs) == 0 {
-		_, _ = fmt.Fprintln(stderr, "foley: this terminal doesn't speak kitty graphics and the tape declared no Output to open")
+		_, _ = fmt.Fprintln(stderr, "foley: this terminal doesn't speak kitty graphics and the tape declared no Output to screen")
 		return 1
 	}
-	_, _ = fmt.Fprintf(stderr, "foley: this terminal doesn't speak kitty graphics — opening %s with the system viewer\n", rep.Outputs[0])
+	_, _ = fmt.Fprintf(stderr, "foley: this terminal doesn't speak kitty graphics — screening %s in the system viewer instead\n", rep.Outputs[0])
 	if err := execx.OpenFile(ctx, rep.Outputs[0]); err != nil {
 		_, _ = fmt.Fprintf(stderr, "foley: %v (the recording is at %s)\n", err, rep.Outputs[0])
 		return 1

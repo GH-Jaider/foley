@@ -154,7 +154,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cols := fs.Int("cols", 0, "terminal grid columns (overrides the tape's pixel Width/Height derivation)")
 	rows := fs.Int("rows", 0, "terminal grid rows (overrides the tape's pixel Width/Height derivation)")
 	fs.Usage = func() {
-		_, _ = fmt.Fprint(stderr, "usage: foley [flags] <file.tape | ->\n"+
+		_, _ = fmt.Fprint(stderr, "foley — terminal demos from .tape scripts, rendered without a window.\n"+
+			"The tape is the recording; foley adds the post-production (camera,\n"+
+			"highlights, the keys reel) and the footage is never touched.\n\n"+
+			"usage: foley [flags] <file.tape | ->\n"+
 			"       foley play [flags] <file.tape | ->\n"+
 			"       foley validate [flags] <file.tape ... | ->\n"+
 			"       foley new <file.tape>\n"+
@@ -306,9 +309,9 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 		"lint chords as if -modify-other-keys were set")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley validate [flags] <file.tape ... | ->\n\n"+
-			"Parses each tape and prints its compatibility warnings without\n"+
-			"recording. Exits 1 if any tape fails to parse; warnings alone\n"+
-			"exit 0.\n\n")
+			"The spotting session: parses each tape, reports compatibility\n"+
+			"warnings and its cue sheet — nothing records. Exits 1 if any tape\n"+
+			"fails to parse; warnings alone exit 0.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {

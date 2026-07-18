@@ -68,31 +68,34 @@ func waitForChange(ctx context.Context, poll time.Duration, paths []string, befo
 	}
 }
 
-// watchLoop drives the session: record, then wait for a save, forever
-// until ctx cancels. record does one full recording (printing its own
-// errors — a broken tape keeps the watch alive: you fix it and save)
-// and returns the files to watch NEXT round, so Source'd tapes and
-// dress files added by an edit join the watch immediately. The watched
-// set snapshots BEFORE each recording: a save that lands mid-render
-// re-records right away instead of being lost.
+// watchLoop drives the session — every re-record is a TAKE: record,
+// then wait for a save, forever until ctx cancels. record does one
+// full recording (printing its own errors — a broken tape keeps the
+// watch alive: you fix it and save) and returns the files to watch
+// NEXT round, so Source'd tapes and dress files added by an edit join
+// the watch immediately. The watched set snapshots BEFORE each
+// recording: a save that lands mid-take rolls again instead of being
+// lost.
 func watchLoop(ctx context.Context, out io.Writer, poll time.Duration, mainPath string, record func() []string) {
 	watch := []string{mainPath}
+	take := 1
 	for {
 		before := snapshotAll(watch)
 		newWatch := record()
 		if ctx.Err() != nil {
 			return
 		}
+		take++
 		if !snapshotsEqual(snapshotAll(watch), before) {
-			_, _ = fmt.Fprintln(out, "foley: change landed mid-recording, re-recording")
+			_, _ = fmt.Fprintf(out, "foley: saved mid-take — rolling take %d\n", take)
 			watch = newWatch
 			continue
 		}
 		watch = newWatch
-		_, _ = fmt.Fprintf(out, "foley: watching %s — save to re-record (ctrl-c stops)\n", strings.Join(watch, ", "))
+		_, _ = fmt.Fprintf(out, "foley: watching %s — save to roll take %d (ctrl-c wraps)\n", strings.Join(watch, ", "), take)
 		if !waitForChange(ctx, poll, watch, snapshotAll(watch)) {
 			return
 		}
-		_, _ = fmt.Fprintln(out, "foley: change detected, re-recording")
+		_, _ = fmt.Fprintf(out, "foley: change detected — rolling take %d\n", take)
 	}
 }
