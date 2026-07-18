@@ -20,6 +20,8 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+
+	"github.com/GH-Jaider/foley/assets/logo"
 )
 
 var (
@@ -110,7 +112,11 @@ func main() {
 		scaleTo(off, iconOff)
 		must(writeBlinkGIF(filepath.Join(outDir, fmt.Sprintf("icon-%d.gif", size)), on, off))
 	}
-	fmt.Println("logogen: wrote banner/compact/icon (.png static + .gif blinking) and icon-64/32/16")
+	// foley.ans: the cell-art chip as a raw ANSI file — fastfetch's
+	// custom logo for the fetch tape (--logo-type file-raw), same
+	// single source the CLI welcome draws.
+	must(os.WriteFile(filepath.Join(outDir, "foley.ans"), []byte(logo.CellArt()), 0o644)) //nolint:gosec // brand asset
+	fmt.Println("logogen: wrote banner/compact/icon (.png static + .gif blinking), icon-64/32/16 and foley.ans")
 }
 
 // strip composes one film strip: u = px per spec unit, wu = width in

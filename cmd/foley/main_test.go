@@ -33,7 +33,7 @@ func TestCLIArgErrors(t *testing.T) {
 		exit   int
 		stderr string
 	}{
-		{"no_args", nil, 2, "usage: foley"},
+		{"flags_but_no_tape", []string{"-output-scale", "1"}, 2, "usage: foley"},
 		{"bad_mode", []string{"-mode", "warp", "x.tape"}, 2, "unknown mode"},
 		{"missing_file", []string{filepath.Join(t.TempDir(), "no.tape")}, 1, "no such file"},
 		{"bad_flag", []string{"-definitely-not-a-flag"}, 2, "flag provided"},
@@ -328,5 +328,39 @@ func TestCLIDressFlagValidatesEarly(t *testing.T) {
 	exit, _, stderr := cli([]string{"-dress", "nosuch", "x.tape"}, "")
 	if exit != 2 || !strings.Contains(stderr, "unknown built-in") {
 		t.Fatalf("exit=%d stderr=%q", exit, stderr)
+	}
+}
+
+// TestBareInvocationIsHelp pins the front door: `foley` alone is
+// someone exploring — a SHORT welcome on stdout, exit 0 (the full
+// flag reference lives behind -h; a reference card is not a front
+// door); only a malformed invocation is a usage error.
+func TestBareInvocationIsHelp(t *testing.T) {
+	exit, stdout, stderr := cli(nil, "")
+	if exit != 0 {
+		t.Fatalf("bare foley exit = %d, want 0 (stderr: %s)", exit, stderr)
+	}
+	if !strings.Contains(stdout, "start here:") || !strings.Contains(stdout, "the post-production") {
+		t.Fatalf("bare foley stdout lacks the welcome:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "-output-scale") {
+		t.Fatalf("bare foley must be the short welcome, not the flag reference:\n%s", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("bare foley wrote to stderr: %q", stderr)
+	}
+}
+
+// TestDashHIsTheFullReference pins -h: the complete flag dump, on
+// stdout, exit 0.
+func TestDashHIsTheFullReference(t *testing.T) {
+	exit, stdout, _ := cli([]string{"-h"}, "")
+	if exit != 0 {
+		t.Fatalf("-h exit = %d, want 0", exit)
+	}
+	for _, want := range []string{"usage: foley", "-output-scale", "-watch", "-gif-loop"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("-h stdout lacks %q:\n%s", want, stdout)
+		}
 	}
 }

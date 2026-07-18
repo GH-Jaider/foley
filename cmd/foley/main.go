@@ -153,23 +153,55 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"gif loop count: 0 = forever (the default), -1 = play once, N = repeat N more times")
 	cols := fs.Int("cols", 0, "terminal grid columns (overrides the tape's pixel Width/Height derivation)")
 	rows := fs.Int("rows", 0, "terminal grid rows (overrides the tape's pixel Width/Height derivation)")
-	fs.Usage = func() {
-		_, _ = fmt.Fprint(stderr, "foley — terminal demos from .tape scripts, rendered without a window.\n"+
-			"The tape is the recording; foley adds the post-production (camera,\n"+
-			"highlights, the keys reel) and the footage is never touched.\n\n"+
-			"usage: foley [flags] <file.tape | ->\n"+
-			"       foley play [flags] <file.tape | ->\n"+
-			"       foley validate [flags] <file.tape ... | ->\n"+
-			"       foley new <file.tape>\n"+
-			"       foley sew [-from <dress>] <name>\n"+
-			"       foley doctor [-fonts dir]\n"+
-			"       foley themes\n"+
-			"       foley fonts\n"+
-			"       foley wardrobe [name]\n\n"+
+	// Three doors, three sizes: bare `foley` is a WELCOME (short, on
+	// stdout, exit 0 — someone exploring got their answer); a malformed
+	// invocation gets the compact usage on stderr; -h gets the full
+	// flag reference. The full dump is a reference card, not a front
+	// door — it does not fit on a screen and should not have to.
+	pitch := "foley — terminal demos from .tape scripts, rendered without a window.\n" +
+		"The tape is the recording; foley adds the post-production (camera,\n" +
+		"highlights, the keys reel) and the footage is never touched.\n"
+	usageLines := "usage: foley [flags] <file.tape | ->\n" +
+		"       foley play [flags] <file.tape | ->\n" +
+		"       foley validate [flags] <file.tape ... | ->\n" +
+		"       foley new <file.tape>\n" +
+		"       foley sew [-from <dress>] <name>\n" +
+		"       foley doctor [-fonts dir]\n" +
+		"       foley themes | fonts | wardrobe [name]\n"
+	welcome := func(w io.Writer) {
+		showLogo(w)
+		_, _ = fmt.Fprint(w, pitch+"\n"+
+			"start here:\n"+
+			"  foley new demo.tape        a starter tape to edit\n"+
+			"  foley demo.tape            record its outputs (gif/mp4/webm/webp/cast/txt)\n"+
+			"  foley play demo.tape       watch it right here, in this terminal\n"+
+			"  foley -watch demo.tape     re-record every time you save\n"+
+			"  foley validate demo.tape   the spotting session: lint + cue sheet\n"+
+			"  foley doctor               check fonts, engine and ffmpeg\n\n"+
+			"also: sew (make a dress) · themes · fonts · wardrobe\n"+
+			"flags: foley -h              the full reference\n")
+	}
+	fullHelp := func(w io.Writer) {
+		_, _ = fmt.Fprint(w, pitch+"\n"+usageLines+"\n"+
 			"\"-\" reads the tape from stdin. Relative paths in the tape (Output,\n"+
 			"Screenshot, Source) resolve against the current working directory,\n"+
 			"exactly like VHS.\n\n")
+		fs.SetOutput(w)
 		fs.PrintDefaults()
+		fs.SetOutput(stderr)
+	}
+	fs.Usage = func() {
+		_, _ = fmt.Fprint(stderr, usageLines+"\nfoley -h lists every flag\n")
+	}
+	if len(args) == 0 {
+		welcome(stdout)
+		return 0
+	}
+	for _, a := range args {
+		if a == "-h" || a == "-help" || a == "--help" {
+			fullHelp(stdout)
+			return 0
+		}
 	}
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
