@@ -3,5 +3,7 @@
   "windowBarSize": 28,
   "windowTitle": "~",
   "borderRadius": 10,
-  "padding": 14
+  "padding": 14,
+  "margin": 36,
+  "marginFill": "#101014"
 }

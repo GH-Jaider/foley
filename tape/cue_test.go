@@ -333,8 +333,9 @@ func TestDressOverrideSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// gnome's values, and NONE of the tape dress's (margin 24 must go).
-	if gnome.WindowBar != "GnomeCSD" || gnome.WindowBarSize != 30 || gnome.Padding != 14 || gnome.Margin != 0 {
+	// gnome's values, and NONE of the tape dress's: the margin is
+	// gnome's own floating 36, not the tape dress's 24.
+	if gnome.WindowBar != "GnomeCSD" || gnome.WindowBarSize != 30 || gnome.Padding != 14 || gnome.Margin != 36 {
 		t.Fatalf("override did not REPLACE the layer: bar=%q/%d padding=%d margin=%d",
 			gnome.WindowBar, gnome.WindowBarSize, gnome.Padding, gnome.Margin)
 	}
