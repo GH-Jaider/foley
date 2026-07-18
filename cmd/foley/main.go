@@ -58,6 +58,25 @@ func (o *outputsFlag) Set(v string) error {
 	return nil
 }
 
+// parseKeysOverride maps the -keys flag values shared by record and
+// play; false means an unknown value (the caller prints the menu).
+func parseKeysOverride(s string) (tape.KeysOverride, bool) {
+	switch s {
+	case "":
+		return tape.KeysDefault, true
+	case "off":
+		return tape.KeysOff, true
+	case "on", "medium":
+		return tape.KeysOnMedium, true
+	case "small":
+		return tape.KeysOnSmall, true
+	case "large":
+		return tape.KeysOnLarge, true
+	default:
+		return tape.KeysDefault, false
+	}
+}
+
 func parseMode(s string) (foley.Mode, bool) {
 	switch s {
 	case "deterministic":
@@ -98,6 +117,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runFonts(args[1:], stdout, stderr)
 		case "sew":
 			return runSew(args[1:], stdout, stderr)
+		case "play":
+			return runPlay(args[1:], stdin, stdout, stderr)
 		}
 	}
 
@@ -121,6 +142,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"re-record every time the tape (or a Source'd tape or dress file it uses) is saved; ctrl-c stops")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley [flags] <file.tape | ->\n"+
+			"       foley play [flags] <file.tape | ->\n"+
 			"       foley validate [flags] <file.tape ... | ->\n"+
 			"       foley new <file.tape>\n"+
 			"       foley sew [-from <dress>] <name>\n"+
@@ -161,18 +183,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
-	var keysOverride tape.KeysOverride
-	switch *keys {
-	case "":
-	case "off":
-		keysOverride = tape.KeysOff
-	case "on", "medium":
-		keysOverride = tape.KeysOnMedium
-	case "small":
-		keysOverride = tape.KeysOnSmall
-	case "large":
-		keysOverride = tape.KeysOnLarge
-	default:
+	keysOverride, ok := parseKeysOverride(*keys)
+	if !ok {
 		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: off, on, small, medium or large\n", *keys)
 		return 2
 	}

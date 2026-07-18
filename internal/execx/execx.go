@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 )
 
@@ -120,4 +121,27 @@ func tail(b []byte) []byte {
 		return b
 	}
 	return b[len(b)-keep:]
+}
+
+// OpenFile hands a file to the platform's opener — `open` on darwin,
+// `xdg-open` elsewhere (the freedesktop standard). No version table:
+// any opener is fine. Used by `foley play` as the honest fallback when
+// the terminal cannot display graphics itself.
+func OpenFile(ctx context.Context, path string) error {
+	name := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		name = "open"
+	}
+	bin, err := LookPath(name)
+	if err != nil {
+		return fmt.Errorf("execx: no system opener (%s) on PATH: %w", name, err)
+	}
+	cmd := exec.CommandContext(ctx, bin, path) //nolint:gosec // bin from LookPath of a platform constant
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("execx: %s %s: %w\n%s", name, path, err, tail(out.Bytes()))
+	}
+	return nil
 }

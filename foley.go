@@ -211,6 +211,11 @@ type Options struct {
 	KeysOverlay  bool
 	KeysSize     KeysSize
 	BorderRadius int
+	// KeepFrames leaves the staging frames directory (PNG frames +
+	// manifest) on disk after Close instead of deleting it — the
+	// caller owns deletion from then on. `foley play` replays it;
+	// FramesDir names it.
+	KeepFrames bool
 	// Zoom reserves the camera (ADR-019): the scene renders on a 2×
 	// supersampled master and Recorder.Zoom/ZoomOff drive a viewport
 	// over it — every frame stays an exact integer downscale, so zoomed
@@ -273,10 +278,11 @@ type Recorder struct {
 	sink      *encode.PNGSink
 	framesDir string
 
-	finished  bool
-	closed    bool
-	shots     int
-	finalText string
+	finished   bool
+	closed     bool
+	shots      int
+	finalText  string
+	keepFrames bool
 
 	// assemblyWarnings surfaces raster findings (e.g. a proportional
 	// user font) — nothing in the pipeline is allowed to stay silent.
@@ -610,6 +616,11 @@ func (r *Recorder) Now() time.Duration { return r.timeline.Now() }
 // Live: safe to read while the recording runs (a progress pulse).
 func (r *Recorder) Frames() int { return r.sink.Frames() }
 
+// FramesDir is the staging directory holding the PNG frames and their
+// manifest. It outlives Close only with Options.KeepFrames — then the
+// caller owns deleting it.
+func (r *Recorder) FramesDir() string { return r.framesDir }
+
 // RestlessSettles reports how many Deterministic-mode settle windows saw
 // the app writing with no input to answer (animation, background work).
 // Deterministic recordings collapse that self-paced motion into settled
@@ -708,7 +719,7 @@ func (r *Recorder) Close() error {
 		errs = append(errs, r.proc.Close())
 	}
 	errs = append(errs, r.engine.Close())
-	if r.framesDir != "" {
+	if r.framesDir != "" && !r.keepFrames {
 		errs = append(errs, os.RemoveAll(r.framesDir))
 	}
 	return errors.Join(errs...)
@@ -1089,6 +1100,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		engine:           eng,
 		sink:             sink,
 		framesDir:        framesDir,
+		keepFrames:       opts.KeepFrames,
 		highlights:       highlightTrack,
 		camera:           camera,
 		ras:              ras,

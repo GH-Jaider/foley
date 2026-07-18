@@ -1,61 +1,43 @@
 package encode
 
 import (
+	"image"
 	"testing"
 	"time"
 )
 
-func TestParseDurations(t *testing.T) {
-	manifest := []byte(`ffconcat version 1.0
-file 'frame-00000.png'
-option framerate 1000
-duration 0.060000
-file 'frame-00001.png'
-option framerate 1000
-duration 1.300000
-file 'frame-00001.png'
-option framerate 1000
-`)
-	total, last, err := parseDurations(manifest)
+// TestManifest pins the playback listing: every frame with its exact
+// duration, in order, and the trailing repeated file (the concat
+// boundary marker) dropped.
+func TestManifest(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewPNGSink(PNGSinkOptions{Dir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 1360*time.Millisecond {
-		t.Fatalf("total = %v", total)
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	if err := s.Add(img, 120*time.Millisecond); err != nil {
+		t.Fatal(err)
 	}
-	if last != 1300*time.Millisecond {
-		t.Fatalf("last = %v", last)
+	if err := s.Add(img, 2*time.Second); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestParseDurationsMalformed(t *testing.T) {
-	for _, bad := range []string{
-		"duration 0.5\n",     // wrong fraction width
-		"duration abc.def\n", // not numbers
-		"duration 1\n",       // no fraction
-	} {
-		if _, _, err := parseDurations([]byte(bad)); err == nil {
-			t.Fatalf("malformed %q must error", bad)
-		}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
 	}
-	if _, _, err := parseDurations([]byte("ffconcat version 1.0\n")); err == nil {
-		t.Fatal("manifest without durations must error")
+	frames, err := Manifest(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestCentiseconds(t *testing.T) {
-	cases := []struct {
-		d    time.Duration
-		want int64
-	}{
-		{1300 * time.Millisecond, 130},
-		{60 * time.Millisecond, 6},
-		{20 * time.Millisecond, 2},
-		{4 * time.Millisecond, 1}, // GIF's floor: sub-centisecond is inexpressible
+	if len(frames) != 2 {
+		t.Fatalf("frames = %d (%+v), want 2 — the boundary marker must be dropped", len(frames), frames)
 	}
-	for _, c := range cases {
-		if got := centiseconds(c.d); got != c.want {
-			t.Fatalf("centiseconds(%v) = %d, want %d", c.d, got, c.want)
+	if frames[0].Dur != 120*time.Millisecond || frames[1].Dur != 2*time.Second {
+		t.Fatalf("durations = %v/%v, want 120ms/2s", frames[0].Dur, frames[1].Dur)
+	}
+	for _, f := range frames {
+		if f.Path == "" {
+			t.Fatalf("frame with empty path: %+v", frames)
 		}
 	}
 }

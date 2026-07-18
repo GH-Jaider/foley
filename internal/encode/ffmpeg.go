@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -129,6 +130,24 @@ func readManifest(framesDir string) (total, last time.Duration, err error) {
 	return parseDurations(raw)
 }
 
+// parseMicros parses the manifest's exact "S.ffffff" decimal into
+// integer microseconds — the same digits ffmpeg reads.
+func parseMicros(val string) (int64, error) {
+	sec, frac, ok := strings.Cut(val, ".")
+	if !ok || len(frac) != 6 {
+		return 0, errors.New("want S.ffffff")
+	}
+	s, err := strconv.ParseInt(sec, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	us, err := strconv.ParseInt(frac, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return s*1_000_000 + us, nil
+}
+
 func parseDurations(manifest []byte) (total, last time.Duration, err error) {
 	var totalMicros, lastMicros int64
 	sc := bufio.NewScanner(bytes.NewReader(manifest))
@@ -138,19 +157,11 @@ func parseDurations(manifest []byte) (total, last time.Duration, err error) {
 		if !ok {
 			continue
 		}
-		sec, frac, ok := strings.Cut(val, ".")
-		if !ok || len(frac) != 6 {
-			return 0, 0, fmt.Errorf("encode: malformed manifest duration %q", line)
-		}
-		s, err := strconv.ParseInt(sec, 10, 64)
+		micros, err := parseMicros(val)
 		if err != nil {
 			return 0, 0, fmt.Errorf("encode: malformed manifest duration %q: %w", line, err)
 		}
-		us, err := strconv.ParseInt(frac, 10, 64)
-		if err != nil {
-			return 0, 0, fmt.Errorf("encode: malformed manifest duration %q: %w", line, err)
-		}
-		lastMicros = s*1_000_000 + us
+		lastMicros = micros
 		totalMicros += lastMicros
 	}
 	if err := sc.Err(); err != nil {

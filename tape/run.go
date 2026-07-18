@@ -58,6 +58,10 @@ type RunOptions struct {
 	// each output is developed. Called synchronously from Run's
 	// goroutine — a slow callback slows the recording; render cheap.
 	Progress func(ProgressEvent)
+	// KeepFrames preserves the staging frames (PNGs + manifest) past
+	// the run; Report.FramesDir names the directory and the CALLER
+	// owns deleting it. `foley play` replays it.
+	KeepFrames bool
 }
 
 // ProgressPhase names what the recording is doing right now.
@@ -94,6 +98,10 @@ type ProgressEvent struct {
 type Report struct {
 	Warnings []string
 	Outputs  []string
+	// FramesDir is the preserved staging directory (RunOptions.
+	// KeepFrames). Set as soon as the recorder exists — even on a
+	// failed run — because the caller owns cleaning it up.
+	FramesDir string
 }
 
 // restlessWarnThreshold: how many restless settles (app output nobody
@@ -198,11 +206,15 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		FPS:             settings.Framerate,
 		ModifyOtherKeys: opts.ModifyOtherKeys,
 		Zoom:            zoomWanted,
+		KeepFrames:      opts.KeepFrames,
 	})
 	if err != nil {
 		return rep, err
 	}
 	defer func() { _ = rec.Close() }()
+	if opts.KeepFrames {
+		rep.FramesDir = rec.FramesDir()
+	}
 	for _, w := range rec.AssemblyWarnings() {
 		warn("%s", w)
 	}
