@@ -1,11 +1,12 @@
 package tape
 
-import "fmt"
-
 // shell is a Set Shell target: the exact invocation and environment VHS
 // uses, prompt included — the default WaitPattern (`>$`) matches that
 // prompt, so this table is functional, not cosmetic.
 type shell struct {
+	// generic marks a shell outside the table: launched bare, prompt
+	// unknown — the executor warns about Wait patterns.
+	generic bool
 	command []string
 	env     []string
 }
@@ -71,6 +72,11 @@ func shellFor(name string) (shell, error) {
 	case "cmd":
 		return shell{command: []string{"cmd.exe", "/k", "prompt=^> "}}, nil
 	default:
-		return shell{}, fmt.Errorf("tape: unknown shell %q (VHS supports bash, zsh, fish, nu, osh, xonsh, powershell, pwsh, cmd)", name)
+		// Any other shell launches BARE (#760): no pinned prompt, no
+		// rc suppression — foley knows nothing about it. The caller
+		// warns (the default `>` Wait pattern will not match; the tape
+		// should Wait /regex/ or set Env PS1) instead of refusing: the
+		// recording still works, honestly degraded.
+		return shell{command: []string{name}, generic: true}, nil
 	}
 }

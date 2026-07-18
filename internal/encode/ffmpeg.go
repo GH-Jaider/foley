@@ -31,17 +31,36 @@ const gifFilter = "split[a][b];[a]palettegen=reserve_transparent=0[p];[b][p]pale
 // GIF assembles framesDir (a closed PNGSink) into an animated GIF. The
 // last frame's delay cannot come from pts deltas (the -t cut removes the
 // marker entry), so it is passed explicitly via -final_delay — computed
-// from the recording's own last duration, never a fixed default.
-func GIF(ctx context.Context, framesDir, outPath string) error {
+// from the recording's own last duration, never a fixed default. loop
+// follows ffmpeg's gif semantics (#633): 0 forever, -1 once, N extra
+// repeats.
+func GIF(ctx context.Context, framesDir, outPath string, loop int) error {
 	_, last, err := readManifest(framesDir)
 	if err != nil {
 		return err
 	}
 	return assemble(ctx, framesDir, outPath,
 		"-vf", gifFilter,
-		"-loop", "0",
+		"-loop", strconv.Itoa(loop),
 		"-final_delay", strconv.FormatInt(centiseconds(last), 10),
 	)
+}
+
+// WebP assembles framesDir into an animated WebP (#50): libwebp with
+// the recording's exact vfr timing. ffmpeg has no native webp ENCODER,
+// so a build without libwebp cannot produce this format — the error
+// says so and names the way out.
+func WebP(ctx context.Context, framesDir, outPath string) error {
+	err := assemble(ctx, framesDir, outPath,
+		"-c:v", "libwebp",
+		"-lossless", "0",
+		"-quality", "82",
+		"-loop", "0",
+	)
+	if err != nil && strings.Contains(err.Error(), "libwebp") {
+		return fmt.Errorf("%w\n(this ffmpeg was built without libwebp — install one that includes it, or output gif/mp4/webm)", err)
+	}
+	return err
 }
 
 // centiseconds rounds d to GIF's delay unit; the format cannot express

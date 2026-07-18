@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -50,6 +51,11 @@ type RunOptions struct {
 	// reel off or on at a size (the CLI's -keys off|on|small|medium|
 	// large).
 	Keys KeysOverride
+	// Theme REPLACES the recording's theme — explicit Sets included,
+	// unlike Dress: its whole purpose is recording the SAME tape in
+	// two palettes (a dark/light pair) without editing it. Zero keeps
+	// the tape's own theme. Build one with ParseThemeRef.
+	Theme ThemeRef
 	// Warn receives one line per compatibility warning as it happens
 	// (they are also collected in the Report). nil discards the stream.
 	Warn io.Writer
@@ -62,6 +68,24 @@ type RunOptions struct {
 	// the run; Report.FramesDir names the directory and the CALLER
 	// owns deleting it. `foley play` replays it.
 	KeepFrames bool
+	// OutputScale forwards to foley.Options.OutputScale: 0/2 = the
+	// retina default, 1 = halve to logical size (quarter the weight,
+	// hairlines soften — weight versus crispness is the user's call).
+	OutputScale int
+	// Dir runs the tape's command in this working directory (#320's
+	// ask, without touching the vendored grammar). Empty inherits.
+	Dir string
+	// ExtraEnv adds KEY=VALUE pairs to the child environment WITHOUT
+	// writing them into the tape (#621: secrets and machine-local
+	// values). They win over the tape's own Env. Prompt variables here
+	// do NOT retune bare Wait — that derivation reads the tape.
+	ExtraEnv []string
+	// GIFLoop is ffmpeg's gif -loop value (#633): 0 = loop forever
+	// (the default), -1 = play once, N = repeat N extra times.
+	GIFLoop int
+	// Cols, Rows size the grid directly (#578), overriding the tape's
+	// pixel Width/Height derivation. Zero defers to the tape.
+	Cols, Rows int
 }
 
 // ProgressPhase names what the recording is doing right now.
@@ -133,6 +157,11 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if err != nil {
 		return rep, err
 	}
+	for _, kv := range opts.ExtraEnv {
+		if k, _, _ := strings.Cut(kv, "="); k == "PS1" || k == "PROMPT" {
+			warn("-env %s: prompt variables from the CLI do not retune bare Wait — put `Env %s` in the tape for a prompt-aware Wait", k, k)
+		}
+	}
 
 	for _, prog := range t.Requires {
 		if _, err := execx.LookPath(prog); err != nil {
@@ -144,6 +173,9 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if err != nil {
 		return rep, err
 	}
+	if sh.generic {
+		warn("Set Shell %s: not in foley's table (VHS's nine) — launched bare with its own defaults; the standard `>` Wait pattern will not match: Wait /regex/ explicitly or set Env PS1 if it honors it", settings.Shell)
+	}
 	if _, err := execx.LookPath(sh.command[0]); err != nil {
 		return rep, fmt.Errorf("tape: Set Shell %s: %w", settings.Shell, err)
 	}
@@ -154,7 +186,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return rep, fmt.Errorf("tape: theme: %w", err)
 	}
 
-	env := mergeEnv(os.Environ(), sh.env, envPairs(t.Env))
+	env := mergeEnv(os.Environ(), sh.env, envPairs(t.Env), opts.ExtraEnv)
 
 	// A custom prompt (ADR-017): `Env PS1` was always legal grammar —
 	// mergeEnv above is what makes it actually WIN over the shell
@@ -177,9 +209,20 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 			break
 		}
 	}
+	// A .cast output needs the byte stream retained from frame zero.
+	captureCast := false
+	for _, out := range t.Outputs {
+		if strings.EqualFold(filepath.Ext(out), ".cast") {
+			captureCast = true
+			break
+		}
+	}
 	rec, err := foley.New(foley.Options{
 		Command:         sh.command,
+		Dir:             opts.Dir,
 		Env:             env,
+		Cols:            opts.Cols,
+		Rows:            opts.Rows,
 		PixelWidth:      settings.Width,
 		PixelHeight:     settings.Height,
 		PixelPadding:    settings.Padding,
@@ -207,6 +250,9 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		ModifyOtherKeys: opts.ModifyOtherKeys,
 		Zoom:            zoomWanted,
 		KeepFrames:      opts.KeepFrames,
+		CaptureCast:     captureCast,
+		OutputScale:     opts.OutputScale,
+		GIFLoop:         opts.GIFLoop,
 	})
 	if err != nil {
 		return rep, err
@@ -440,19 +486,37 @@ func effectiveSettings(t *Tape, opts RunOptions) (Settings, error) {
 	if !opts.Dress.IsZero() {
 		ref = opts.Dress
 	}
-	if ref.IsZero() || ref.None {
-		return settings, nil
+	if !ref.IsZero() && !ref.None {
+		d, err := ResolveDress(ref)
+		if err != nil {
+			return settings, err
+		}
+		explicit := make(map[string]bool, len(t.Explicit))
+		for _, n := range t.Explicit {
+			explicit[n] = true
+		}
+		applyDress(&settings, explicit, d)
 	}
-	d, err := ResolveDress(ref)
-	if err != nil {
-		return settings, err
+	// The theme override is LAST and total: dark/light pairs need the
+	// same tape in another palette, explicit Set Theme included.
+	if !opts.Theme.IsZero() {
+		settings.Theme = opts.Theme
 	}
-	explicit := make(map[string]bool, len(t.Explicit))
-	for _, n := range t.Explicit {
-		explicit[n] = true
-	}
-	applyDress(&settings, explicit, d)
 	return settings, nil
+}
+
+// ParseThemeRef classifies a theme argument the way Set Theme does — a
+// curated name or an inline {json} — and validates it NOW, so a CLI
+// typo dies before anything records.
+func ParseThemeRef(arg string) (ThemeRef, error) {
+	ref := ThemeRef{Name: arg}
+	if strings.HasPrefix(strings.TrimSpace(arg), "{") {
+		ref = ThemeRef{JSON: arg}
+	}
+	if _, err := resolveTheme(ref); err != nil {
+		return ThemeRef{}, err
+	}
+	return ref, nil
 }
 
 // fontFileFor maps the effective FontFamily to the recorder's FontFile:

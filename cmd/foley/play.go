@@ -38,6 +38,8 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"replace the tape's dress layer (same forms as the record flag)")
 	keys := fs.String("keys", "",
 		"replace the tape's keys layer: off, or on|small|medium|large")
+	themeFlag := fs.String("theme", "",
+		"replace the recording's theme (a curated name or an inline {json})")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley play [flags] <file.tape | ->\n\n"+
 			"Records the tape and replays it RIGHT HERE, in your terminal, via\n"+
@@ -75,6 +77,15 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: off, on, small, medium or large\n", *keys)
 		return 2
 	}
+	var themeRef tape.ThemeRef
+	if *themeFlag != "" {
+		var err error
+		themeRef, err = tape.ParseThemeRef(*themeFlag)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: -theme: %v\n", err)
+			return 2
+		}
+	}
 
 	// The stage check comes FIRST — before minutes of recording: play
 	// needs a controlling terminal to draw on (or to know it must fall
@@ -106,6 +117,7 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		FontsDir:        *fonts,
 		Dress:           dressRef,
 		Keys:            keysOverride,
+		Theme:           themeRef,
 		Warn:            progress.warnWriter(),
 		Progress:        progress.pulse,
 		KeepFrames:      true,

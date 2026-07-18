@@ -37,6 +37,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GH-Jaider/foley/internal/driver"
@@ -211,6 +212,20 @@ type Options struct {
 	KeysOverlay  bool
 	KeysSize     KeysSize
 	BorderRadius int
+	// GIFLoop is the gif's loop count, ffmpeg semantics (#633): 0 =
+	// loop forever (the default), -1 = play once, N = repeat N more
+	// times. Only .gif outputs read it.
+	GIFLoop int
+	// OutputScale picks the recording's output resolution: 2 (the
+	// default) is the retina house output — every logical pixel is a
+	// 2x2 block; 1 halves it to logical size with the exact integer
+	// area mean (files at roughly a quarter of the weight, single-pixel
+	// hairlines soften). Weight versus crispness — the user's call.
+	OutputScale int
+	// CaptureCast retains the raw pty output stream in memory, stamped
+	// on the timeline — required for a .cast Output (asciicast v2).
+	// Off by default: a long recording's byte stream is real memory.
+	CaptureCast bool
 	// KeepFrames leaves the staging frames directory (PNG frames +
 	// manifest) on disk after Close instead of deleting it — the
 	// caller owns deletion from then on. `foley play` replays it;
@@ -293,6 +308,32 @@ type Recorder struct {
 	// Options.Zoom reserved it. ras maps cells to master viewports.
 	camera *raster.CameraTrack
 	ras    *raster.Rasterizer
+	// cast collects the pty byte stream when Options.CaptureCast asked
+	// for it (the .cast Output's feed).
+	cast *castLog
+	// gifLoop carries Options.GIFLoop to the encoder.
+	gifLoop int
+}
+
+// castLog captures (bytes, timeline instant) pairs. Mutex: realtime's
+// loop goroutine appends while Output reads after the loop stopped —
+// and the lock keeps it honest if that ordering ever shifts.
+type castLog struct {
+	mu         sync.Mutex
+	cols, rows int
+	events     []encode.CastEvent
+}
+
+func (c *castLog) add(data []byte, at time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, encode.CastEvent{At: at, Data: data})
+}
+
+func (c *castLog) write(path string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return encode.WriteCast(path, c.cols, c.rows, c.events)
 }
 
 // HighlightSpec selects what a highlight paints (ADR-018): a regex
@@ -646,11 +687,23 @@ func (r *Recorder) Output(ctx context.Context, path string) error {
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".gif":
-		return encode.GIF(ctx, r.framesDir, path)
+		return encode.GIF(ctx, r.framesDir, path, r.gifLoop)
+	case ".webp":
+		return encode.WebP(ctx, r.framesDir, path)
 	case ".mp4":
 		return encode.MP4(ctx, r.framesDir, path)
 	case ".webm":
 		return encode.WebM(ctx, r.framesDir, path)
+	case ".cast":
+		// asciicast v2 (asciinema): the raw byte stream on the exact
+		// timeline. finish() already sealed the recording.
+		if r.cast == nil {
+			return errors.New("foley: .cast output needs Options.CaptureCast — the byte stream is not retained by default")
+		}
+		if err := r.cast.write(path); err != nil {
+			return fmt.Errorf("foley: %w", err)
+		}
+		return nil
 	case ".txt", ".ascii":
 		// finish() captured the closing screen before the timeline
 		// stopped (the realtime loop cannot answer afterwards).
@@ -1038,6 +1091,13 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	render := func(f *vtengine.Frame, dst *image.RGBA) (*image.RGBA, error) {
 		return ras.Render(f, eng, dst)
 	}
+	var cast *castLog
+	if opts.CaptureCast {
+		cast = &castLog{cols: opts.Cols, rows: opts.Rows}
+	}
+	if opts.OutputScale != 0 && opts.OutputScale != 1 && opts.OutputScale != 2 {
+		return nil, fmt.Errorf("foley: OutputScale %d: 2 is the retina default, 1 halves to logical size", opts.OutputScale)
+	}
 	var camera *raster.CameraTrack
 	if opts.Zoom {
 		// The camera composits every frame: master render → viewport
@@ -1056,6 +1116,23 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		}
 	}
 
+	if opts.OutputScale == 1 {
+		// The final pass halves whatever the pipeline produced (camera
+		// included) with the exact 2:1 integer mean. The inner render
+		// keeps its own buffer; the driver's dst stays the half-size
+		// one it will reuse.
+		inner := render
+		var fullBuf *image.RGBA
+		render = func(f *vtengine.Frame, dst *image.RGBA) (*image.RGBA, error) {
+			full, err := inner(f, fullBuf)
+			if err != nil {
+				return nil, err
+			}
+			fullBuf = full
+			return raster.DownscaleHalf(dst, full), nil
+		}
+	}
+
 	// Overlay wiring: the driver sees ONE overlay; foley fans it out to
 	// the tracks that exist (keys ADR-016, highlights ADR-018, camera
 	// ADR-019) — the driver never learns how many there are.
@@ -1070,19 +1147,23 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	}
 	var overlay driver.Overlay = mux
 
+	var onOutput func(data []byte, at time.Duration)
+	if cast != nil {
+		onOutput = cast.add
+	}
 	var timeline driver.Timeline
 	switch opts.Mode {
 	case Deterministic:
 		timeline, err = driver.New(driver.Options{
 			Engine: eng, Transport: proc, Render: render, Sink: sink,
 			Settle: driver.SettleOptions(opts.Settle),
-			OnKey:  onKey, Overlay: overlay,
+			OnKey:  onKey, Overlay: overlay, OnOutput: onOutput,
 		})
 	case Realtime:
 		timeline, err = driver.NewRealtime(driver.RealtimeOptions{
 			Engine: eng, Transport: proc, Render: render, Sink: sink,
 			FPS:   opts.FPS,
-			OnKey: onKey, Overlay: overlay,
+			OnKey: onKey, Overlay: overlay, OnOutput: onOutput,
 		})
 	default:
 		err = fmt.Errorf("foley: unknown mode %d", opts.Mode)
@@ -1104,6 +1185,8 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		highlights:       highlightTrack,
 		camera:           camera,
 		ras:              ras,
+		cast:             cast,
+		gifLoop:          opts.GIFLoop,
 		assemblyWarnings: append(fontWarnings, ras.Warnings()...),
 	}, nil
 }

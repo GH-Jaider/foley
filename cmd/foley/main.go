@@ -140,6 +140,19 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"replace the tape's keys layer: off, or on|small|medium|large to draw the input reel at that size (default: the tape's `# foley: keys` cue decides)")
 	watch := fs.Bool("watch", false,
 		"re-record every time the tape (or a Source'd tape or dress file it uses) is saved; ctrl-c stops")
+	themeFlag := fs.String("theme", "",
+		"replace the recording's theme (a curated name or an inline {json}) — explicit Set Theme included: record dark/light pairs from one tape")
+	outputScale := fs.Int("output-scale", 2,
+		"output resolution: 2 = retina (the default), 1 = logical size (about a quarter of the file weight; hairlines soften)")
+	dirFlag := fs.String("dir", "",
+		"working directory for the tape's command (default: the current directory)")
+	var extraEnv outputsFlag
+	fs.Var(&extraEnv, "env",
+		"add KEY=VALUE to the recording's environment without writing it into the tape (repeatable; wins over the tape's Env)")
+	gifLoop := fs.Int("gif-loop", 0,
+		"gif loop count: 0 = forever (the default), -1 = play once, N = repeat N more times")
+	cols := fs.Int("cols", 0, "terminal grid columns (overrides the tape's pixel Width/Height derivation)")
+	rows := fs.Int("rows", 0, "terminal grid rows (overrides the tape's pixel Width/Height derivation)")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley [flags] <file.tape | ->\n"+
 			"       foley play [flags] <file.tape | ->\n"+
@@ -188,6 +201,19 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "foley: -keys %q: off, on, small, medium or large\n", *keys)
 		return 2
 	}
+	var themeRef tape.ThemeRef
+	if *themeFlag != "" {
+		var err error
+		themeRef, err = tape.ParseThemeRef(*themeFlag)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: -theme: %v\n", err)
+			return 2
+		}
+	}
+	if *outputScale != 1 && *outputScale != 2 {
+		_, _ = fmt.Fprintf(stderr, "foley: -output-scale %d: 2 is the retina default, 1 halves to logical size\n", *outputScale)
+		return 2
+	}
 
 	// The pulse: a live progress line on stderr while recording and
 	// developing — only when stderr is a terminal; CI and pipes stay
@@ -199,6 +225,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		FontsDir:        *fonts,
 		Dress:           dressRef,
 		Keys:            keysOverride,
+		Theme:           themeRef,
+		OutputScale:     *outputScale,
+		Dir:             *dirFlag,
+		ExtraEnv:        extraEnv,
+		GIFLoop:         *gifLoop,
+		Cols:            *cols,
+		Rows:            *rows,
 		Warn:            progress.warnWriter(),
 		Progress:        progress.pulse,
 	}

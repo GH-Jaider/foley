@@ -110,7 +110,7 @@ read hold`
 	}
 
 	gifPath := filepath.Join(framesDir, "demo.gif")
-	if err := encode.GIF(ctx, framesDir, gifPath); err != nil {
+	if err := encode.GIF(ctx, framesDir, gifPath, 0); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(gifPath) //nolint:gosec // path built from TempDir

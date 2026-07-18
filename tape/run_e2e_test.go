@@ -5,6 +5,7 @@ package tape_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"image/gif"
 	"os"
 	"path/filepath"
@@ -312,6 +313,145 @@ Sleep 400ms
 	}
 	if final := events[len(events)-1]; final.Now < want {
 		t.Fatalf("final clock %v never reached the declared total %v", final.Now, want)
+	}
+}
+
+// TestOutputScaleEndToEnd pins the weight knob: OutputScale 1 halves
+// the canvas to LOGICAL size — with the camera in the same take, so
+// the zoom compositor and the final halving compose.
+func TestOutputScaleEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.gif
+Require bash
+Set Shell bash
+Set Width 640
+Set Height 220
+Type@0ms "echo liviano"
+Enter
+Sleep 300ms
+# foley: zoom 0,0 30x6 200ms
+Sleep 400ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts, OutputScale: 1})
+	if err != nil {
+		t.Fatalf("run: %v (warnings: %v)", err, rep.Warnings)
+	}
+	f, err := os.Open(filepath.Join(dir, "demo.gif")) //nolint:gosec // TempDir path
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	g, err := gif.DecodeAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w, h := g.Config.Width, g.Config.Height; w != 640 || h != 220 {
+		t.Fatalf("canvas = %dx%d, want the LOGICAL 640x220 at OutputScale 1", w, h)
+	}
+}
+
+// TestCastEndToEnd records a tape straight to asciicast v2: the header
+// carries the real grid, events parse with monotonic exact timestamps,
+// the typed text is in the stream — and two identical runs produce a
+// byte-identical cast (same-instant merging makes pty chunking noise
+// vanish).
+func TestCastEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.cast
+Require bash
+Set Shell bash
+Set Width 480
+Set Height 200
+Type@0ms "echo casteado"
+Enter
+Sleep 300ms
+`
+	run := func() []byte {
+		tp, err := tape.Parse(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts})
+		if err != nil {
+			t.Fatalf("run: %v (warnings: %v)", err, rep.Warnings)
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, "demo.cast")) //nolint:gosec // TempDir path
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	first := run()
+	lines := strings.Split(strings.TrimRight(string(first), "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("cast has %d lines, want header + events:\n%s", len(lines), first)
+	}
+	var header struct {
+		Version       int `json:"version"`
+		Width, Height int
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &header); err != nil {
+		t.Fatalf("header %q: %v", lines[0], err)
+	}
+	if header.Version != 2 || header.Width <= 0 || header.Height <= 0 {
+		t.Fatalf("header = %+v, want version 2 with the real grid", header)
+	}
+	prev := -1.0
+	var all strings.Builder
+	for _, ln := range lines[1:] {
+		var ev []any
+		if err := json.Unmarshal([]byte(ln), &ev); err != nil {
+			t.Fatalf("event %q: %v", ln, err)
+		}
+		if len(ev) != 3 || ev[1] != "o" {
+			t.Fatalf("event %q: want [time, \"o\", data]", ln)
+		}
+		at, ok := ev[0].(float64)
+		if !ok || at < prev {
+			t.Fatalf("event %q: non-monotonic time (prev %v)", ln, prev)
+		}
+		prev = at
+		s, _ := ev[2].(string)
+		all.WriteString(s)
+	}
+	if !strings.Contains(all.String(), "casteado") {
+		t.Fatalf("typed text missing from the stream:\n%s", all.String())
+	}
+	second := run()
+	if !bytes.Equal(first, second) {
+		t.Fatal("two identical runs differ — the cast broke byte-determinism")
 	}
 }
 

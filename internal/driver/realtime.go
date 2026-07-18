@@ -21,11 +21,12 @@ type RealtimeOptions struct {
 	Render    RenderFunc
 	Sink      Sink
 	FPS       int
-	// OnKey and Overlay mirror the deterministic driver's (ADR-016);
+	// OnKey, Overlay and OnOutput mirror the deterministic driver's;
 	// here timestamps are wall-clock since the recording started, and
 	// the overlay animates on the FPS ticks (no span splitting).
-	OnKey   func(k key.Key, at time.Duration, hidden bool)
-	Overlay Overlay
+	OnKey    func(k key.Key, at time.Duration, hidden bool)
+	Overlay  Overlay
+	OnOutput func(data []byte, at time.Duration)
 }
 
 // Realtime is the wall-clock timeline (ADR-012 D7): recording starts at
@@ -368,6 +369,9 @@ func (lp *rtLoop) snapshot() bool {
 
 func (lp *rtLoop) onChunk(data []byte) {
 	lp.lastChunk = time.Now()
+	if lp.r.opts.OnOutput != nil {
+		lp.r.opts.OnOutput(data, time.Since(lp.r.start))
+	}
 	if _, err := lp.r.opts.Engine.Write(data); err != nil {
 		lp.fail(err)
 		return

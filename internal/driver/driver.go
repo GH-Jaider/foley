@@ -111,6 +111,9 @@ type Options struct {
 	OnKey func(k key.Key, at time.Duration, hidden bool)
 	// Overlay, when non-nil, animates over the frames (see Overlay).
 	Overlay Overlay
+	// OnOutput observes every pty byte chunk as the engine ingests it,
+	// stamped with the timeline instant — the .cast emitter's feed.
+	OnOutput func(data []byte, at time.Duration)
 }
 
 // Driver runs a deterministic recording timeline. Not safe for concurrent
@@ -159,6 +162,16 @@ func New(opts Options) (*Driver, error) {
 
 // Now reports the virtual timeline position.
 func (d *Driver) Now() time.Duration { return d.now }
+
+// ingest feeds pty bytes to the engine and the OnOutput observer,
+// stamped at the current virtual instant.
+func (d *Driver) ingest(data []byte) error {
+	if d.opts.OnOutput != nil {
+		d.opts.OnOutput(data, d.now)
+	}
+	_, err := d.opts.Engine.Write(data)
+	return err
+}
 
 // Type presses each rune of s as one step of perKey virtual time. Zero
 // perKey is paste semantics: the whole string is ONE write and ONE
@@ -230,7 +243,7 @@ func (d *Driver) Wait(ctx context.Context, pred func(*vtengine.Frame) bool, time
 			if !ok {
 				return d.waitFailed(ErrWaitInterrupted, timeout, "application exited")
 			}
-			if _, err := d.opts.Engine.Write(ch.Data); err != nil {
+			if err := d.ingest(ch.Data); err != nil {
 				return err
 			}
 			f, err := d.snapshot()
@@ -361,7 +374,7 @@ func (d *Driver) settle(ctx context.Context, prompted bool) error {
 				return nil
 			}
 			sawOutput = true
-			if _, err := d.opts.Engine.Write(ch.Data); err != nil {
+			if err := d.ingest(ch.Data); err != nil {
 				return err
 			}
 			quiet.Reset(s.Quiet)

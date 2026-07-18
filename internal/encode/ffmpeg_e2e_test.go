@@ -43,7 +43,7 @@ func TestAssembleGIFAndMP4(t *testing.T) {
 	}
 
 	gifPath := filepath.Join(dir, "out.gif")
-	if err := encode.GIF(ctx, dir, gifPath); err != nil {
+	if err := encode.GIF(ctx, dir, gifPath, 0); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(gifPath) //nolint:gosec // path built from TempDir

@@ -612,3 +612,30 @@ func TestSourcedTapes(t *testing.T) {
 		t.Fatalf("quoted text counted as Source: %v", extra)
 	}
 }
+
+// TestThemeOverride pins the -theme contract: it replaces the theme
+// TOTALLY (explicit Set Theme included — dark/light pairs are its whole
+// purpose), and a typo dies at flag-parse time via ParseThemeRef.
+func TestThemeOverride(t *testing.T) {
+	tp, err := tape.Parse("Output d.gif\nSet Theme \"Dracula\"\nType \"x\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := tape.ParseThemeRef("Catppuccin Latte")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, err := tape.EffectiveSettingsForTest(tp, tape.RunOptions{Theme: ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Theme.Name != "Catppuccin Latte" {
+		t.Fatalf("Theme = %+v, want the override to beat the explicit Set", settings.Theme)
+	}
+	if _, err := tape.ParseThemeRef("NoSuchTheme"); err == nil {
+		t.Fatal("a typo'd theme name must die at flag parse")
+	}
+	if _, err := tape.ParseThemeRef(`{"background": "#101010"}`); err != nil {
+		t.Fatalf("inline palette form: %v", err)
+	}
+}

@@ -23,3 +23,7 @@ func EffectiveSettingsForTest(t *Tape, opts RunOptions) (Settings, error) {
 func DeclaredTotalForTest(t *Tape, settings Settings) time.Duration {
 	return declaredTotal(t, settings)
 }
+
+// MergeEnvForTest exposes the env layering: the seam that pins CLI
+// -env winning over the tape's own Env.
+func MergeEnvForTest(layers ...[]string) []string { return mergeEnv(layers...) }

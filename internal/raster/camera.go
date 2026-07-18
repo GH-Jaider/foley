@@ -371,3 +371,17 @@ func (r *Rasterizer) Composite(master *image.RGBA, vp image.Rectangle, dst *imag
 	}
 	return dst
 }
+
+// DownscaleHalf shrinks src into dst at exactly 2:1 with the integer
+// area mean — the output-scale knob's final pass (this file's scaler:
+// deterministic by construction). dst is reallocated when it does not
+// match; the result is returned either way.
+func DownscaleHalf(dst, src *image.RGBA) *image.RGBA {
+	sb := src.Bounds()
+	w, h := sb.Dx()/2, sb.Dy()/2
+	if dst == nil || dst.Bounds().Dx() != w || dst.Bounds().Dy() != h {
+		dst = image.NewRGBA(image.Rect(0, 0, w, h))
+	}
+	downscaleArea(dst, src, sb)
+	return dst
+}
