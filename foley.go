@@ -172,7 +172,11 @@ type Options struct {
 	Command []string
 	// Dir is the command's working directory (empty = inherit).
 	Dir string
-	// Env is the exact child environment (nil = inherit).
+	// Env is the exact child environment. nil inherits the process
+	// environment THROUGH foley's terminal identity (ADR-021): the
+	// host terminal's variables scrubbed, foley's declared. Callers
+	// building an explicit Env should start from
+	// TerminalEnv(os.Environ()) for the same behavior.
 	Env []string
 
 	// Cols, Rows size the terminal grid. Default 80x24. When zero and
@@ -1044,10 +1048,16 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	}
 	geo := vtengine.Geometry{Cols: opts.Cols, Rows: opts.Rows, CellW: cellW, CellH: cellH}
 
+	childEnv := opts.Env
+	if childEnv == nil {
+		// foley IS the terminal (ADR-021): inheritance passes through
+		// the identity layer, never raw.
+		childEnv = TerminalEnv(os.Environ())
+	}
 	proc, err := ptyx.Start(ptyx.Options{
 		Command: opts.Command,
 		Dir:     opts.Dir,
-		Env:     opts.Env,
+		Env:     childEnv,
 		Size: ptyx.Winsize{
 			Cols: opts.Cols, Rows: opts.Rows,
 			XPix: opts.Cols * cellW, YPix: opts.Rows * cellH,

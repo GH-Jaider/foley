@@ -186,7 +186,12 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return rep, fmt.Errorf("tape: theme: %w", err)
 	}
 
-	env := mergeEnv(os.Environ(), sh.env, envPairs(t.Env), opts.ExtraEnv)
+	// The base layer is foley's terminal identity (ADR-021): the host
+	// terminal's env scrubbed, foley's declared — a fastfetch inside
+	// the demo names foley, and the recording stops depending on which
+	// terminal it was launched from. Shell table, tape Env and -env
+	// still win, in that order.
+	env := mergeEnv(foley.TerminalEnv(os.Environ()), sh.env, envPairs(t.Env), opts.ExtraEnv)
 
 	// A custom prompt (ADR-017): `Env PS1` was always legal grammar —
 	// mergeEnv above is what makes it actually WIN over the shell

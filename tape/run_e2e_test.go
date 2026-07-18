@@ -316,6 +316,57 @@ Sleep 400ms
 	}
 }
 
+// TestTerminalIdentityEndToEnd pins ADR-021 against a real recording
+// with a POLLUTED host environment: inside the tape, TERM_PROGRAM says
+// foley, the host terminal's kitty marker is gone, and the tape's own
+// explicit Env still wins over the identity layer.
+func TestTerminalIdentityEndToEnd(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "ghostty")
+	t.Setenv("TERM", "xterm-kitty")
+	t.Setenv("KITTY_WINDOW_ID", "7")
+	ctx := context.Background()
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output final.txt
+Require bash
+Set Shell bash
+Set Width 760
+Set Height 220
+Env DEMO_ID "propio"
+Type@0ms "echo P=$TERM_PROGRAM T=$TERM K=[$KITTY_WINDOW_ID] D=$DEMO_ID"
+Enter
+Sleep 400ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts})
+	if err != nil {
+		t.Fatalf("run: %v (warnings: %v)", err, rep.Warnings)
+	}
+	text, err := os.ReadFile(filepath.Join(dir, "final.txt")) //nolint:gosec // TempDir path
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"P=foley", "T=xterm-256color", "K=[]", "D=propio"} {
+		if !strings.Contains(string(text), want) {
+			t.Fatalf("final screen lacks %q — the identity layer leaked:\n%s", want, text)
+		}
+	}
+}
+
 // TestOutputScaleEndToEnd pins the weight knob: OutputScale 1 halves
 // the canvas to LOGICAL size — with the camera in the same take, so
 // the zoom compositor and the final halving compose.
