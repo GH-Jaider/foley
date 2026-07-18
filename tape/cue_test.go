@@ -593,3 +593,22 @@ func TestZoomCue(t *testing.T) {
 		t.Fatalf("off-before-zoom error = %v", err)
 	}
 }
+
+// TestSourcedTapes pins the watch set: top-level Source lines are the
+// extra files a watcher must follow.
+func TestSourcedTapes(t *testing.T) {
+	src := "Output d.gif\nSource ./intro.tape\nType \"x\"\n  Source common/setup.tape\n# Source comentado.tape\n"
+	got := tape.SourcedTapes(src)
+	want := []string{"./intro.tape", "common/setup.tape"}
+	if len(got) != len(want) {
+		t.Fatalf("sourced = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sourced = %v, want %v", got, want)
+		}
+	}
+	if extra := tape.SourcedTapes("Output d.gif\nType \"Source x\"\n"); len(extra) != 0 {
+		t.Fatalf("quoted text counted as Source: %v", extra)
+	}
+}

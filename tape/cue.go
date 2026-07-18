@@ -558,6 +558,19 @@ func cutOnSpace(s string) (kind, rest string) {
 	return s[:i], strings.TrimSpace(s[i:])
 }
 
+// SourcedTapes lists the tape files a script Sources at top level —
+// what a watcher must ALSO watch: their content is spliced into the
+// recording, so a save there re-records too.
+func SourcedTapes(src string) []string {
+	var out []string
+	for _, line := range strings.Split(src, "\n") {
+		if m := sourceRE.FindStringSubmatch(line); m != nil {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
 // checkSourcedCues reads a Source'd tape one level deep and rejects
 // cues found there: the grammar's expansion drops comments, so those
 // cues would otherwise vanish silently. An unreadable file is left for

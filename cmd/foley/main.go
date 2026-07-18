@@ -117,6 +117,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"replace the tape's dress layer: a built-in name (see `foley wardrobe`), a .json path, an inline {json}, or none — the tape's explicit Sets still win")
 	keys := fs.String("keys", "",
 		"replace the tape's keys layer: off, or on|small|medium|large to draw the input reel at that size (default: the tape's `# foley: keys` cue decides)")
+	watch := fs.Bool("watch", false,
+		"re-record every time the tape (or a Source'd tape or dress file it uses) is saved; ctrl-c stops")
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, "usage: foley [flags] <file.tape | ->\n"+
 			"       foley validate [flags] <file.tape ... | ->\n"+
@@ -188,39 +190,64 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		Warn:            progress.warnWriter(),
 		Progress:        progress.pulse,
 	}
-	src, err := readTape(fs.Arg(0), stdin)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
-		switch fs.Arg(0) {
-		case "validate", "themes", "doctor", "new":
-			_, _ = fmt.Fprintf(stderr, "foley: (did you mean `foley %s …`? subcommands go before flags)\n", fs.Arg(0))
-		}
-		return 1
-	}
-	t, err := tape.Parse(string(src))
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "%v\n", err)
-		return 1
-	}
-	if len(outs) > 0 {
-		// The grammar guarantees at least one Output, so -o always
-		// REPLACES rather than rescues.
-		t.Outputs = append([]string(nil), outs...)
-	}
 	// Ctrl-C cancels the context: actions fail fast and the Recorder's
 	// cleanup (process, engine, staging) runs instead of leaking.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	rep, err := tape.Run(ctx, t, opts)
-	progress.done()
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
-		return 1
+
+	// recordOnce runs the whole read→parse→record flow, printing its
+	// own errors. It reports the files this tape pulls in (for -watch)
+	// and the exit code.
+	recordOnce := func() (watchPaths []string, exit int) {
+		watchPaths = []string{fs.Arg(0)}
+		src, err := readTape(fs.Arg(0), stdin)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
+			switch fs.Arg(0) {
+			case "validate", "themes", "doctor", "new":
+				_, _ = fmt.Fprintf(stderr, "foley: (did you mean `foley %s …`? subcommands go before flags)\n", fs.Arg(0))
+			}
+			return watchPaths, 1
+		}
+		t, err := tape.Parse(string(src))
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "%v\n", err)
+			return watchPaths, 1
+		}
+		watchPaths = append(watchPaths, tape.SourcedTapes(string(src))...)
+		if p := t.DressCue().Path; p != "" {
+			watchPaths = append(watchPaths, p)
+		}
+		if len(outs) > 0 {
+			// The grammar guarantees at least one Output, so -o always
+			// REPLACES rather than rescues.
+			t.Outputs = append([]string(nil), outs...)
+		}
+		rep, err := tape.Run(ctx, t, opts)
+		progress.done()
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
+			return watchPaths, 1
+		}
+		for _, out := range rep.Outputs {
+			_, _ = fmt.Fprintf(stdout, "foley: wrote %s\n", out)
+		}
+		return watchPaths, 0
 	}
-	for _, out := range rep.Outputs {
-		_, _ = fmt.Fprintf(stdout, "foley: wrote %s\n", out)
+
+	if *watch {
+		if fs.Arg(0) == "-" {
+			_, _ = fmt.Fprintln(stderr, "foley: -watch needs a file path (stdin has nothing to watch)")
+			return 2
+		}
+		watchLoop(ctx, stderr, watchPoll, fs.Arg(0), func() []string {
+			paths, _ := recordOnce() // a broken tape keeps the watch alive
+			return paths
+		})
+		return 0
 	}
-	return 0
+	_, exit := recordOnce()
+	return exit
 }
 
 // runValidate parses each tape and prints its compatibility warnings
