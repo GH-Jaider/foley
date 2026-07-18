@@ -346,10 +346,76 @@ func (d *Driver) step(ctx context.Context, b []byte, dur time.Duration) error {
 			return fmt.Errorf("driver: transport write: %w", err)
 		}
 	}
+	if len(b) == 0 && dur > 0 {
+		// A Sleep: declared time LENDS wall clock (settleLend).
+		if err := d.settleLend(ctx, dur); err != nil {
+			return err
+		}
+		return d.advance(dur)
+	}
 	if err := d.settle(ctx, len(b) > 0); err != nil {
 		return err
 	}
 	return d.advance(dur)
+}
+
+// settleLend is a Sleep's settle: the declared pause lends the app up
+// to its WHOLE duration of wall clock, with a quiet window that scales
+// with the pause — min(dur/2, 1s) — so a slow bursty command (a
+// fastfetch probing hardware with 300ms gaps between modules) lands
+// whole inside its declared pause instead of being truncated at the
+// first 40ms of silence. Phase one waits only briefly for a first
+// byte, so a QUIET app costs almost nothing and the deterministic
+// speed promise holds; the timeline still advances exactly dur
+// virtually, and absorbed output counts restless exactly like an
+// unprompted settle (the realtime hint stays honest).
+func (d *Driver) settleLend(ctx context.Context, dur time.Duration) error {
+	s := d.opts.Settle
+	quietW := dur / 2
+	if quietW > time.Second {
+		quietW = time.Second
+	}
+	if quietW < s.Quiet {
+		quietW = s.Quiet
+	}
+	firstW := 300 * time.Millisecond
+	if firstW > quietW {
+		firstW = quietW
+	}
+	d.settled = true
+	sawOutput := false
+	deadline := time.NewTimer(dur)
+	defer deadline.Stop()
+	quiet := time.NewTimer(firstW)
+	defer quiet.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case ch, ok := <-d.opts.Transport.Chunks():
+			if !ok {
+				return nil
+			}
+			sawOutput = true
+			if err := d.ingest(ch.Data); err != nil {
+				return err
+			}
+			quiet.Reset(quietW)
+		case <-quiet.C:
+			// Quiet exit = the app FINISHED what the pause lent time
+			// for — captured whole, nothing restless about it.
+			return nil
+		case <-deadline.C:
+			// The lend ran out WITH output still flowing: that is an
+			// app moving on its own — the realtime hint's case. A
+			// short quiet sleep hitting its deadline saw nothing and
+			// owes nothing.
+			if sawOutput {
+				d.restless++
+			}
+			return nil
+		}
+	}
 }
 
 // settle absorbs application output on the wall clock: up to First for

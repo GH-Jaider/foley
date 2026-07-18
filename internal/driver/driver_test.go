@@ -361,7 +361,7 @@ func TestSettleMaxCapsAStreamingApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	if err := d.Sleep(context.Background(), time.Second); err != nil {
+	if err := d.Press(context.Background(), key.RuneKey('x'), 10*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 	if elapsed := time.Since(start); elapsed >= time.Second {
@@ -369,6 +369,19 @@ func TestSettleMaxCapsAStreamingApp(t *testing.T) {
 	}
 	if len(e.Written) == 0 {
 		t.Fatal("settle absorbed nothing from the stream")
+	}
+	// A Sleep under the same stream is capped by ITS OWN declared
+	// duration (the lend), and an exhausted lend counts restless.
+	before := d.RestlessSettles()
+	start = time.Now()
+	if err := d.Sleep(context.Background(), 200*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed > 700*time.Millisecond {
+		t.Fatalf("streaming sleep ran %v; the declared pause did not cap the lend", elapsed)
+	}
+	if d.RestlessSettles() != before+1 {
+		t.Fatalf("an exhausted lend must count restless (got %d, was %d)", d.RestlessSettles(), before)
 	}
 }
 
@@ -621,5 +634,49 @@ func TestOverlaySplitsAdvances(t *testing.T) {
 		if ov.times[i] != want {
 			t.Fatalf("SetTime %d = %v, want %v", i, ov.times[i], want)
 		}
+	}
+}
+
+// TestSleepLendsWallClock pins the Sleep semantics: a slow bursty
+// command (gaps well past the settle Quiet) lands WHOLE inside its
+// declared pause; a quiet app costs almost nothing of the wall clock.
+func TestSleepLendsWallClock(t *testing.T) {
+	g := newRig(t, false)
+	go func() {
+		g.tr.feed("A")
+		time.Sleep(250 * time.Millisecond) // a fastfetch-style module gap
+		g.tr.feed("B")
+		time.Sleep(250 * time.Millisecond)
+		g.tr.feed("C")
+	}()
+	start := time.Now()
+	if err := g.d.Sleep(context.Background(), 3*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if wall := time.Since(start); wall >= 3*time.Second {
+		t.Fatalf("sleep spent the whole declared pause on the wall clock: %v", wall)
+	}
+	f, err := g.d.ScreenText()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(f, "ABC") {
+		t.Fatalf("slow bursts truncated: screen = %q, want ABC", f)
+	}
+	if g.d.Now() != 3*time.Second {
+		t.Fatalf("virtual time = %v, want exactly 3s", g.d.Now())
+	}
+
+	// Quiet app: the lend costs one short first-byte window, not the
+	// declared pause.
+	start = time.Now()
+	if err := g.d.Sleep(context.Background(), 5*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if wall := time.Since(start); wall > time.Second {
+		t.Fatalf("quiet sleep burned %v of wall clock", wall)
+	}
+	if g.d.Now() != 8*time.Second {
+		t.Fatalf("virtual time = %v, want exactly 8s", g.d.Now())
 	}
 }
