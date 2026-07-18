@@ -179,8 +179,33 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return scale(settings.TypingSpeed)
 	}
 
+	// Highlight cues fire at their POSITION in the script (ADR-018):
+	// everything with AfterCommand <= i activates before command i runs,
+	// stamped with the current virtual instant.
+	var hlCues []Cue
+	for _, c := range t.Cues {
+		if c.Kind == CueHighlight {
+			hlCues = append(hlCues, c)
+		}
+	}
+	nextHl := 0
+	applyHighlights := func(i int) {
+		for nextHl < len(hlCues) && hlCues[nextHl].AfterCommand <= i {
+			switch c := hlCues[nextHl]; {
+			case c.HighlightOff && c.Highlight.Name != "":
+				rec.ClearHighlight(c.Highlight.Name)
+			case c.HighlightOff:
+				rec.ClearHighlights()
+			default:
+				rec.Highlight(c.Highlight)
+			}
+			nextHl++
+		}
+	}
+
 	var clipboard string
-	for _, cmd := range t.Commands {
+	for i, cmd := range t.Commands {
+		applyHighlights(i)
 		var err error
 		switch cmd.Kind {
 		case KindType:
@@ -222,6 +247,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 			return rep, err
 		}
 	}
+	applyHighlights(len(t.Commands))
 
 	// The question every animated-TUI tape raises, answered proactively.
 	// One restless settle is already proof the app writes on its own —

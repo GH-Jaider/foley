@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/internal/execx"
 	"github.com/GH-Jaider/foley/internal/testassets"
 	"github.com/GH-Jaider/foley/tape"
@@ -172,5 +173,110 @@ Sleep 400ms
 	}
 	if !strings.Contains(string(text), "prompt propio") {
 		t.Fatalf("final text lacks the command output:\n%s", text)
+	}
+}
+
+// TestAllCuesTogetherEndToEnd pins the composition: dress + keys +
+// highlight in ONE tape. The overlay mux, the reel's band arithmetic
+// and the highlight paint must coexist — this is the tape a real user
+// writes, not three lab tapes.
+func TestAllCuesTogetherEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.gif
+Require bash
+Set Shell bash
+Set Width 640
+Set Height 220
+# foley: dress noir
+# foley: keys small
+Type "echo all cues"
+Enter
+Sleep 500ms
+# foley: highlight /^all cues/
+Sleep 800ms
+# foley: highlight off
+Sleep 300ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts})
+	if err != nil {
+		t.Fatalf("run: %v (warnings: %v)", err, rep.Warnings)
+	}
+	f, err := os.Open(filepath.Join(dir, "demo.gif")) //nolint:gosec // TempDir path
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	g, err := gif.DecodeAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Typing frames + reel fades + the highlight's two snap frames.
+	if len(g.Image) < 12 {
+		t.Fatalf("gif has %d frames, want the full composition", len(g.Image))
+	}
+}
+
+// TestHighlightRealtimeEndToEnd smokes the wall clock (ADR-018): the
+// track mutates from the recording goroutine while the loop renders —
+// the mutex and the tick gating must hold on a REAL recording.
+func TestHighlightRealtimeEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.gif
+Require bash
+Set Shell bash
+Set Width 640
+Set Height 200
+Type@0ms "echo vivo"
+Enter
+Sleep 300ms
+# foley: highlight /vivo/
+Sleep 400ms
+# foley: highlight off
+Sleep 200ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts, Mode: foley.Realtime})
+	if err != nil {
+		t.Fatalf("realtime run: %v (warnings: %v)", err, rep.Warnings)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "demo.gif")); err != nil {
+		t.Fatalf("gif missing: %v", err)
 	}
 }

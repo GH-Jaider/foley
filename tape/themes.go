@@ -18,13 +18,17 @@ import (
 var themesJSON []byte
 
 // vhsTheme mirrors VHS's theme JSON shape (themes.go of the pinned
-// release): flat hex strings. Selection and CursorAccent have no foley
-// equivalent yet (no selection rendering) and are ignored.
+// release): flat hex strings. Selection feeds the highlight cue
+// (ADR-018 — the zombie field, revived). CursorAccent is parsed for
+// theme-JSON compatibility but has no renderer yet (staged, not a
+// typo-trap for strict dress palettes).
 type vhsTheme struct {
 	Name          string `json:"name"`
 	Background    string `json:"background"`
 	Foreground    string `json:"foreground"`
 	Cursor        string `json:"cursor"`
+	CursorAccent  string `json:"cursorAccent"`
+	Selection     string `json:"selection"`
 	Black         string `json:"black"`
 	Red           string `json:"red"`
 	Green         string `json:"green"`
@@ -111,6 +115,7 @@ func themeFromVHS(vt vhsTheme) (foley.Theme, error) {
 	set(&t.Foreground, vt.Foreground, "foreground")
 	set(&t.Background, vt.Background, "background")
 	set(&t.Cursor, vt.Cursor, "cursor")
+	set(&t.Selection, vt.Selection, "selection")
 	ansi := []struct {
 		i    int
 		hexs string

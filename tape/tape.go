@@ -208,12 +208,24 @@ func Parse(src string) (*Tape, error) {
 		return nil, err
 	}
 	var dressLines, keysLines []string
+	hlNames := map[string]bool{}
 	for _, c := range cues {
 		switch c.Kind {
 		case CueDress:
 			dressLines = append(dressLines, strconv.Itoa(c.Line))
 		case CueKeys:
 			keysLines = append(keysLines, strconv.Itoa(c.Line))
+		case CueHighlight:
+			// Any number of highlights may coexist (ADR-018). A
+			// targeted off must name a highlight declared BEFORE it —
+			// a typo dies here, in validate, not as a silent no-op.
+			switch {
+			case c.HighlightOff && c.Highlight.Name != "" && !hlNames[c.Highlight.Name]:
+				return nil, fmt.Errorf("tape: %d: highlight off %q: no highlight with that name was declared earlier (`as %s`)",
+					c.Line, c.Highlight.Name, c.Highlight.Name)
+			case !c.HighlightOff && c.Highlight.Name != "":
+				hlNames[c.Highlight.Name] = true
+			}
 		}
 	}
 	if len(dressLines) > 1 {

@@ -35,6 +35,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -70,11 +71,14 @@ type RGB struct{ R, G, B uint8 }
 
 // Theme is foley's neutral color model: defaults plus the 16 ANSI slots.
 // The remaining 240 palette entries are always the standard xterm cube
-// and grayscale ramp. A zero Cursor follows the foreground.
+// and grayscale ramp. A zero Cursor follows the foreground. Selection
+// paints the highlight cue (ADR-018) — terminal themes always carry it;
+// it finally has a job.
 type Theme struct {
 	Foreground RGB
 	Background RGB
 	Cursor     RGB
+	Selection  RGB
 	ANSI       [16]RGB
 }
 
@@ -83,6 +87,7 @@ func DefaultTheme() Theme {
 	return Theme{
 		Foreground: RGB{0xcd, 0xd6, 0xf4},
 		Background: RGB{0x1e, 0x1e, 0x2e},
+		Selection:  RGB{0x58, 0x5b, 0x70},
 		ANSI: [16]RGB{
 			{0x45, 0x47, 0x5a},
 			{0xf3, 0x8b, 0xa8},
@@ -266,6 +271,40 @@ type Recorder struct {
 	// assemblyWarnings surfaces raster findings (e.g. a proportional
 	// user font) — nothing in the pipeline is allowed to stay silent.
 	assemblyWarnings []string
+	// highlights is the ADR-018 track behind Highlight/ClearHighlights.
+	highlights *raster.HighlightTrack
+}
+
+// HighlightSpec selects what a highlight paints (ADR-018): a regex
+// matched against each row's text, or a rectangle in CELLS
+// (Col,Row,W,H). Exactly one form should be set. With Pick, Occurrence
+// narrows a pattern to that match per frame — 0-based in screen order,
+// the same standard as the rect's cells. Name lets ClearHighlight
+// target just this one.
+type HighlightSpec struct {
+	Pattern        *regexp.Regexp
+	Col, Row, W, H int
+	Rect           bool
+	Occurrence     int
+	Pick           bool
+	Name           string
+}
+
+// Highlight paints the theme's Selection color under the spec's cells
+// from this instant of the timeline until ClearHighlights (or the end).
+// Post-production: the pty never knows.
+func (r *Recorder) Highlight(spec HighlightSpec) {
+	r.highlights.Activate(raster.HighlightSpec(spec), r.timeline.Now())
+}
+
+// ClearHighlights turns every active highlight off at this instant.
+func (r *Recorder) ClearHighlights() {
+	r.highlights.Clear(r.timeline.Now())
+}
+
+// ClearHighlight turns off only the highlights carrying the name.
+func (r *Recorder) ClearHighlight(name string) {
+	r.highlights.ClearNamed(name, r.timeline.Now())
 }
 
 // AssemblyWarnings reports findings from recorder assembly (ADR-015:
@@ -626,6 +665,31 @@ func (f FontFiles) empty() bool {
 	return f.Regular == "" && f.Bold == "" && f.Italic == "" && f.BoldItalic == ""
 }
 
+// overlayMux fans the driver's single Overlay out to several tracks:
+// SetTime broadcasts, Breakpoints merge (sorted, deduplicated).
+type overlayMux []driver.Overlay
+
+func (m overlayMux) SetTime(t time.Duration) {
+	for _, o := range m {
+		o.SetTime(t)
+	}
+}
+
+func (m overlayMux) Breakpoints(from, to time.Duration) []time.Duration {
+	var out []time.Duration
+	for _, o := range m {
+		out = append(out, o.Breakpoints(from, to)...)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	dedup := out[:0]
+	for i, t := range out {
+		if i == 0 || t != out[i-1] {
+			dedup = append(dedup, t)
+		}
+	}
+	return dedup
+}
+
 // resolveUserFonts turns the font options into the raster's user font:
 // FontFiles > FontFile > FontFamily (pinned catalog) > none. Explicit
 // file paths fail HARD on error (a typo'd path must not record); an
@@ -799,10 +863,16 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	if opts.KeysOverlay {
 		keysTrack = raster.NewKeysTrack()
 	}
+	// The highlight track always exists — Recorder.Highlight is public
+	// API, tape or no tape (ADR-018).
+	highlightTrack := raster.NewHighlightTrack()
+	selRGB := opts.Theme.Selection
 	ras, err := raster.New(raster.Options{
 		Pack: pack, UserFonts: userFonts,
 		FontSizePx: opts.FontSize, Scale: opts.Scale, Window: win,
 		Keys: keysTrack, KeysFontPx: keysFontPx,
+		Highlights:     highlightTrack,
+		SelectionColor: color.RGBA{R: selRGB.R, G: selRGB.G, B: selRGB.B, A: 0xff},
 	})
 	if err != nil {
 		return nil, err
@@ -859,13 +929,16 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		return ras.Render(f, eng, dst)
 	}
 
-	// Keys band wiring (ADR-016): the driver reports each injected key
-	// into the track; the track paces frame splits and feeds the chips.
+	// Overlay wiring: the driver sees ONE overlay; foley fans it out to
+	// the tracks that exist (keys ADR-016, highlights ADR-018) — the
+	// driver never learns there are two.
 	var onKey func(k key.Key, at time.Duration, hidden bool)
-	var overlay driver.Overlay
+	mux := overlayMux{highlightTrack}
 	if keysTrack != nil {
-		onKey, overlay = keysTrack.AddKey, keysTrack
+		onKey = keysTrack.AddKey
+		mux = append(mux, keysTrack)
 	}
+	var overlay driver.Overlay = mux
 
 	var timeline driver.Timeline
 	switch opts.Mode {
@@ -897,6 +970,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		engine:           eng,
 		sink:             sink,
 		framesDir:        framesDir,
+		highlights:       highlightTrack,
 		assemblyWarnings: append(fontWarnings, ras.Warnings()...),
 	}, nil
 }

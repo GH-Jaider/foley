@@ -267,20 +267,22 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 			_, _ = fmt.Fprintf(stderr, "%s: warning: %s\n", arg, w)
 		}
 		if n := len(t.Cues); n > 0 {
-			dresses, keys := 0, 0
+			dresses, keys, highlights := 0, 0, 0
 			for _, c := range t.Cues {
 				switch c.Kind {
 				case tape.CueDress:
 					dresses++
 				case tape.CueKeys:
 					keys++
+				case tape.CueHighlight:
+					highlights++
 				}
 			}
 			plural := "s"
 			if n == 1 {
 				plural = ""
 			}
-			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys\n", arg, n, plural, dresses, keys)
+			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys, %d highlight\n", arg, n, plural, dresses, keys, highlights)
 		}
 	}
 	return exit

@@ -37,3 +37,7 @@ The examples in this directory showcase foley-only ground:
   grammar) actually WINS here, and a bare `Wait` learns the new
   prompt automatically. In VHS the same tape records with its pinned
   prompt — degradable by construction.
+- **`highlight/`** — point the viewer's eye (`# foley: highlight`):
+  the theme's Selection color under a /regex/ or a cell rect, from
+  its position in the script until `off`. The zombie theme field,
+  finally employed.

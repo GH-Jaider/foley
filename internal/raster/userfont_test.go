@@ -2,9 +2,12 @@ package raster_test
 
 import (
 	"bytes"
+	"image/color"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GH-Jaider/foley/internal/fontpack"
 	"github.com/GH-Jaider/foley/internal/raster"
@@ -145,4 +148,89 @@ func TestUserFontFamilyNeedsRegular(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "regular") {
 		t.Fatalf("family without regular must fail loudly, got %v", err)
 	}
+}
+
+// TestHighlightPaintsSelection is the pixel proof (ADR-018): the cells
+// under a regex match carry the Selection color while unmatched cells
+// keep the theme background — and the glyphs still draw on top.
+func TestHighlightPaintsSelection(t *testing.T) {
+	pack, err := fontpack.Load(filepath.Join("..", "fontpack", "fonts"))
+	testassets.Require(t, err, "make fonts")
+	track := raster.NewHighlightTrack()
+	sel := color.RGBA{R: 0x58, G: 0x5b, B: 0x70, A: 0xff}
+	r, err := raster.New(raster.Options{
+		Pack: pack, FontSizePx: 16, Scale: 2,
+		Highlights: track, SelectionColor: sel,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	geo := vtengine.Geometry{Cols: 20, Rows: 2}
+	geo.CellW, geo.CellH = r.LogicalCellSize()
+	e := fake.New(vtengine.Options{Geometry: geo})
+	defer func() { _ = e.Close() }()
+	bg := vtengine.RGB{R: 0x1e, G: 0x1e, B: 0x2e}
+	e.SetColors(vtengine.Colors{FG: vtengine.RGB{R: 0xcd, G: 0xd6, B: 0xf4}, BG: bg})
+	x := 0
+	for _, rn := range "ok error ok" {
+		e.SetCell(x, 0, string(rn), vtengine.Style{FG: vtengine.RGB{R: 0xcd, G: 0xd6, B: 0xf4}})
+		x++
+	}
+	track.Activate(raster.HighlightSpec{Pattern: regexp.MustCompile("error.*")}, 0)
+	track.SetTime(time.Second)
+
+	var f vtengine.Frame
+	if err := e.Snapshot(&f); err != nil {
+		t.Fatal(err)
+	}
+	img, err := r.Render(&f, e, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cw, ch := r.CellSize()
+	probe := func(cellX int) color.RGBA {
+		// Top-left corner of the cell: background territory, no glyph.
+		return img.RGBAAt(cellX*cw+1, 0*ch+1)
+	}
+	// "error" occupies cells 3..7 ("ok " is 0-2).
+	if got := probe(4); got != sel {
+		t.Fatalf("matched cell = %v, want selection %v", got, sel)
+	}
+	if got := probe(1); got == sel {
+		t.Fatalf("unmatched cell carries the selection color")
+	}
+	// `.*` ends at the LAST GLYPH ("ok" at cells 9-10), never in the
+	// empty-cell padding beyond it.
+	if got := probe(9); got != sel {
+		t.Fatalf("glyph inside the greedy match = %v, want selection", got)
+	}
+	if got := probe(15); got == sel {
+		t.Fatalf(".* painted into the empty-cell void")
+	}
+	// After Clear, the same render shows plain background again.
+	track.Clear(2 * time.Second)
+	track.SetTime(3 * time.Second)
+	img, err = r.Render(&f, e, img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := probe(4); got == sel {
+		t.Fatalf("cleared highlight still painted")
+	}
+	// Occurrence selector: with TWO "ok" matches on screen, `first`
+	// paints only the first one (cells 0-1; probe 1 dodges the cursor
+	// cell), never the second (cells 9-10).
+	track.Activate(raster.HighlightSpec{Pattern: regexp.MustCompile("ok"), Occurrence: 0, Pick: true}, 5*time.Second)
+	track.SetTime(6 * time.Second)
+	img, err = r.Render(&f, e, img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := probe(1); got != sel {
+		t.Fatalf("first occurrence not painted: %v", got)
+	}
+	if got := probe(9); got == sel {
+		t.Fatalf("second occurrence painted despite index 0")
+	}
+	_ = img
 }

@@ -414,3 +414,110 @@ func TestKeysCue(t *testing.T) {
 		t.Fatalf("two keys cues must fail with lines, got %v", err)
 	}
 }
+
+// TestHighlightCue: the third cue (ADR-018) — three forms, loud
+// errors, and POSITION: AfterCommand counts command lines with the
+// inverted keyword list, immune to interleaved settings and comments.
+func TestHighlightCue(t *testing.T) {
+	src := "Output d.gif\n" +
+		"Set FontSize 16\n" +
+		"# a plain comment\n" +
+		"Type \"uno\"\n" +
+		"Enter\n" +
+		"# foley: highlight /error/\n" +
+		"Env DEMO \"1\"\n" +
+		"Sleep 1s\n" +
+		"# foley: highlight 2,1 10x2\n" +
+		"Type \"dos\"\n" +
+		"# foley: highlight off\n"
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hl []tape.Cue
+	for _, c := range tp.Cues {
+		if c.Kind == tape.CueHighlight {
+			hl = append(hl, c)
+		}
+	}
+	if len(hl) != 3 {
+		t.Fatalf("highlight cues = %d, want 3", len(hl))
+	}
+	if hl[0].Highlight.Pattern == nil || hl[0].Highlight.Pattern.String() != "error" || hl[0].AfterCommand != 2 {
+		t.Fatalf("cue 0 = %+v, want /error/ after 2 commands", hl[0])
+	}
+	if !hl[1].Highlight.Rect || hl[1].Highlight.Col != 2 || hl[1].Highlight.W != 10 || hl[1].AfterCommand != 3 {
+		t.Fatalf("cue 1 = %+v, want rect 2,1 10x2 after 3 commands", hl[1])
+	}
+	if !hl[2].HighlightOff || hl[2].AfterCommand != 4 {
+		t.Fatalf("cue 2 = %+v, want off after 4 commands", hl[2])
+	}
+
+	for _, c := range []struct{ src, want string }{
+		{"# foley: highlight", "missing argument"},
+		{"# foley: highlight /(/", "pattern"},
+		{"# foley: highlight //", "empty pattern"},
+		{"# foley: highlight 1,2", "expected"},
+		{"# foley: highlight -1,2 3x4", "positive"},
+		{"# foley: highlight 1,2 0x4", "positive"},
+	} {
+		_, err := tape.Parse("Output d.gif\n" + c.src + "\nType \"x\"\n")
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("%q error %v lacks %q", c.src, err, c.want)
+		}
+	}
+}
+
+// TestHighlightModifiers pins the v2 ergonomics: occurrence selectors,
+// named highlights, targeted off with STATIC validation (an off for an
+// undeclared name dies at parse), and their loud error paths.
+func TestHighlightModifiers(t *testing.T) {
+	tp, err := tape.Parse("Output d.gif\n" +
+		"# foley: highlight /err/ 0 as uno\n" +
+		"# foley: highlight /err/ 2\n" +
+		"# foley: highlight 0,1 3x2 as caja\n" +
+		"Type \"x\"\n" +
+		"# foley: highlight off uno\n" +
+		"# foley: highlight off\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hl []tape.Cue
+	for _, c := range tp.Cues {
+		if c.Kind == tape.CueHighlight {
+			hl = append(hl, c)
+		}
+	}
+	if len(hl) != 5 {
+		t.Fatalf("cues = %d, want 5", len(hl))
+	}
+	if hl[0].Highlight.Occurrence != 0 || !hl[0].Highlight.Pick || hl[0].Highlight.Name != "uno" {
+		t.Fatalf("cue 0 = %+v, want index 0 as uno", hl[0].Highlight)
+	}
+	if hl[1].Highlight.Occurrence != 2 || !hl[1].Highlight.Pick {
+		t.Fatalf("cue 1 = %+v, want occurrence 2", hl[1].Highlight)
+	}
+	if !hl[2].Highlight.Rect || hl[2].Highlight.Name != "caja" {
+		t.Fatalf("cue 2 = %+v, want rect as caja", hl[2].Highlight)
+	}
+	if !hl[3].HighlightOff || hl[3].Highlight.Name != "uno" {
+		t.Fatalf("cue 3 = %+v, want off uno", hl[3])
+	}
+	if !hl[4].HighlightOff || hl[4].Highlight.Name != "" {
+		t.Fatalf("cue 4 = %+v, want off all", hl[4])
+	}
+
+	for _, c := range []struct{ src, want string }{
+		{"# foley: highlight off fantasma", "declared earlier"},
+		{"# foley: highlight 0,1 3x2 0", "need a /pattern/"},
+		{"# foley: highlight /x/ zeroth", "0-based match index"},
+		{"# foley: highlight /x/ -1", "start at 0"},
+		{"# foley: highlight /x/ as 1bad", "letters, digits"},
+		{"# foley: highlight /x/ as a b", "as NAME"},
+	} {
+		_, err := tape.Parse("Output d.gif\n" + c.src + "\nType \"x\"\n")
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("%q error %v lacks %q", c.src, err, c.want)
+		}
+	}
+}

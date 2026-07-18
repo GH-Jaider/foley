@@ -57,6 +57,10 @@ type Options struct {
 	// KeysFontPx is the cap label size in logical px (the reel's
 	// small/medium/large); zero = FontSizePx.
 	KeysFontPx int
+	// Highlights is the highlight track (ADR-018); nil = none.
+	// SelectionColor paints the matches — the theme's Selection.
+	Highlights     *HighlightTrack
+	SelectionColor color.RGBA
 }
 
 // Rasterizer turns engine frames into RGBA images. It caches parsed
@@ -109,6 +113,9 @@ type Rasterizer struct {
 	keyStrips map[string]textStrip
 	capLabels map[string]string
 	keysMult  string
+	// highlights paints the Selection color under matched cells
+	// (ADR-018), between cell backgrounds and text.
+	highlights *HighlightTrack
 }
 
 // glyphKey caches masks per FACE — the GID space belongs to a face, so
@@ -134,15 +141,16 @@ func New(opts Options) (*Rasterizer, error) {
 		return nil, fmt.Errorf("raster: invalid size/scale %d/%d", opts.FontSizePx, opts.Scale)
 	}
 	r := &Rasterizer{
-		opts:      opts,
-		sizePx:    opts.FontSizePx * opts.Scale,
-		glyphs:    make(map[glyphKey]*glyphMask),
-		sprites:   make(map[rune]*glyphMask),
-		emojis:    make(map[font.GID]*image.RGBA),
-		kitty:     make(map[kittyKey]*image.RGBA),
-		keys:      opts.Keys,
-		keyStrips: make(map[string]textStrip),
-		capLabels: make(map[string]string),
+		opts:       opts,
+		sizePx:     opts.FontSizePx * opts.Scale,
+		glyphs:     make(map[glyphKey]*glyphMask),
+		sprites:    make(map[rune]*glyphMask),
+		emojis:     make(map[font.GID]*image.RGBA),
+		kitty:      make(map[kittyKey]*image.RGBA),
+		keys:       opts.Keys,
+		keyStrips:  make(map[string]textStrip),
+		capLabels:  make(map[string]string),
+		highlights: opts.Highlights,
 	}
 	r.keysCapPx = r.sizePx
 	if opts.KeysFontPx > 0 {
@@ -306,6 +314,9 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 		return nil, err
 	}
 	r.drawCellBackgrounds(dst, f)
+	// 2b. Highlights (ADR-018): Selection under the matches, so the
+	// text draws crisp on top — exactly like a real selection.
+	r.drawHighlights(dst, f)
 	// 3. Below-text placements, text and decorations, above-text.
 	if err := r.drawPlacements(dst, src, placements[vtengine.LayerBelowText]); err != nil {
 		return nil, err
