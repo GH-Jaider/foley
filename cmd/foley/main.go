@@ -267,7 +267,7 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 			_, _ = fmt.Fprintf(stderr, "%s: warning: %s\n", arg, w)
 		}
 		if n := len(t.Cues); n > 0 {
-			dresses, keys, highlights := 0, 0, 0
+			dresses, keys, highlights, zooms := 0, 0, 0, 0
 			for _, c := range t.Cues {
 				switch c.Kind {
 				case tape.CueDress:
@@ -276,13 +276,18 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 					keys++
 				case tape.CueHighlight:
 					highlights++
+				case tape.CueZoom:
+					zooms++
 				}
 			}
 			plural := "s"
 			if n == 1 {
 				plural = ""
 			}
-			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys, %d highlight\n", arg, n, plural, dresses, keys, highlights)
+			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys, %d highlight, %d zoom\n", arg, n, plural, dresses, keys, highlights, zooms)
+			if zooms > 0 {
+				_, _ = fmt.Fprintf(stderr, "%s: note: the zoom sharp-cap check needs the real font geometry — it runs at frame zero of the recording, before any key is typed\n", arg)
+			}
 		}
 	}
 	return exit

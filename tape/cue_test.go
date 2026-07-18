@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/tape"
@@ -460,6 +461,9 @@ func TestHighlightCue(t *testing.T) {
 		{"# foley: highlight 1,2", "expected"},
 		{"# foley: highlight -1,2 3x4", "positive"},
 		{"# foley: highlight 1,2 0x4", "positive"},
+		// Strict rect shape: Sscanf would silently drop these tails.
+		{"# foley: highlight 1,2 3x4.5", "expected"},
+		{"# foley: highlight 1,2 3x4junk", "expected"},
 	} {
 		_, err := tape.Parse("Output d.gif\n" + c.src + "\nType \"x\"\n")
 		if err == nil || !strings.Contains(err.Error(), c.want) {
@@ -519,5 +523,73 @@ func TestHighlightModifiers(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Fatalf("%q error %v lacks %q", c.src, err, c.want)
 		}
+	}
+}
+
+// TestZoomCue pins the camera grammar (ADR-019): rect + optional
+// duration, off + optional duration, positional anchoring, and the loud
+// error paths — a bare number without unit dies at parse.
+func TestZoomCue(t *testing.T) {
+	tp, err := tape.Parse("Output d.gif\n" +
+		"Type \"uno\"\n" +
+		"# foley: zoom 4,2 40x10\n" +
+		"Enter\n" +
+		"# foley: zoom 0,0 30x8 900ms\n" +
+		"Type \"dos\"\n" +
+		"# foley: zoom off\n" +
+		"# foley: zoom off 1s\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var zc []tape.Cue
+	for _, c := range tp.Cues {
+		if c.Kind == tape.CueZoom {
+			zc = append(zc, c)
+		}
+	}
+	if len(zc) != 4 {
+		t.Fatalf("zoom cues = %d, want 4", len(zc))
+	}
+	if zc[0].Zoom.Col != 4 || zc[0].Zoom.Row != 2 || zc[0].Zoom.W != 40 || zc[0].Zoom.H != 10 ||
+		zc[0].Zoom.Dur != 0 || zc[0].Zoom.Off || zc[0].AfterCommand != 1 {
+		t.Fatalf("cue 0 = %+v, want 4,2 40x10 default dur after 1 command", zc[0].Zoom)
+	}
+	if zc[1].Zoom.Dur != 900*time.Millisecond || zc[1].AfterCommand != 2 {
+		t.Fatalf("cue 1 = %+v after %d, want 900ms after 2 commands", zc[1].Zoom, zc[1].AfterCommand)
+	}
+	if !zc[2].Zoom.Off || zc[2].Zoom.Dur != 0 || zc[2].AfterCommand != 3 {
+		t.Fatalf("cue 2 = %+v, want off default dur after 3 commands", zc[2].Zoom)
+	}
+	if !zc[3].Zoom.Off || zc[3].Zoom.Dur != time.Second {
+		t.Fatalf("cue 3 = %+v, want off 1s", zc[3].Zoom)
+	}
+
+	for _, c := range []struct{ src, want string }{
+		{"# foley: zoom", "missing argument"},
+		{"# foley: zoom 1,2", "expected COL,ROW WxH"},
+		{"# foley: zoom -1,2 3x4", "start at 0,0"},
+		{"# foley: zoom 1,2 0x4", "positive"},
+		// Strict rect shape: Sscanf would silently drop these tails.
+		{"# foley: zoom 1,2 3x4.5", "expected COL,ROW WxH"},
+		{"# foley: zoom 1,2 3x4junk", "expected COL,ROW WxH"},
+		{"# foley: zoom 1,2. 3x4", "expected COL,ROW WxH"},
+		{"# foley: zoom 1,2 3x4 800", "use a unit"},
+		{"# foley: zoom 1,2 3x4 -1s", "must be positive"},
+		{"# foley: zoom 1,2 3x4 11s", "cap"},
+		{"# foley: zoom 1,2 3x4 1s extra", "expected COL,ROW WxH"},
+		{"# foley: zoom off 1s extra", "at most a duration"},
+		{"# foley: zoom off nope", "use a unit"},
+	} {
+		_, err := tape.Parse("Output d.gif\n# foley: zoom 0,0 90x40\n" + c.src + "\nType \"x\"\n")
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("%q error %v lacks %q", c.src, err, c.want)
+		}
+	}
+
+	// An `off` before any zoom is an authoring mistake — static, in
+	// validate, like highlight's undeclared-name off.
+	if _, err := tape.Parse("Output d.gif\n# foley: zoom off\nType \"x\"\n"); err == nil ||
+		!strings.Contains(err.Error(), "no zoom was declared earlier") {
+		t.Fatalf("off-before-zoom error = %v", err)
 	}
 }

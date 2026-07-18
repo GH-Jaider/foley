@@ -209,6 +209,7 @@ func Parse(src string) (*Tape, error) {
 	}
 	var dressLines, keysLines []string
 	hlNames := map[string]bool{}
+	zoomSeen := false
 	for _, c := range cues {
 		switch c.Kind {
 		case CueDress:
@@ -225,6 +226,18 @@ func Parse(src string) (*Tape, error) {
 					c.Line, c.Highlight.Name, c.Highlight.Name)
 			case !c.HighlightOff && c.Highlight.Name != "":
 				hlNames[c.Highlight.Name] = true
+			}
+		case CueZoom:
+			// Any number of camera moves may coexist (ADR-019), but an
+			// `off` before any zoom is an authoring mistake — the
+			// camera is already at the full frame — and dies here, in
+			// validate. (The sharp-cap check needs real geometry and
+			// runs in Run's pre-flight, before a single key is typed.)
+			if c.Zoom.Off && !zoomSeen {
+				return nil, fmt.Errorf("tape: %d: zoom off: no zoom was declared earlier — the camera is already at the full frame", c.Line)
+			}
+			if !c.Zoom.Off {
+				zoomSeen = true
 			}
 		}
 	}

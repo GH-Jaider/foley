@@ -211,6 +211,16 @@ type Options struct {
 	KeysOverlay  bool
 	KeysSize     KeysSize
 	BorderRadius int
+	// Zoom reserves the camera (ADR-019): the scene renders on a 2×
+	// supersampled master and Recorder.Zoom/ZoomOff drive a viewport
+	// over it — every frame stays an exact integer downscale, so zoomed
+	// frames are as sharp as the base render. Costs ~4× render time and
+	// memory while recording, and even at rest every frame passes
+	// through the master (a subtly smoother look — NOT byte-identical
+	// to the plain render), so leave it off unless the recording zooms:
+	// with it off the pipeline is untouched, byte for byte. The keys
+	// reel stays pinned to the glass, outside the camera's world.
+	Zoom bool
 	// FontSize is the font size in logical pixels. Default 16.
 	FontSize int
 	// Scale multiplies every metric for supersampling. Default 2.
@@ -273,6 +283,10 @@ type Recorder struct {
 	assemblyWarnings []string
 	// highlights is the ADR-018 track behind Highlight/ClearHighlights.
 	highlights *raster.HighlightTrack
+	// camera is the ADR-019 track behind Zoom/ZoomOff; nil unless
+	// Options.Zoom reserved it. ras maps cells to master viewports.
+	camera *raster.CameraTrack
+	ras    *raster.Rasterizer
 }
 
 // HighlightSpec selects what a highlight paints (ADR-018): a regex
@@ -305,6 +319,78 @@ func (r *Recorder) ClearHighlights() {
 // ClearHighlight turns off only the highlights carrying the name.
 func (r *Recorder) ClearHighlight(name string) {
 	r.highlights.ClearNamed(name, r.timeline.Now())
+}
+
+// DefaultZoomDur is the camera's house transition — the duration IS the
+// shot (ADR-019): one curve, one default, tuned to read as intent.
+const DefaultZoomDur = 600 * time.Millisecond
+
+// MaxZoomDur caps a camera transition: each second of transition
+// renders ~30 physical frames, so an absurd duration would silently
+// explode the recording (a 1h "transition" is ~109,000 frames — unlike
+// a 1h Sleep, which is one frame with a long delay). Ten seconds is
+// already a very slow cinematic push; past it foley refuses LOUDLY.
+const MaxZoomDur = 10 * time.Second
+
+// Zoom eases the camera onto the given CELL rect (0-based, the house
+// standard) starting at this instant of the timeline; it stays framed
+// there until the next Zoom or ZoomOff. The rect grows to the output's
+// aspect around its center and is clamped inside the window. dur <= 0
+// means DefaultZoomDur. Refuses past the 2× sharp cap — foley never
+// ships a blurry frame.
+func (r *Recorder) Zoom(col, row, w, h int, dur time.Duration) error {
+	if r.camera == nil {
+		return errors.New("foley: zoom needs Options.Zoom — the camera reserves its 2× master before recording starts")
+	}
+	dur, err := zoomDur(dur)
+	if err != nil {
+		return err
+	}
+	target, err := r.ras.ZoomTarget(col, row, w, h)
+	if err != nil {
+		// The raster's error is self-contained and domain-tagged
+		// ("zoom: …"); another prefix would only stutter downstream.
+		return err
+	}
+	r.camera.MoveTo(target, r.timeline.Now(), dur)
+	return nil
+}
+
+// ZoomOff eases the camera back to the full frame. dur <= 0 means
+// DefaultZoomDur.
+func (r *Recorder) ZoomOff(dur time.Duration) error {
+	if r.camera == nil {
+		return errors.New("foley: zoom needs Options.Zoom — the camera reserves its 2× master before recording starts")
+	}
+	dur, err := zoomDur(dur)
+	if err != nil {
+		return err
+	}
+	r.camera.Reset(r.timeline.Now(), dur)
+	return nil
+}
+
+// zoomDur resolves a transition duration: zero/negative means the house
+// default, past MaxZoomDur is a LOUD refusal (the frame-count bomb).
+func zoomDur(dur time.Duration) (time.Duration, error) {
+	if dur <= 0 {
+		return DefaultZoomDur, nil
+	}
+	if dur > MaxZoomDur {
+		return 0, fmt.Errorf("foley: zoom transition %v exceeds the %v cap — each second renders ~30 physical frames; a slower reveal is a longer Sleep while framed, not a longer transition", dur, MaxZoomDur)
+	}
+	return dur, nil
+}
+
+// ZoomCheck validates a zoom rect against the sharp cap WITHOUT moving
+// the camera — the tape runner pre-flights every cue before a single
+// key is typed, so a bad zoom fails the run at frame zero, not mid-take.
+func (r *Recorder) ZoomCheck(col, row, w, h int) error {
+	if r.camera == nil {
+		return errors.New("foley: zoom needs Options.Zoom — the camera reserves its 2× master before recording starts")
+	}
+	_, err := r.ras.ZoomTarget(col, row, w, h)
+	return err
 }
 
 // AssemblyWarnings reports findings from recorder assembly (ADR-015:
@@ -787,7 +873,9 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	}
 
 	win := raster.Window{}
-	chromeWanted := opts.PixelPadding > 0 || opts.Margin > 0 || barH > 0 || opts.BorderRadius > 0 || opts.KeysOverlay
+	// Zoom needs a definite canvas: the camera's world is the window
+	// block, so the camera forces chrome the same way the keys reel does.
+	chromeWanted := opts.PixelPadding > 0 || opts.Margin > 0 || barH > 0 || opts.BorderRadius > 0 || opts.KeysOverlay || opts.Zoom
 	if pixelPath {
 		// Pixel path: the canvas is EXACTLY the declared size, always.
 		win.CanvasW, win.CanvasH = opts.PixelWidth, opts.PixelHeight
@@ -867,10 +955,17 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	// API, tape or no tape (ADR-018).
 	highlightTrack := raster.NewHighlightTrack()
 	selRGB := opts.Theme.Selection
+	ssample := 1
+	if opts.Zoom {
+		// The camera's master: render at 2× the output so a full 2×
+		// zoom is still a 1:1 crop — never an upscale (ADR-019).
+		ssample = 2
+	}
 	ras, err := raster.New(raster.Options{
 		Pack: pack, UserFonts: userFonts,
-		FontSizePx: opts.FontSize, Scale: opts.Scale, Window: win,
-		Keys: keysTrack, KeysFontPx: keysFontPx,
+		FontSizePx: opts.FontSize, Scale: opts.Scale, SuperSample: ssample,
+		Window: win,
+		Keys:   keysTrack, KeysFontPx: keysFontPx,
 		Highlights:     highlightTrack,
 		SelectionColor: color.RGBA{R: selRGB.R, G: selRGB.G, B: selRGB.B, A: 0xff},
 	})
@@ -928,15 +1023,35 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	render := func(f *vtengine.Frame, dst *image.RGBA) (*image.RGBA, error) {
 		return ras.Render(f, eng, dst)
 	}
+	var camera *raster.CameraTrack
+	if opts.Zoom {
+		// The camera composits every frame: master render → viewport
+		// downscaled into the output (the driver's reuse buffer), HUD
+		// band glued at fixed 2:1. The master buffer is private and
+		// reused — the driver never sees supersampled pixels.
+		camera = raster.NewCameraTrack(ras.WorldRect())
+		var masterBuf *image.RGBA
+		render = func(f *vtengine.Frame, dst *image.RGBA) (*image.RGBA, error) {
+			m, err := ras.Render(f, eng, masterBuf)
+			if err != nil {
+				return nil, err
+			}
+			masterBuf = m
+			return ras.Composite(m, camera.Viewport(), dst), nil
+		}
+	}
 
 	// Overlay wiring: the driver sees ONE overlay; foley fans it out to
-	// the tracks that exist (keys ADR-016, highlights ADR-018) — the
-	// driver never learns there are two.
+	// the tracks that exist (keys ADR-016, highlights ADR-018, camera
+	// ADR-019) — the driver never learns how many there are.
 	var onKey func(k key.Key, at time.Duration, hidden bool)
 	mux := overlayMux{highlightTrack}
 	if keysTrack != nil {
 		onKey = keysTrack.AddKey
 		mux = append(mux, keysTrack)
+	}
+	if camera != nil {
+		mux = append(mux, camera)
 	}
 	var overlay driver.Overlay = mux
 
@@ -971,6 +1086,8 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		sink:             sink,
 		framesDir:        framesDir,
 		highlights:       highlightTrack,
+		camera:           camera,
+		ras:              ras,
 		assemblyWarnings: append(fontWarnings, ras.Warnings()...),
 	}, nil
 }

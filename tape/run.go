@@ -124,6 +124,16 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if err != nil {
 		return rep, err
 	}
+	// One zoom cue anywhere reserves the camera for the whole run
+	// (ADR-019): the master is a per-recorder decision, made before the
+	// first frame. Tapes without zoom cues never pay for it.
+	zoomWanted := false
+	for _, c := range t.Cues {
+		if c.Kind == CueZoom {
+			zoomWanted = true
+			break
+		}
+	}
 	rec, err := foley.New(foley.Options{
 		Command:         sh.command,
 		Env:             env,
@@ -152,6 +162,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		Mode:            opts.Mode,
 		FPS:             settings.Framerate,
 		ModifyOtherKeys: opts.ModifyOtherKeys,
+		Zoom:            zoomWanted,
 	})
 	if err != nil {
 		return rep, err
@@ -178,20 +189,58 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		}
 		return scale(settings.TypingSpeed)
 	}
+	// Camera transitions live on the same virtual timeline PlaybackSpeed
+	// compresses, so they scale like Type and Sleep — the default too.
+	zoomDur := func(d time.Duration) time.Duration {
+		if d == 0 {
+			d = foley.DefaultZoomDur
+		}
+		return scale(d)
+	}
 
-	// Highlight cues fire at their POSITION in the script (ADR-018):
-	// everything with AfterCommand <= i activates before command i runs,
-	// stamped with the current virtual instant.
-	var hlCues []Cue
+	// Pre-flight every zoom cue (ADR-019): the rect against the sharp
+	// cap, the SCALED duration against the frame-count cap (a slow
+	// PlaybackSpeed stretches transitions past what parse saw). A bad
+	// zoom fails HERE, at frame zero, never mid-take.
 	for _, c := range t.Cues {
-		if c.Kind == CueHighlight {
-			hlCues = append(hlCues, c)
+		if c.Kind != CueZoom {
+			continue
+		}
+		if !c.Zoom.Off {
+			if err := rec.ZoomCheck(c.Zoom.Col, c.Zoom.Row, c.Zoom.W, c.Zoom.H); err != nil {
+				return rep, fmt.Errorf("tape: %d: %w", c.Line, err)
+			}
+		}
+		if d := zoomDur(c.Zoom.Dur); d > foley.MaxZoomDur {
+			return rep, fmt.Errorf("tape: %d: zoom: PlaybackSpeed %g stretches the %v transition to %v — past the %v cap (each second renders ~30 physical frames)",
+				c.Line, settings.PlaybackSpeed, c.Zoom.Dur, d, foley.MaxZoomDur)
 		}
 	}
-	nextHl := 0
-	applyHighlights := func(i int) {
-		for nextHl < len(hlCues) && hlCues[nextHl].AfterCommand <= i {
-			switch c := hlCues[nextHl]; {
+
+	// Positional cues (highlight ADR-018, zoom ADR-019) fire at their
+	// POSITION in the script: everything with AfterCommand <= i acts
+	// before command i runs, stamped with the current virtual instant,
+	// in tape order.
+	var posCues []Cue
+	for _, c := range t.Cues {
+		if c.Kind == CueHighlight || c.Kind == CueZoom {
+			posCues = append(posCues, c)
+		}
+	}
+	nextCue := 0
+	applyCues := func(i int) error {
+		for nextCue < len(posCues) && posCues[nextCue].AfterCommand <= i {
+			c := posCues[nextCue]
+			nextCue++
+			switch {
+			case c.Kind == CueZoom && c.Zoom.Off:
+				if err := rec.ZoomOff(zoomDur(c.Zoom.Dur)); err != nil {
+					return fmt.Errorf("tape: %d: %w", c.Line, err)
+				}
+			case c.Kind == CueZoom:
+				if err := rec.Zoom(c.Zoom.Col, c.Zoom.Row, c.Zoom.W, c.Zoom.H, zoomDur(c.Zoom.Dur)); err != nil {
+					return fmt.Errorf("tape: %d: %w", c.Line, err)
+				}
 			case c.HighlightOff && c.Highlight.Name != "":
 				rec.ClearHighlight(c.Highlight.Name)
 			case c.HighlightOff:
@@ -199,13 +248,15 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 			default:
 				rec.Highlight(c.Highlight)
 			}
-			nextHl++
 		}
+		return nil
 	}
 
 	var clipboard string
 	for i, cmd := range t.Commands {
-		applyHighlights(i)
+		if err := applyCues(i); err != nil {
+			return rep, err
+		}
 		var err error
 		switch cmd.Kind {
 		case KindType:
@@ -247,7 +298,9 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 			return rep, err
 		}
 	}
-	applyHighlights(len(t.Commands))
+	if err := applyCues(len(t.Commands)); err != nil {
+		return rep, err
+	}
 
 	// The question every animated-TUI tape raises, answered proactively.
 	// One restless settle is already proof the app writes on its own —

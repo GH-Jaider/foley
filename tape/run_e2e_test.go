@@ -3,6 +3,7 @@
 package tape_test
 
 import (
+	"bytes"
 	"context"
 	"image/gif"
 	"os"
@@ -235,6 +236,76 @@ Sleep 300ms
 	}
 }
 
+// TestZoomEndToEnd records a real tape through the camera (ADR-019):
+// the canvas keeps its DECLARED size while the master renders at 2×,
+// the transitions add their quantized frames — and, the constitutional
+// claim, two identical runs produce byte-identical output.
+func TestZoomEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.gif
+Require bash
+Set Shell bash
+Set Width 640
+Set Height 220
+Type "echo zoom aqui"
+Enter
+Sleep 400ms
+# foley: zoom 0,0 30x6 400ms
+Sleep 600ms
+# foley: zoom off 400ms
+Sleep 500ms
+`
+	run := func() []byte {
+		tp, err := tape.Parse(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts})
+		if err != nil {
+			t.Fatalf("run: %v (warnings: %v)", err, rep.Warnings)
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, "demo.gif")) //nolint:gosec // TempDir path
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	first := run()
+	g, err := gif.DecodeAll(bytes.NewReader(first))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The house output is retina: declared × Scale 2. The zoom master
+	// (another 2× on top) must stay internal — a leak would double this.
+	if w, h := g.Config.Width, g.Config.Height; w != 1280 || h != 440 {
+		t.Fatalf("canvas = %dx%d, want 1280x440 (declared 640x220 at the standard 2×) — the master must stay internal", w, h)
+	}
+	// Two eased moves at 400ms are ~12 quantized cuts each on top of
+	// the typing frames.
+	if len(g.Image) < 12 {
+		t.Fatalf("gif has %d frames, want the zoom transitions in it", len(g.Image))
+	}
+	second := run()
+	if !bytes.Equal(first, second) {
+		t.Fatal("two identical zoom runs differ — the camera broke byte-determinism")
+	}
+}
+
 // TestHighlightRealtimeEndToEnd smokes the wall clock (ADR-018): the
 // track mutates from the recording goroutine while the loop renders —
 // the mutex and the tick gating must hold on a REAL recording.
@@ -278,5 +349,66 @@ Sleep 200ms
 	}
 	if _, err := os.Stat(filepath.Join(dir, "demo.gif")); err != nil {
 		t.Fatalf("gif missing: %v", err)
+	}
+}
+
+// TestZoomRealtimeEndToEnd smokes the camera on the wall clock
+// (ADR-019): the track mutates from the recording goroutine while the
+// loop composits at 2×; the tick gating must emit the transition frames
+// on a REAL recording.
+func TestZoomRealtimeEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.gif
+Require bash
+Set Shell bash
+Set Width 640
+Set Height 220
+Type@0ms "echo vivo"
+Enter
+Sleep 300ms
+# foley: zoom 0,0 30x6 300ms
+Sleep 500ms
+# foley: zoom off 300ms
+Sleep 400ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts, Mode: foley.Realtime})
+	if err != nil {
+		t.Fatalf("realtime run: %v (warnings: %v)", err, rep.Warnings)
+	}
+	f, err := os.Open(filepath.Join(dir, "demo.gif")) //nolint:gosec // TempDir path
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	g, err := gif.DecodeAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w, h := g.Config.Width, g.Config.Height; w != 1280 || h != 440 {
+		t.Fatalf("canvas = %dx%d, want 1280x440 — the master must stay internal in realtime too", w, h)
+	}
+	// The two 300ms transitions must materialize as frames even though
+	// the screen content is static during them (the overlay gating).
+	if len(g.Image) < 8 {
+		t.Fatalf("gif has %d frames, want the zoom transitions captured", len(g.Image))
 	}
 }

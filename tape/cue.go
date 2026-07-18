@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/GH-Jaider/foley"
@@ -32,18 +34,30 @@ type Cue struct {
 	// CueHighlight.
 	Highlight    foley.HighlightSpec
 	HighlightOff bool
+	// Zoom carries the payload when Kind == CueZoom.
+	Zoom ZoomCue
 }
 
 // CueKind identifies a cue type.
 type CueKind uint8
 
-// The cue types: dress (ADR-014), keys (ADR-016) and highlight
-// (ADR-018); zoom and captions extend the same scanner later.
+// The cue types: dress (ADR-014), keys (ADR-016), highlight (ADR-018)
+// and zoom (ADR-019); captions extend the same scanner later.
 const (
 	CueDress CueKind = iota
 	CueKeys
 	CueHighlight
+	CueZoom
 )
+
+// ZoomCue is one camera direction (ADR-019): frame a CELL rect
+// (0-based, the house standard) or return to the full frame. Dur zero
+// means the house default transition.
+type ZoomCue struct {
+	Col, Row, W, H int
+	Off            bool
+	Dur            time.Duration
+}
 
 // DressRef is a dress argument in one of its four forms — exactly one
 // field is set.
@@ -147,8 +161,14 @@ func scanCues(src string) ([]Cue, error) {
 				return nil, fmt.Errorf("tape: %d: %w", i+1, err)
 			}
 			cues = append(cues, Cue{Line: i + 1, Kind: CueHighlight, AfterCommand: commands, Highlight: spec, HighlightOff: off})
+		case "zoom":
+			z, err := parseZoom(rest)
+			if err != nil {
+				return nil, fmt.Errorf("tape: %d: %w", i+1, err)
+			}
+			cues = append(cues, Cue{Line: i + 1, Kind: CueZoom, AfterCommand: commands, Zoom: z})
 		default:
-			return nil, fmt.Errorf("tape: %d: unknown cue %q (available cues: dress, keys, highlight)", i+1, kind)
+			return nil, fmt.Errorf("tape: %d: unknown cue %q (available cues: dress, keys, highlight, zoom)", i+1, kind)
 		}
 	}
 	return cues, nil
@@ -328,6 +348,39 @@ func isCommandLine(line string) bool {
 // clause must fail loudly, not become a strange name.
 var highlightNameRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 
+// The rect tokens are pinned by regex, not Sscanf: Sscanf ignores
+// trailing garbage after the last verb, so `3x4.5` would silently
+// record as 3x4 — and nothing in the foley namespace is silent. Signs
+// are allowed by SHAPE so a negative coordinate reaches the friendly
+// range error instead of a generic one.
+var (
+	rectColRowRE = regexp.MustCompile(`^(-?\d+),(-?\d+)$`)
+	rectSizeRE   = regexp.MustCompile(`^(-?\d+)x(-?\d+)$`)
+)
+
+// parseCellRect parses the two rect tokens (`COL,ROW` and `WxH`)
+// strictly: every character must be part of the numbers. ok=false means
+// the SHAPE is wrong (including integer overflow); range checks stay
+// with the caller, whose error messages name the cue.
+func parseCellRect(colRow, size string) (col, row, w, h int, ok bool) {
+	m := rectColRowRE.FindStringSubmatch(colRow)
+	n := rectSizeRE.FindStringSubmatch(size)
+	if m == nil || n == nil {
+		return 0, 0, 0, 0, false
+	}
+	var errs [4]error
+	col, errs[0] = strconv.Atoi(m[1])
+	row, errs[1] = strconv.Atoi(m[2])
+	w, errs[2] = strconv.Atoi(n[1])
+	h, errs[3] = strconv.Atoi(n[2])
+	for _, err := range errs {
+		if err != nil {
+			return 0, 0, 0, 0, false
+		}
+	}
+	return col, row, w, h, true
+}
+
 // parseHighlight classifies a highlight argument (ADR-018):
 //
 //	off [NAME]
@@ -366,8 +419,8 @@ func parseHighlight(arg string) (foley.HighlightSpec, bool, error) {
 		if len(fields) < 2 {
 			return foley.HighlightSpec{}, false, fmt.Errorf("highlight: %q: expected /regex/, COL,ROW WxH (cells), or off", arg)
 		}
-		var col, row, w, h int
-		if n, err := fmt.Sscanf(fields[0]+" "+fields[1], "%d,%d %dx%d", &col, &row, &w, &h); n != 4 || err != nil {
+		col, row, w, h, ok := parseCellRect(fields[0], fields[1])
+		if !ok {
 			return foley.HighlightSpec{}, false, fmt.Errorf("highlight: %q: expected /regex/, COL,ROW WxH (cells), or off", arg)
 		}
 		if col < 0 || row < 0 || w <= 0 || h <= 0 {
@@ -414,6 +467,74 @@ func parseHighlightMods(rest string, pattern bool) (occ int, pick bool, name str
 		return 0, false, "", fmt.Errorf("highlight: name %q: letters, digits, _ and -", name)
 	}
 	return occ, pick, name, nil
+}
+
+// parseZoom classifies a zoom argument (ADR-019):
+//
+//	COL,ROW WxH [duration]
+//	off [duration]
+//
+// Coordinates are CELLS, 0-based — one standard with highlight rects.
+// The duration takes Go syntax (800ms, 1s); absent means the house
+// default. There is no easing knob: the duration IS the shot.
+func parseZoom(arg string) (ZoomCue, error) {
+	if arg == "" {
+		return ZoomCue{}, errors.New("zoom: missing argument (COL,ROW WxH [duration], or off)")
+	}
+	fields := strings.Fields(arg)
+	if fields[0] == "off" {
+		if len(fields) > 2 {
+			return ZoomCue{}, fmt.Errorf("zoom: %q: off takes at most a duration", arg)
+		}
+		z := ZoomCue{Off: true}
+		if len(fields) == 2 {
+			d, err := parseZoomDur(fields[1])
+			if err != nil {
+				return ZoomCue{}, err
+			}
+			z.Dur = d
+		}
+		return z, nil
+	}
+	if len(fields) < 2 || len(fields) > 3 {
+		return ZoomCue{}, fmt.Errorf("zoom: %q: expected COL,ROW WxH [duration] (cells), or off", arg)
+	}
+	var z ZoomCue
+	var ok bool
+	z.Col, z.Row, z.W, z.H, ok = parseCellRect(fields[0], fields[1])
+	if !ok {
+		return ZoomCue{}, fmt.Errorf("zoom: %q: expected COL,ROW WxH [duration] (cells), or off", arg)
+	}
+	if z.Col < 0 || z.Row < 0 || z.W <= 0 || z.H <= 0 {
+		return ZoomCue{}, fmt.Errorf("zoom: rect %q: cells start at 0,0 and the size must be positive", arg)
+	}
+	if len(fields) == 3 {
+		d, err := parseZoomDur(fields[2])
+		if err != nil {
+			return ZoomCue{}, err
+		}
+		z.Dur = d
+	}
+	return z, nil
+}
+
+// parseZoomDur parses the optional transition duration, strictly
+// positive, with an explicit unit — a bare number is ambiguous and
+// dies here, in validate — and under the frame-count cap: each second
+// of transition renders ~30 physical frames (a 1h Sleep is one frame
+// with a long delay; a 1h transition would be ~109,000 frames).
+func parseZoomDur(s string) (time.Duration, error) {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("zoom: duration %q: use a unit (800ms, 1s)", s)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("zoom: duration %q: must be positive", s)
+	}
+	if d > foley.MaxZoomDur {
+		return 0, fmt.Errorf("zoom: duration %q exceeds the %v cap — each second renders ~30 physical frames; a slower reveal is a longer Sleep while framed, not a longer transition", s, foley.MaxZoomDur)
+	}
+	return d, nil
 }
 
 // isFontPath spots the FontFamily PATH form (ADR-015): a font FILE the
