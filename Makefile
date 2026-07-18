@@ -53,3 +53,9 @@ engine-clean:
 
 fonts:
 	scripts/fonts.sh
+
+# Regenerate the brand assets from the tape: the logo IS a recording
+# (assets/logo/logo.tape -> real engine frames -> film strip).
+logo:
+	cd assets/logo && FOLEY_FONTS=$(CURDIR)/internal/fontpack/fonts go run -tags ghosttyvt ../../cmd/foley -cols 8 -rows 3 logo.tape
+	go run ./tooling/logogen assets/logo assets/logo

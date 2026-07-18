@@ -20,3 +20,5 @@ internal/fontpack/fonts/
 examples/**/*.gif
 examples/**/*.mp4
 examples/**/*.webm
+assets/logo/logo-f*.png
+assets/logo/logo-raw.gif
