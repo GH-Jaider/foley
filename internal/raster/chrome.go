@@ -75,6 +75,10 @@ type Window struct {
 	// leak hostnames — determinism). TitleAlign positions it.
 	Title      string
 	TitleAlign TitleAlign
+	// TitleFollow lets the bar follow the title the APPLICATION
+	// declares via OSC 0/2 (Frame.Title), falling back to Title while
+	// none is set (ADR-022). Footage, not host state: deterministic.
+	TitleFollow bool
 	// KeysBand is the height of the input-caption band under the
 	// window (ADR-016); zero = no band. The canvas GROWS by it — a cue
 	// never eats grid rows and the footage is never covered.
@@ -306,14 +310,21 @@ func (r *Rasterizer) drawBar(dst *image.RGBA, rect image.Rectangle, contentBG co
 }
 
 // drawBarTitle blits the window title into the bar. The rendered strip
-// is cached: title, bar and metrics are fixed for a whole recording.
+// is cached per string: static titles shape once for the whole
+// recording; a followed title (ADR-022) re-shapes only when the app
+// actually changes it.
 func (r *Rasterizer) drawBarTitle(dst *image.RGBA, rect image.Rectangle, barBG color.RGBA) {
 	w := r.opts.Window
-	if w.Title == "" {
+	title := w.Title
+	if w.TitleFollow && r.frameTitle != "" {
+		title = r.frameTitle
+	}
+	if title == "" {
 		return
 	}
-	if r.titleMask == nil {
-		r.titleMask = r.renderTitleStrip(w.Title, w.BarSize*r.s)
+	if r.titleMask == nil || r.titleStr != title {
+		r.titleMask = r.renderTitleStrip(title, w.BarSize*r.s)
+		r.titleStr = title
 	}
 	if r.titleMask == nil {
 		return

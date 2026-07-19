@@ -228,3 +228,64 @@ func TestGoldenChromeTitleAndControls(t *testing.T) {
 		t.Fatalf("chrome title/controls differ from golden; got written to %s", diffPath)
 	}
 }
+
+// TestTitleFollow pins the reactive bar title (ADR-022): with follow ON
+// the bar tracks Frame.Title and falls back to the static text until
+// the app declares one; with follow OFF the frame title never leaks in.
+func TestTitleFollow(t *testing.T) {
+	pack, err := fontpack.Load(filepath.Join("..", "fontpack", "fonts"))
+	testassets.Require(t, err, "make fonts")
+
+	probe, err := raster.New(raster.Options{Pack: pack, FontSizePx: 16, Scale: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cw, ch := probe.LogicalCellSize()
+
+	render := func(follow bool, frameTitle string) []byte {
+		t.Helper()
+		win := raster.Window{
+			CanvasW: 24*cw + 20, CanvasH: 3*ch + 20 + 18,
+			Margin: 5, Padding: 5,
+			MarginFill:  raster.Fill{Color: color.RGBA{R: 0x10, G: 0x10, B: 0x14, A: 0xff}},
+			Bar:         raster.BarRings,
+			BarSize:     18,
+			Title:       "static",
+			TitleFollow: follow,
+		}
+		r, err := raster.New(raster.Options{Pack: pack, FontSizePx: 16, Scale: 2, Window: win})
+		if err != nil {
+			t.Fatal(err)
+		}
+		geo := vtengine.Geometry{Cols: 24, Rows: 3, CellW: cw, CellH: ch}
+		e := fake.New(vtengine.Options{Geometry: geo})
+		defer func() { _ = e.Close() }()
+		e.SetCursor(vtengine.Cursor{Visible: false})
+		if frameTitle != "" {
+			e.SetTitle(frameTitle)
+		}
+		var f vtengine.Frame
+		if err := e.Snapshot(&f); err != nil {
+			t.Fatal(err)
+		}
+		img, err := r.Render(&f, e, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return append([]byte(nil), img.Pix...)
+	}
+
+	static := render(true, "")
+	followed := render(true, "tmux")
+	if bytes.Equal(static, followed) {
+		t.Fatal("follow ON: an OSC title must repaint the bar")
+	}
+	// The fallback is the static title: no OSC yet ≡ follow OFF.
+	if !bytes.Equal(static, render(false, "")) {
+		t.Fatal("follow ON without an OSC title must render the static title")
+	}
+	// Follow OFF ignores the frame's title entirely.
+	if !bytes.Equal(render(false, "tmux"), render(false, "")) {
+		t.Fatal("follow OFF: the frame title must never leak into the bar")
+	}
+}

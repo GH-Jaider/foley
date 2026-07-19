@@ -136,6 +136,167 @@ func RunFull(t *testing.T, factory Factory) {
 		}
 	})
 
+	t.Run("osc_title", func(t *testing.T) {
+		e := factory(t, defaultOpts())
+		defer func() { _ = e.Close() }()
+		f := snapshot(t, e)
+		if f.Title != "" {
+			t.Fatalf("title before any OSC = %q, want empty", f.Title)
+		}
+		mustWrite(t, e, "\x1b]2;vim retry.go\x1b\\")
+		f = snapshot(t, e)
+		if f.Title != "vim retry.go" {
+			t.Fatalf("OSC 2 title = %q, want vim retry.go", f.Title)
+		}
+		// A PURE title change (no cell touched) must still dirty the
+		// frame — chrome following the title cannot skip it (ADR-022).
+		snapshot(t, e) // drain dirty
+		mustWrite(t, e, "\x1b]0;tmux\x07")
+		f = snapshot(t, e)
+		if f.Title != "tmux" {
+			t.Fatalf("OSC 0 title = %q, want tmux", f.Title)
+		}
+		if !f.Dirty {
+			t.Fatal("a title change alone must dirty the frame")
+		}
+	})
+
+	t.Run("kitty_graphics_scaled_placement_anchor", func(t *testing.T) {
+		// A placement scaled by c= (columns) alone must still anchor at
+		// the cursor — real previewers (lf's, icat) routinely send
+		// c-only and let the aspect pick the rows. Found live: the lf
+		// example's photo rendered at the grid origin.
+		e := factory(t, defaultOpts())
+		defer func() { _ = e.Close() }()
+		pix := make([]byte, 4*4*4) // 4x4 RGBA
+		for i := range pix {
+			pix[i] = 0xff
+		}
+		payload := base64.StdEncoding.EncodeToString(pix)
+		mustWrite(t, e, "\x1b[2;5H") // anchor at row 1, col 4 (0-based)
+		writeKitty(t, e, fmt.Sprintf("a=T,f=32,s=4,v=4,i=11,c=2,q=2;%s", payload))
+		f := snapshot(t, e)
+		if len(f.Graphics.Placements) != 1 {
+			t.Fatalf("placements = %d, want 1 (%+v)", len(f.Graphics.Placements), f.Graphics)
+		}
+		p := f.Graphics.Placements[0]
+		if p.Col != 4 || p.Row != 1 {
+			t.Fatalf("c-only placement anchored at (%d,%d), want the cursor (4,1)", p.Col, p.Row)
+		}
+		if p.PixelW == 0 || p.PixelH == 0 {
+			t.Fatalf("c-only placement has no pixel geometry: %+v", p)
+		}
+
+		// The same contract for PNG data: the aspect math needs the
+		// DECODED dimensions (the live failure was a PNG previewer).
+		src := image.NewNRGBA(image.Rect(0, 0, 6, 6))
+		for i := range src.Pix {
+			src.Pix[i] = 0xaa
+		}
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, src); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, e, "\x1b[3;7H") // anchor at row 2, col 6 (0-based)
+		writeKitty(t, e, fmt.Sprintf("a=T,f=100,i=12,c=2,q=2;%s",
+			base64.StdEncoding.EncodeToString(buf.Bytes())))
+		f = snapshot(t, e)
+		var pngP *vtengine.Placement
+		for i := range f.Graphics.Placements {
+			if f.Graphics.Placements[i].ImageID == 12 {
+				pngP = &f.Graphics.Placements[i]
+			}
+		}
+		if pngP == nil {
+			t.Fatalf("png c-only placement missing: %+v", f.Graphics)
+		}
+		if pngP.Col != 6 || pngP.Row != 2 {
+			t.Fatalf("png c-only placement anchored at (%d,%d), want the cursor (6,2)", pngP.Col, pngP.Row)
+		}
+		if pngP.PixelW == 0 || pngP.PixelH == 0 {
+			t.Fatalf("png c-only placement has no pixel geometry: %+v", pngP)
+		}
+
+		// A LARGE payload arrives from a real pty in many read chunks —
+		// the APC crosses hundreds of Write calls. The anchor must not
+		// drift (the live failure was a 500KB photo previewer).
+		big := image.NewNRGBA(image.Rect(0, 0, 300, 300))
+		for i := range big.Pix {
+			big.Pix[i] = byte(i * 7)
+		}
+		buf.Reset()
+		if err := png.Encode(&buf, big); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, e, "\x1b[2;3H") // anchor at row 1, col 2 (0-based)
+		apc := fmt.Sprintf("\x1b_Ga=T,f=100,i=13,c=2,q=2;%s\x1b\\",
+			base64.StdEncoding.EncodeToString(buf.Bytes()))
+		for len(apc) > 0 {
+			n := min(1024, len(apc))
+			mustWrite(t, e, apc[:n])
+			apc = apc[n:]
+		}
+		f = snapshot(t, e)
+		var bigP *vtengine.Placement
+		for i := range f.Graphics.Placements {
+			if f.Graphics.Placements[i].ImageID == 13 {
+				bigP = &f.Graphics.Placements[i]
+			}
+		}
+		if bigP == nil {
+			t.Fatalf("big chunked placement missing: %+v", f.Graphics)
+		}
+		if bigP.Col != 2 || bigP.Row != 1 {
+			t.Fatalf("big chunked placement anchored at (%d,%d), want the cursor (2,1)", bigP.Col, bigP.Row)
+		}
+
+		// The previewer idiom: DECSC, jump, transmit, DECRC — one write.
+		// The anchor is the cursor AT TRANSMISSION, not the restored
+		// one (found live: lf's photo anchored at the pre-jump cell).
+		writeKitty(t, e, "a=d,d=A") // clear the stage
+		mustWrite(t, e, "\x1b[1;1H")
+		mustWrite(t, e, fmt.Sprintf("\x1b7\x1b[3;9H\x1b_Ga=T,f=32,s=4,v=4,i=14,c=2,q=2;%s\x1b\\\x1b8", payload))
+		f = snapshot(t, e)
+		var wrapped *vtengine.Placement
+		for i := range f.Graphics.Placements {
+			if f.Graphics.Placements[i].ImageID == 14 {
+				wrapped = &f.Graphics.Placements[i]
+			}
+		}
+		if wrapped == nil {
+			t.Fatalf("DECSC-wrapped placement missing: %+v", f.Graphics)
+		}
+		if wrapped.Col != 8 || wrapped.Row != 2 {
+			t.Fatalf("DECSC-wrapped placement anchored at (%d,%d), want the jumped cursor (8,2)", wrapped.Col, wrapped.Row)
+		}
+
+		// CHARACTERIZATION, not aspiration: a placement whose derived
+		// rows OVERFLOW the space below the anchor gets RELOCATED by
+		// libghostty — both axes, toward the origin — instead of
+		// kitty's scroll-to-fit (rows shift, column holds). Found live
+		// (the lf photo pinned to the top-left); reproduced across the
+		// whole pipeline. Pinned here so a lib bump that changes the
+		// behavior is NOTICED; the app-side answer stays "fit your
+		// placements" (c AND r), which real previewers should do
+		// anyway. Upstream question for the pin.
+		writeKitty(t, e, "a=d,d=A")
+		mustWrite(t, e, "\x1b[3;16H") // anchor (15,2); c=10 → ~5 rows > the 2 below
+		writeKitty(t, e, fmt.Sprintf("a=T,f=32,s=4,v=4,i=15,c=10,q=2;%s", payload))
+		f = snapshot(t, e)
+		var over *vtengine.Placement
+		for i := range f.Graphics.Placements {
+			if f.Graphics.Placements[i].ImageID == 15 {
+				over = &f.Graphics.Placements[i]
+			}
+		}
+		if over == nil {
+			t.Fatalf("overflowing placement missing: %+v", f.Graphics)
+		}
+		if over.Col == 15 && over.Row == 2 {
+			t.Fatal("the lib now anchors overflowing placements at the cursor — kitty semantics arrived with a pin bump: drop this characterization and the fit-workarounds it documents")
+		}
+	})
+
 	t.Run("kitty_graphics_roundtrip_raw", func(t *testing.T) {
 		e := factory(t, defaultOpts())
 		defer func() { _ = e.Close() }()
@@ -211,6 +372,17 @@ func RunFull(t *testing.T, factory Factory) {
 		f3 := snapshot(t, e)
 		if f3.Graphics.Generation <= gen1 {
 			t.Fatalf("generation must advance on new transmit: %d → %d", gen1, f3.Graphics.Generation)
+		}
+		// A graphics mutation carries no cell damage, but it IS a visible
+		// change: the frame must come out dirty or a realtime recording
+		// freezes on animations that only retransmit images (found live
+		// with tenten's pixel mode).
+		if !f3.Dirty {
+			t.Fatal("graphics-only mutation must dirty the frame")
+		}
+		f4 := snapshot(t, e)
+		if f4.Dirty {
+			t.Fatal("quiet snapshot after a graphics change must be clean")
 		}
 	})
 

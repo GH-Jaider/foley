@@ -19,6 +19,7 @@ type Engine struct {
 	cursor vtengine.Cursor
 	colors vtengine.Colors
 	gfx    vtengine.Graphics
+	title  string
 	images map[uint32]vtengine.ImageData
 
 	dirty  bool
@@ -116,12 +117,20 @@ func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 		dst.Colors.Cursor = dst.Colors.FG
 	}
 	dst.Dirty = e.dirty
+	dst.Title = e.title
 	dst.Graphics = vtengine.Graphics{
 		Generation: e.gfx.Generation,
 		Placements: append(dst.Graphics.Placements[:0], e.gfx.Placements...),
 	}
 	e.dirty = false
 	return nil
+}
+
+// SetTitle sets the OSC-declared window title the next Snapshot reports
+// (ADR-022) and marks the frame dirty, like a real engine would.
+func (e *Engine) SetTitle(title string) {
+	e.title = title
+	e.dirty = true
 }
 
 // ImagePixels returns pixels registered via SetImage.

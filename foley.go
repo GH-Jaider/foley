@@ -254,6 +254,11 @@ type Options struct {
 	// aligns it left of center (macOS genre centers).
 	WindowTitle     string
 	WindowTitleLeft bool
+	// WindowTitleFollow lets the bar follow the title the recorded
+	// APPLICATION declares via OSC 0/2 — tmux, vim, the shell — like a
+	// real terminal's tab (ADR-022), with WindowTitle as the fallback
+	// until one is set. Footage, not host state: deterministic.
+	WindowTitleFollow bool
 	// KeysOverlay draws the injected input track as film-strip frames
 	// on a stage band UNDER the window (ADR-016). The canvas GROWS by
 	// the band height — the footage is never covered and the grid
@@ -1083,6 +1088,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 			win.Bar = raster.BarGnomeCSD
 		}
 		win.Title = opts.WindowTitle
+		win.TitleFollow = opts.WindowTitleFollow
 		if opts.WindowTitleLeft {
 			win.TitleAlign = raster.TitleLeft
 		}
@@ -1142,10 +1148,11 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	geo := vtengine.Geometry{Cols: opts.Cols, Rows: opts.Rows, CellW: cellW, CellH: cellH}
 
 	childEnv := opts.Env
+	var identityWarnings []string
 	if childEnv == nil {
 		// foley IS the terminal (ADR-021): inheritance passes through
 		// the identity layer, never raw.
-		childEnv = TerminalEnv(os.Environ())
+		childEnv, identityWarnings = TerminalIdentity(os.Environ())
 	}
 	proc, err := ptyx.Start(ptyx.Options{
 		Command: opts.Command,
@@ -1292,6 +1299,6 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		ras:              ras,
 		cast:             cast,
 		gifLoop:          opts.GIFLoop,
-		assemblyWarnings: append(fontWarnings, ras.Warnings()...),
+		assemblyWarnings: append(append(fontWarnings, identityWarnings...), ras.Warnings()...),
 	}, nil
 }

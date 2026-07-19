@@ -60,6 +60,17 @@ type Engine struct {
 	geo    vtengine.Geometry
 	opts   vtengine.Options
 	closed bool
+	// lastTitle detects OSC 0/2 title changes between snapshots: a pure
+	// title change carries no dirty cells, but the frame must not be
+	// skipped (ADR-022).
+	lastTitle string
+	// lastGfxGen detects kitty-graphics mutations between snapshots: an
+	// animation retransmitting frames over the protocol never touches
+	// cell damage, so the lib's dirty flag stays FALSE while the screen
+	// visibly moves (found live: a realtime take of tenten froze on one
+	// frame). The generation counter is graphics' own dirty bit — same
+	// doctrine as lastTitle.
+	lastGfxGen uint64
 }
 
 //nolint:gochecknoglobals // process-wide C callback registration must happen exactly once
@@ -230,6 +241,18 @@ func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 		dst.Colors.Cursor = dst.Colors.FG
 	}
 
+	// Title (OSC 0/2): a borrowed string, len 0 until the app sets one
+	// (ADR-022). A change dirties the frame even with a quiet grid.
+	var title C.GhosttyString
+	dst.Title = ""
+	if rc := C.ghostty_terminal_get(e.term, C.GHOSTTY_TERMINAL_DATA_TITLE, unsafe.Pointer(&title)); rc == C.GHOSTTY_SUCCESS && title.len > 0 {
+		dst.Title = C.GoStringN((*C.char)(unsafe.Pointer(title.ptr)), C.int(title.len))
+	}
+	if dst.Title != e.lastTitle {
+		e.lastTitle = dst.Title
+		dst.Dirty = true
+	}
+
 	// Cursor.
 	e.snapshotCursor(dst)
 
@@ -385,6 +408,15 @@ func (e *Engine) graphics() (C.GhosttyKittyGraphics, bool) {
 
 func (e *Engine) snapshotGraphics(dst *vtengine.Frame) error {
 	dst.Graphics.Placements = dst.Graphics.Placements[:0]
+	defer func() {
+		// Graphics mutations (transmit, place, delete, clear) bump the
+		// generation without touching cell damage — without this, a
+		// graphics-only change is an invisible frame (see lastGfxGen).
+		if dst.Graphics.Generation != e.lastGfxGen {
+			e.lastGfxGen = dst.Graphics.Generation
+			dst.Dirty = true
+		}
+	}()
 	gfx, ok := e.graphics()
 	if !ok {
 		dst.Graphics.Generation = 0

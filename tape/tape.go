@@ -102,15 +102,17 @@ type Settings struct {
 	WindowBar     string
 	WindowBarSize int
 	BorderRadius  int
-	// WindowTitle, TitleAlign and WindowBarColor are foley-only (no VHS
-	// Set exists); they flow exclusively from a dress. Empty bar color
-	// means theme-derived AUTO shading.
-	WindowTitle    string
-	TitleAlign     string
-	WindowBarColor string
-	CursorBlink    bool
-	WaitTimeout    time.Duration
-	WaitPattern    *regexp.Regexp
+	// WindowTitle, TitleAlign, WindowTitleFollow and WindowBarColor are
+	// foley-only (no VHS Set exists); they flow exclusively from a
+	// dress. Empty bar color means theme-derived AUTO shading; follow
+	// makes the bar track the app's OSC title (ADR-022).
+	WindowTitle       string
+	TitleAlign        string
+	WindowTitleFollow bool
+	WindowBarColor    string
+	CursorBlink       bool
+	WaitTimeout       time.Duration
+	WaitPattern       *regexp.Regexp
 }
 
 // ThemeRef is a Set Theme argument: a curated theme name or an inline
@@ -166,6 +168,17 @@ func (t *Tape) KeysCue() (bool, KeysCue) {
 	return false, KeysCue{}
 }
 
+// StudioCue reports whether the tape asks for a closed set (ADR-023).
+// Parse guarantees at most one studio cue.
+func (t *Tape) StudioCue() bool {
+	for _, c := range t.Cues {
+		if c.Kind == CueStudio {
+			return true
+		}
+	}
+	return false
+}
+
 // vhsDefaults are VHS's own default options (vhs.go/style.go/video.go of
 // the pinned release) — a migrated tape must behave as it did there.
 func vhsDefaults() Settings {
@@ -206,7 +219,7 @@ func Parse(src string) (*Tape, error) {
 	if err != nil {
 		return nil, err
 	}
-	var dressLines, keysLines []string
+	var dressLines, keysLines, studioLines []string
 	hlNames := map[string]bool{}
 	zoomSeen := false
 	for _, c := range cues {
@@ -215,6 +228,8 @@ func Parse(src string) (*Tape, error) {
 			dressLines = append(dressLines, strconv.Itoa(c.Line))
 		case CueKeys:
 			keysLines = append(keysLines, strconv.Itoa(c.Line))
+		case CueStudio:
+			studioLines = append(studioLines, strconv.Itoa(c.Line))
 		case CueHighlight:
 			// Any number of highlights may coexist (ADR-018). A
 			// targeted off must name a highlight declared BEFORE it —
@@ -247,6 +262,10 @@ func Parse(src string) (*Tape, error) {
 	if len(keysLines) > 1 {
 		return nil, fmt.Errorf("tape: more than one `# foley: keys` cue (lines %s) — the band is one switch",
 			strings.Join(keysLines, " and "))
+	}
+	if len(studioLines) > 1 {
+		return nil, fmt.Errorf("tape: more than one `# foley: studio` cue (lines %s) — one set per take",
+			strings.Join(studioLines, " and "))
 	}
 
 	t := &Tape{

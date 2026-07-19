@@ -36,9 +36,12 @@ type Dress struct {
 	BorderRadius   *int       `json:"borderRadius,omitempty"`
 	Padding        *int       `json:"padding,omitempty"`
 	// Foley-only primitives (no VHS Set exists for them): static bar
-	// title and its alignment ("center" default, or "left").
-	WindowTitle *string `json:"windowTitle,omitempty"`
-	TitleAlign  *string `json:"titleAlign,omitempty"`
+	// title and its alignment ("center" default, or "left"), and the
+	// reactive follow — the bar tracks the app's OSC 0/2 title with
+	// the static one as fallback (ADR-022).
+	WindowTitle       *string `json:"windowTitle,omitempty"`
+	TitleAlign        *string `json:"titleAlign,omitempty"`
+	WindowTitleFollow *bool   `json:"windowTitleFollow,omitempty"`
 }
 
 // DressTheme accepts the two `Set Theme` forms inside dress JSON: a
@@ -266,6 +269,9 @@ func applyDress(s *Settings, explicit map[string]bool, d Dress) {
 	if d.TitleAlign != nil {
 		s.TitleAlign = *d.TitleAlign
 	}
+	if d.WindowTitleFollow != nil {
+		s.WindowTitleFollow = *d.WindowTitleFollow
+	}
 }
 
 // Expansion renders the dress as the `Set` primitives it fills — the
@@ -324,6 +330,9 @@ func (d Dress) Expansion() []string {
 	}
 	if d.TitleAlign != nil {
 		out = append(out, "(foley) TitleAlign "+*d.TitleAlign)
+	}
+	if d.WindowTitleFollow != nil {
+		out = append(out, fmt.Sprintf("(foley) WindowTitleFollow %t", *d.WindowTitleFollow))
 	}
 	return out
 }

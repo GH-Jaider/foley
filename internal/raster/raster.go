@@ -110,10 +110,13 @@ type Rasterizer struct {
 	orgX, orgY int
 	// marginBuf caches a canvas-scaled MarginFill image.
 	marginBuf *image.RGBA
-	// titleMask caches the rendered window-bar title strip; titleFG is
-	// the theme foreground the title color derives from.
-	titleMask *glyphMask
-	titleFG   color.RGBA
+	// titleMask caches the rendered window-bar title strip for titleStr;
+	// titleFG is the theme foreground the title color derives from, and
+	// frameTitle the current frame's OSC title when the bar follows it.
+	titleMask  *glyphMask
+	titleStr   string
+	titleFG    color.RGBA
+	frameTitle string
 	// The keys band (ADR-016): the track feeding the frames, the film
 	// strip's rect (set by drawChrome), the style knobs, the cap font
 	// size, and the label/icon strip caches.
@@ -225,14 +228,17 @@ func New(opts Options) (*Rasterizer, error) {
 	if _, ok := r.gridFace().NominalGlyph('×'); !ok {
 		r.keysMult = "x"
 	}
-	if opts.Keys != nil && opts.Window.KeysBand > 0 {
-		// Take capacity from what the strip actually fits (a square
-		// frame is the minimum): same inputs, same capacity.
-		frameH := opts.Window.KeysBand - keysBandPadTop - keysBandPadBot - 2*(keysSprocketH+2*keysSprocketPad)
-		opts.Keys.setCapacity((opts.Window.CanvasW - 2*opts.Window.Margin) / (frameH + keysCapGap))
-	}
 	ox, oy := opts.Window.contentOrigin()
 	r.orgX, r.orgY = ox*r.s, oy*r.s
+	if opts.Keys != nil && opts.Window.KeysBand > 0 {
+		// The width cut measures REAL caps (ADR-016 v3): the strip
+		// fills to its edge, then splices — same inputs, same widths,
+		// same cuts. The usable width mirrors drawKeyChips' geometry:
+		// first cap at the prompt column, strip ending at the margin.
+		startX := max(r.orgX, 8*r.s)
+		limit := (opts.Window.CanvasW-opts.Window.Margin)*r.s - startX
+		opts.Keys.bind(r.capWidth, keysCapGap*r.s, limit)
+	}
 	return r, nil
 }
 
@@ -322,6 +328,7 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 	// 1. Theme background — or the full window chrome (margin fill, bar,
 	// terminal background incl. the visual padding) when configured.
 	if r.opts.Window.enabled() {
+		r.frameTitle = f.Title
 		r.drawChrome(dst, rgba(f.Colors.BG), rgba(f.Colors.FG))
 	} else {
 		fillRect(dst, dst.Bounds(), rgba(f.Colors.BG))
