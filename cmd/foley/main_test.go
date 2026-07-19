@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/tape"
 )
 
@@ -361,6 +362,75 @@ func TestDashHIsTheFullReference(t *testing.T) {
 	for _, want := range []string{"usage: foley", "-output-scale", "-watch", "-gif-loop"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("-h stdout lacks %q:\n%s", want, stdout)
+		}
+	}
+}
+
+// TestDashHIsGrouped pins the curated reference: flags print under
+// their group headers, and the LOUD "ungrouped" drift header never
+// ships — a new flag must be added to flagGroups or this fails.
+func TestDashHIsGrouped(t *testing.T) {
+	exit, stdout, _ := cli([]string{"-h"}, "")
+	if exit != 0 {
+		t.Fatalf("-h exit = %d, want 0", exit)
+	}
+	for _, want := range []string{"The take:", "The look:", "The output:", "System:"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("-h lacks the %q group:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "ungrouped") {
+		t.Fatalf("a flag is missing from flagGroups:\n%s", stdout)
+	}
+	// The -studio regression: back-quotes in a usage string become the
+	// flag's VALUE NAME (flag.UnquoteUsage) — `-studio` takes none.
+	if !strings.Contains(stdout, "\n  -studio\n") {
+		t.Fatalf("-studio must render bare (no value name):\n%s", stdout)
+	}
+}
+
+// TestFlagsAfterThePath pins interleaved parsing on every door that
+// takes positionals: trailing flags work exactly like leading ones.
+func TestFlagsAfterThePath(t *testing.T) {
+	t.Run("record", func(t *testing.T) {
+		// Reaching "no such file" proves -o parsed from AFTER the path
+		// (unparsed it would be a second positional: usage, exit 2).
+		exit, _, stderr := cli([]string{"nosuch.tape", "-o", "x.gif"}, "")
+		if exit != 1 || !strings.Contains(stderr, "nosuch.tape") {
+			t.Fatalf("exit = %d, stderr = %q; want the tape read attempt", exit, stderr)
+		}
+	})
+	t.Run("validate", func(t *testing.T) {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "ok.tape")
+		writeFile(t, p, "Output d.gif\nType \"hi\"\n")
+		exit, _, stderr := cli([]string{"validate", p, "-modify-other-keys"}, "")
+		if exit != 0 {
+			t.Fatalf("exit = %d, stderr = %q", exit, stderr)
+		}
+	})
+	t.Run("sew", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		exit, _, stderr := cli([]string{"sew", "mine", "-from", "macos"}, "")
+		if exit != 0 {
+			t.Fatalf("exit = %d, stderr = %q", exit, stderr)
+		}
+		if _, err := os.Stat("mine.dress.json"); err != nil {
+			t.Fatalf("sew wrote nothing: %v", err)
+		}
+	})
+}
+
+// TestKeysOverrideSpeaksSpacesAndCommas: the -keys value takes the
+// cue's tokens with either separator (quoted spaces or commas).
+func TestKeysOverrideSpacesAndCommas(t *testing.T) {
+	for _, s := range []string{"small,notation=icons", "small notation=icons", "on,small,notation=icons"} {
+		ov, err := parseKeysOverride(s)
+		if err != nil {
+			t.Fatalf("%q: %v", s, err)
+		}
+		if !ov.On || ov.Cue.Size != foley.KeysSmall || ov.Cue.Notation != foley.KeysIcons {
+			t.Fatalf("%q parsed to %+v", s, ov)
 		}
 	}
 }

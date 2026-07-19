@@ -1,6 +1,6 @@
 GOLANGCI_VERSION := 2.12.2
 
-.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures fonts e2e-linux e2e-darwin lint-version engine-lib engine-clean
+.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures fonts examples e2e-linux e2e-darwin lint-version engine-lib engine-clean terminfo
 
 build:
 	go build ./...
@@ -11,7 +11,7 @@ test:
 test-race:
 	go test -race ./...
 
-lint: lint-version lint-sh
+lint: lint-version lint-sh lint-completions
 	golangci-lint run
 
 # shellcheck lee el shebang de cada script y aplica el dialecto correcto
@@ -19,6 +19,19 @@ lint: lint-version lint-sh
 # Los scripts de examples/ se shippean: mismo gate.
 lint-sh:
 	shellcheck scripts/*.sh examples/*/*.sh
+
+# Los scripts de `foley completion` viven como consts en Go (fuera del
+# alcance de shellcheck): cada shell presente valida el suyo con su
+# parser real (-n); un shell ausente se salta CON AVISO, jamás se finge.
+lint-completions:
+	@for sh in bash zsh fish; do \
+		if command -v $$sh >/dev/null 2>&1; then \
+			go run ./cmd/foley completion $$sh | $$sh -n || exit 1; \
+			echo "completion $$sh: syntax ok"; \
+		else \
+			echo "completion $$sh: shell no instalado — check saltado"; \
+		fi; \
+	done
 
 fmt: lint-version
 	golangci-lint fmt
@@ -53,6 +66,18 @@ engine-clean:
 
 fonts:
 	scripts/fonts.sh
+
+# Regenera la entrada terminfo pineada (internal/terminfo) desde el pin
+# del motor — correr tras un bump de build.zig.zon; el diff va en el
+# mismo commit del bump. Herramientas de mantenedor: zig + tic.
+terminfo:
+	scripts/terminfo.sh
+
+# Re-record every example gif from its tape (they ARE the docs the
+# README embeds). `make examples` for all; narrow with the script:
+# scripts/examples.sh fetch keys
+examples:
+	scripts/examples.sh
 
 # Regenerate the brand assets from the tape: the logo IS a recording
 # (assets/logo/logo.tape -> real engine frames -> film strip).

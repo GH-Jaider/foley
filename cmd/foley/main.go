@@ -22,6 +22,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/GH-Jaider/foley"
 	"github.com/GH-Jaider/foley/internal/execx"
@@ -67,11 +68,11 @@ func parseKeysOverride(s string) (tape.KeysOverride, error) {
 	if s == "off" {
 		return tape.KeysOverride{Off: true}, nil
 	}
-	// The comma form ("on,large,notation=icons") speaks the cue's own
-	// token grammar — one grammar, two doors. A leading "on" is
-	// optional: any styling token implies the reel is wanted.
-	toks := strings.Split(s, ",")
-	if toks[0] == "on" {
+	// Commas or spaces ("on,large" or a quoted "on large") both speak
+	// the cue's own token grammar — one grammar, two doors. A leading
+	// "on" is optional: any styling token implies the reel is wanted.
+	toks := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	if len(toks) > 0 && toks[0] == "on" {
 		toks = toks[1:]
 	}
 	kc, err := tape.ParseKeysArgs(strings.Join(toks, " "))
@@ -79,6 +80,84 @@ func parseKeysOverride(s string) (tape.KeysOverride, error) {
 		return tape.KeysOverride{}, err
 	}
 	return tape.KeysOverride{On: true, Cue: kc}, nil
+}
+
+// parseInterleaved parses flags and positional arguments in ANY order:
+// `foley demo.tape -watch` works exactly like `foley -watch demo.tape`.
+// Go's flag package stops at the first non-flag token; this collects
+// that token and resumes parsing, until the arguments run out. The
+// positional arguments come back in their original order.
+func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
+	var positional []string
+	rest := args
+	for {
+		if err := fs.Parse(rest); err != nil {
+			return nil, err
+		}
+		if fs.NArg() == 0 {
+			return positional, nil
+		}
+		positional = append(positional, fs.Arg(0))
+		rest = fs.Args()[1:]
+	}
+}
+
+// flagGroups is the curated `foley -h` layout: every record flag lives
+// in a group, in reading order — the alphabetical soup of PrintDefaults
+// is exactly what a reference card must not be. A flag missing from
+// this table prints under a LOUD "ungrouped" header (nothing silent),
+// and TestDashHIsGrouped pins that the header never ships.
+//
+//nolint:gochecknoglobals // immutable help layout
+var flagGroups = []struct {
+	title string
+	names []string
+}{
+	{"The take", []string{"mode", "studio", "dir", "env", "cols", "rows"}},
+	{"The look", []string{"dress", "keys", "theme"}},
+	{"The output", []string{"o", "output-scale", "gif-loop"}},
+	{"The loop", []string{"watch"}},
+	{"System", []string{"fonts", "modify-other-keys", "version"}},
+}
+
+// printGroupedFlags renders the record flags under flagGroups' headers.
+func printGroupedFlags(w io.Writer, fs *flag.FlagSet) {
+	seen := map[string]bool{}
+	for _, g := range flagGroups {
+		_, _ = fmt.Fprintf(w, "%s:\n", g.title)
+		for _, name := range g.names {
+			if f := fs.Lookup(name); f != nil {
+				seen[name] = true
+				printFlag(w, f)
+			}
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+	headed := false
+	fs.VisitAll(func(f *flag.Flag) {
+		if seen[f.Name] {
+			return
+		}
+		if !headed {
+			headed = true
+			_, _ = fmt.Fprintln(w, "ungrouped (add to flagGroups):")
+		}
+		printFlag(w, f)
+	})
+}
+
+// printFlag renders one flag PrintDefaults-style, minus the sorting.
+func printFlag(w io.Writer, f *flag.Flag) {
+	arg, usage := flag.UnquoteUsage(f)
+	head := "  -" + f.Name
+	if arg != "" {
+		head += " " + arg
+	}
+	if f.DefValue != "" && f.DefValue != "false" && f.DefValue != "0" {
+		usage += fmt.Sprintf(" (default %s)", f.DefValue)
+	}
+	_, _ = fmt.Fprintln(w, head)
+	_, _ = fmt.Fprintln(w, "        "+usage)
 }
 
 func parseMode(s string) (foley.Mode, bool) {
@@ -123,6 +202,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runSew(args[1:], stdout, stderr)
 		case "play":
 			return runPlay(args[1:], stdin, stdout, stderr)
+		case "completion":
+			return runCompletion(args[1:], stdout, stderr)
 		}
 	}
 
@@ -141,7 +222,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	dress := fs.String("dress", "",
 		"replace the tape's dress layer: a built-in name (list: foley wardrobe), a .json path, an inline {json}, or none — the tape's explicit Sets still win")
 	keys := fs.String("keys", "",
-		"replace the tape's keys layer: off, or comma-separated keys tokens — on, small|medium|large, notation=keycap|icons, accent=<ansi|#hex|off>, plain (default: the tape's keys cue decides)")
+		"replace the tape's keys layer: off, or keys tokens separated by commas or spaces — on, small|medium|large, notation=keycap|icons, accent=<ansi|#hex|off>, plain (default: the tape's keys cue decides)")
 	watch := fs.Bool("watch", false,
 		"re-record every time the tape (or a Source'd tape or dress file it uses) is saved; ctrl-c stops")
 	themeFlag := fs.String("theme", "",
@@ -149,7 +230,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	outputScale := fs.Int("output-scale", 2,
 		"output resolution: 2 = retina (the default), 1 = logical size (about a quarter of the file weight; hairlines soften)")
 	dirFlag := fs.String("dir", "",
-		"working directory for the tape's command (default: the current directory)")
+		"working directory for the tape's COMMAND only (default: the current directory) — output paths still resolve against your cwd, like VHS")
+	studio := fs.Bool("studio", false,
+		"build a closed set for the take: a fresh directory becomes HOME, the working directory and every temp default, struck when the recording ends — your machine stays off camera (the tape's '# foley: studio' cue does the same)")
 	var extraEnv repeatFlag
 	fs.Var(&extraEnv, "env",
 		"add KEY=VALUE to the recording's environment without writing it into the tape (repeatable; wins over the tape's Env)")
@@ -171,7 +254,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       foley new <file.tape>\n" +
 		"       foley sew [-from <dress>] <name>\n" +
 		"       foley doctor [-fonts dir]\n" +
-		"       foley themes | fonts | wardrobe [name]\n"
+		"       foley themes | fonts | wardrobe [name]\n" +
+		"       foley completion bash|zsh|fish\n"
 	welcome := func(w io.Writer) {
 		showLogo(w)
 		_, _ = fmt.Fprint(w, pitch+"\n"+
@@ -182,17 +266,15 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			"  foley -watch demo.tape     re-record every time you save\n"+
 			"  foley validate demo.tape   the spotting session: lint + cue sheet\n"+
 			"  foley doctor               check fonts, engine and ffmpeg\n\n"+
-			"also: sew (make a dress) · themes · fonts · wardrobe\n"+
+			"also: sew (make a dress) · themes · fonts · wardrobe · completion\n"+
 			"flags: foley -h              the full reference\n")
 	}
 	fullHelp := func(w io.Writer) {
 		_, _ = fmt.Fprint(w, pitch+"\n"+usageLines+"\n"+
 			"\"-\" reads the tape from stdin. Relative paths in the tape (Output,\n"+
 			"Screenshot, Source) resolve against the current working directory,\n"+
-			"exactly like VHS.\n\n")
-		fs.SetOutput(w)
-		fs.PrintDefaults()
-		fs.SetOutput(stderr)
+			"exactly like VHS. Flags go before or after the tape path — both work.\n\n")
+		printGroupedFlags(w, fs)
 	}
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, usageLines+"\nfoley -h lists every flag\n")
@@ -207,7 +289,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	if err := fs.Parse(args); err != nil {
+	files, err := parseInterleaved(fs, args)
+	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -217,10 +300,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "foley "+versionString())
 		return 0
 	}
-	if fs.NArg() != 1 {
+	if len(files) != 1 {
 		fs.Usage()
 		return 2
 	}
+	tapeArg := files[0]
 	m, ok := parseMode(*mode)
 	if !ok {
 		_, _ = fmt.Fprintf(stderr, "foley: unknown mode %q (deterministic|realtime)\n", *mode)
@@ -253,6 +337,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "foley: -output-scale %d: 2 is the retina default, 1 halves to logical size\n", *outputScale)
 		return 2
 	}
+	if *studio && *dirFlag != "" {
+		_, _ = fmt.Fprintln(stderr, "foley: -studio and -dir contradict each other — the studio builds its own working directory")
+		return 2
+	}
 
 	// The pulse: a live progress line on stderr while recording and
 	// developing — only when stderr is a terminal; CI and pipes stay
@@ -267,6 +355,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		Theme:           themeRef,
 		OutputScale:     *outputScale,
 		Dir:             *dirFlag,
+		Studio:          *studio,
 		ExtraEnv:        extraEnv,
 		GIFLoop:         *gifLoop,
 		Cols:            *cols,
@@ -283,13 +372,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// own errors. It reports the files this tape pulls in (for -watch)
 	// and the exit code.
 	recordOnce := func() (watchPaths []string, exit int) {
-		watchPaths = []string{fs.Arg(0)}
-		src, err := readTape(fs.Arg(0), stdin)
+		watchPaths = []string{tapeArg}
+		src, err := readTape(tapeArg, stdin)
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
-			switch fs.Arg(0) {
-			case "play", "validate", "themes", "doctor", "new", "sew", "fonts", "wardrobe":
-				_, _ = fmt.Fprintf(stderr, "foley: (did you mean `foley %s …`? subcommands go before flags)\n", fs.Arg(0))
+			switch tapeArg {
+			case "play", "validate", "themes", "doctor", "new", "sew", "fonts", "wardrobe", "completion":
+				_, _ = fmt.Fprintf(stderr, "foley: (did you mean `foley %s …`? subcommands go before flags)\n", tapeArg)
 			}
 			return watchPaths, 1
 		}
@@ -320,11 +409,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	if *watch {
-		if fs.Arg(0) == "-" {
+		if tapeArg == "-" {
 			_, _ = fmt.Fprintln(stderr, "foley: -watch needs a file path (stdin has nothing to watch)")
 			return 2
 		}
-		watchLoop(ctx, stderr, watchPoll, fs.Arg(0), func() []string {
+		watchLoop(ctx, stderr, watchPoll, tapeArg, func() []string {
 			paths, _ := recordOnce() // a broken tape keeps the watch alive
 			return paths
 		})
@@ -350,13 +439,14 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 			"fails to parse; warnings alone exit 0.\n\n")
 		fs.PrintDefaults()
 	}
-	if err := fs.Parse(args); err != nil {
+	files, err := parseInterleaved(fs, args)
+	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
-	if fs.NArg() == 0 {
+	if len(files) == 0 {
 		fs.Usage()
 		return 2
 	}
@@ -367,7 +457,7 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 	}
 	opts := tape.RunOptions{Mode: m, ModifyOtherKeys: *mok}
 	exit := 0
-	for _, arg := range fs.Args() {
+	for _, arg := range files {
 		src, err := readTape(arg, stdin)
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
@@ -384,7 +474,7 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 			_, _ = fmt.Fprintf(stderr, "%s: warning: %s\n", arg, w)
 		}
 		if n := len(t.Cues); n > 0 {
-			dresses, keys, highlights, zooms := 0, 0, 0, 0
+			dresses, keys, highlights, zooms, studios := 0, 0, 0, 0, 0
 			for _, c := range t.Cues {
 				switch c.Kind {
 				case tape.CueDress:
@@ -395,13 +485,15 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 					highlights++
 				case tape.CueZoom:
 					zooms++
+				case tape.CueStudio:
+					studios++
 				}
 			}
 			plural := "s"
 			if n == 1 {
 				plural = ""
 			}
-			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys, %d highlight, %d zoom\n", arg, n, plural, dresses, keys, highlights, zooms)
+			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys, %d highlight, %d zoom, %d studio\n", arg, n, plural, dresses, keys, highlights, zooms, studios)
 			if zooms > 0 {
 				_, _ = fmt.Fprintf(stderr, "%s: note: the zoom sharp-cap check needs the real font geometry — it runs at frame zero of the recording, before any key is typed\n", arg)
 			}
@@ -731,17 +823,21 @@ func runSew(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sew", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	from := fs.String("from", "",
-		"start from an existing dress: a built-in (see `foley wardrobe`), a .json path, or a name in ~/.config/foley/dresses")
-	if err := fs.Parse(args); err != nil {
+		"start from an existing dress: a built-in (list: foley wardrobe), a .json path, or a name in ~/.config/foley/dresses")
+	files, err := parseInterleaved(fs, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
-	if fs.NArg() != 1 {
+	if len(files) != 1 {
 		_, _ = fmt.Fprint(stderr, "usage: foley sew [-from <dress>] <name>\n\n"+
 			"Writes <name>.dress.json — a dress to edit and wear with a\n"+
 			"`# foley: dress ./<name>.dress.json` cue (or -dress per run).\n")
 		return 2
 	}
-	name := fs.Arg(0)
+	name := files[0]
 	path := name
 	if !strings.HasSuffix(path, ".json") {
 		path = name + ".dress.json"

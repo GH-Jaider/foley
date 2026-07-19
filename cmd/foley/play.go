@@ -48,13 +48,14 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			"graphics gets the first output screened in the system viewer.\n\n")
 		fs.PrintDefaults()
 	}
-	if err := fs.Parse(args); err != nil {
+	files, err := parseInterleaved(fs, args)
+	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
-	if fs.NArg() != 1 {
+	if len(files) != 1 {
 		fs.Usage()
 		return 2
 	}
@@ -97,7 +98,7 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	defer func() { _ = tty.Close() }()
 
-	src, err := readTape(fs.Arg(0), stdin)
+	src, err := readTape(files[0], stdin)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
 		return 1
@@ -124,7 +125,7 @@ func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	})
 	progress.done()
 	if rep.FramesDir != "" {
-		defer func() { _ = os.RemoveAll(rep.FramesDir) }()
+		defer func() { _ = os.RemoveAll(rep.FramesDir) }() //nolint:gosec // the recorder's OWN staging dir (MkdirTemp), reported back by Run — not user input
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)

@@ -30,7 +30,7 @@ type fileSnapshot struct {
 func snapshotAll(paths []string) []fileSnapshot {
 	out := make([]fileSnapshot, len(paths))
 	for i, p := range paths {
-		if st, err := os.Stat(p); err == nil {
+		if st, err := os.Stat(p); err == nil { //nolint:gosec // the watched tape/dress paths are the CLI's whole purpose
 			out[i] = fileSnapshot{mtime: st.ModTime(), size: st.Size(), exists: true}
 		}
 	}
