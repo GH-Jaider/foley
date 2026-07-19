@@ -1,0 +1,31 @@
+{
+  "theme": {
+    "background": "#0d0b0a",
+    "foreground": "#ece6df",
+    "cursor": "#ff4f45",
+    "selection": "#332c28",
+    "black": "#191514",
+    "red": "#f25e54",
+    "green": "#9ec07c",
+    "yellow": "#e2b45a",
+    "blue": "#8aa8c7",
+    "magenta": "#c98a9b",
+    "cyan": "#93b8ab",
+    "white": "#d8d0c7",
+    "brightBlack": "#57493f",
+    "brightRed": "#ff4f45",
+    "brightGreen": "#b4d38f",
+    "brightYellow": "#f0c877",
+    "brightBlue": "#a4c0dc",
+    "brightMagenta": "#ff7a6e",
+    "brightCyan": "#abcfc2",
+    "brightWhite": "#ece6df"
+  },
+  "windowBar": "Rings",
+  "windowBarSize": 28,
+  "windowTitle": "foley",
+  "borderRadius": 10,
+  "padding": 24,
+  "margin": 32,
+  "marginFill": "#191514"
+}

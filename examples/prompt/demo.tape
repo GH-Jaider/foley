@@ -5,7 +5,8 @@
 # it degrades to VHS's own prompt.
 
 Output prompt.gif
-# foley: dress macos
+# foley: dress gnome
+# foley: studio
 
 Set Width 700
 Set Height 230
@@ -15,7 +16,7 @@ Set WaitTimeout 20s
 Env PS1 "\[\e[35m\]❯\[\e[0m\] "
 
 Sleep 400ms
-Type "echo mi prompt, mis reglas"
+Type "echo my prompt, my rules"
 Enter
 Wait
 Sleep 2s

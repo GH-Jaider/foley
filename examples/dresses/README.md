@@ -10,6 +10,7 @@ the wardrobe.
 
 | Tape | Look |
 |---|---|
+| `foley.tape` | the house dress: film-black margin, warm screen, REC cursor — the brand as wardrobe |
 | `macos.tape` | traffic lights + centered `~` title, rounded — the macOS genre |
 | `gnome.tape` | CSD close button + centered title — the Linux/GNOME genre |
 | `bare.tape` | content only — padding 0 |

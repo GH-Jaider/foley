@@ -1,55 +1,89 @@
-# The camera (ADR-019): push onto the line that matters, hold, pull
-# back. The scene renders on a 2x supersampled master, so the zoom is
-# a 1:1 crop — never an upscale, never blur. This gif records at
-# logical size for the README: foley -output-scale 1 demo.tape Here: vim as the viewer,
-# the camera as the reviewer's eye.
+# The camera (ADR-019) earning its keep: tmux splits the screen, the
+# right pane runs the tests, and the FAIL is too small to read — so
+# the camera pushes onto THAT PANE, holds, and pulls back. The scene
+# renders on a 2x supersampled master: the zoom is a 1:1 crop, never
+# an upscale, never blur. The keys reel narrates the tmux chord.
 
 Output zoom.gif
-# foley: dress macos
+# noir, plus the reactive title (ADR-022): the bar starts as "~" and
+# becomes "tmux" the moment tmux declares itself via OSC 2 — like a
+# real terminal's tab. Footage, not host state.
+# foley: dress {"theme":"TokyoNight","windowBar":"Colorful","windowBarSize":28,"windowTitle":"~","borderRadius":10,"padding":30,"margin":36,"marginFill":"#0d0e16","windowTitleFollow":true}
+# foley: keys small
+# foley: studio
 
-Require vim
+Require tmux
+Require bat
 Set Shell bash
-Set Width 900
-Set Height 480
+Set Width 1000
+Set Height 500
 Set FontSize 15
-Set TypingSpeed 40ms
+Set TypingSpeed 55ms
 
 Hide
-Type@0ms "cd $(mktemp -d)"
+# The studio (ADR-023) is the set: tmux reads the take's own
+# ~/.tmux.conf (no status clock — the recording must not tick; the
+# default status-right even carries the HOSTNAME) and set-titles makes
+# it DECLARE its title over OSC 2 (the string is pinned: the default
+# leaks pane titles and hostnames). TMUX_TMPDIR is the one tmux-ism
+# the studio's TMPDIR does not cover: without it the SERVER lands on
+# the host's socket and outlives the take. Panes do not inherit PS1
+# through tmux, so a tiny rcfile pins the same prompt the outer shell
+# wears (%q survives the color escapes).
+Type@0ms `export TMUX_TMPDIR=$TMPDIR && printf 'PS1=%q\n' "$PS1" > ~/.panerc`
 Enter
-Type@0ms "cat > server.go <<'GO'"
+Type@0ms `printf 'set -g status-right ""\nset -g default-command "bash --rcfile ~/.panerc --noprofile"\nset -g set-titles on\nset -g set-titles-string "tmux"\n' > ~/.tmux.conf`
 Enter
-Type@0ms "package main"
+Type@0ms "printf 'func handle() error {\n\treturn run(0) // FIXME: retries off\n}\n' > retry.go"
 Enter
-Type@0ms ""
+Type@0ms "cat > test.sh <<'SH'"
 Enter
-Type@0ms "func handle(retries int) error {"
+Type@0ms "printf '\033[1mgo test ./retry\033[0m\n'"
 Enter
-Type@0ms "	if retries < 0 { // BUG: zero disables the retry loop"
+Type@0ms "printf -- '--- \033[31mFAIL\033[0m: TestHandleRetries (0.00s)\n'"
 Enter
-Type@0ms "		return errNoRetries"
+Type@0ms "printf '    retry_test.go:14: run(0): retries disabled,\n'"
 Enter
-Type@0ms "	}"
+Type@0ms "printf '        want 3 attempts before giving up\n'"
 Enter
-Type@0ms "	return runWithRetries(retries)"
+Type@0ms "printf '\033[31mFAIL\033[0m\nexit status 1\n'"
 Enter
-Type@0ms "}"
-Enter
-Type@0ms "GO"
+Type@0ms "SH"
 Enter
 Type@0ms "clear"
 Enter
 Show
 
-Type "vim -c 'set bg=dark nu' --clean server.go"
+Sleep 400ms
+Type "tmux"
+Sleep 300ms
+Enter
+Sleep 1100ms
+
+Type "bat --style=numbers --theme=ansi retry.go"
+Sleep 300ms
+Enter
+Sleep 1000ms
+
+# The tmux chord, narrated by the reel: prefix, then the split.
+Ctrl+B
+Sleep 450ms
+Type "%"
+Sleep 1100ms
+
+Type "sh test.sh"
+Sleep 300ms
 Enter
 Sleep 1200ms
-# foley: zoom 0,2 50x12 700ms
-Sleep 1800ms
+
+# Push onto the right pane: the FAIL becomes readable.
+# foley: zoom 40,0 56x13 700ms
+Sleep 2400ms
 # foley: zoom off 700ms
-Sleep 600ms
+Sleep 1200ms
+
+# Epilogue, off camera: the private tmux server dies with the take —
+# no orphan process survives the render.
 Hide
-Type ":q!"
+Type@0ms "tmux kill-server"
 Enter
-Show
-Sleep 400ms

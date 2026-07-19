@@ -6,7 +6,7 @@ Output gnome.gif
 # foley: dress gnome
 
 Set Width 700
-Set Height 230
+Set Height 340
 Set FontSize 16
 Set TypingSpeed 35ms
 

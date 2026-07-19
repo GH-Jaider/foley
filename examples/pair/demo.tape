@@ -7,6 +7,7 @@
 
 Output pair.gif
 # foley: dress macos
+# foley: studio
 
 Set Shell bash
 Set Width 860
@@ -15,7 +16,7 @@ Set FontSize 15
 Set TypingSpeed 35ms
 
 Hide
-Type@0ms "cd $(mktemp -d) && cat > release.sh <<'SH'"
+Type@0ms "cat > release.sh <<'SH'"
 Enter
 Type@0ms "printf '\033[33m→\033[0m building 3 targets\n'"
 Enter

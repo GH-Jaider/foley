@@ -6,7 +6,7 @@ Output noir.gif
 # foley: dress noir
 
 Set Width 700
-Set Height 260
+Set Height 340
 Set FontSize 16
 Set TypingSpeed 35ms
 

@@ -4,6 +4,7 @@
 # runs in (ADR-021); fastfetch just reports it.
 
 Output fetch.gif
+# foley: dress foley
 
 Require fastfetch
 Set Shell bash

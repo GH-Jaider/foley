@@ -4,6 +4,7 @@
 
 Output highlight.gif
 # foley: dress noir
+# foley: studio
 
 Set Shell bash
 Set Width 860
@@ -12,7 +13,7 @@ Set FontSize 15
 Set TypingSpeed 35ms
 
 Hide
-Type@0ms "cd $(mktemp -d) && cat > run-tests.sh <<'SH'"
+Type@0ms "cat > run-tests.sh <<'SH'"
 Enter
 Type@0ms "#!/bin/sh"
 Enter
