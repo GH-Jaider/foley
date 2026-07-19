@@ -70,14 +70,19 @@ func TestKeysPhrasesFlushAndCut(t *testing.T) {
 		t.Fatalf("post-flush alpha = %d", a)
 	}
 
+	// The width cut measures REAL pixels: 30px caps + 5px gaps on a
+	// 100px strip fit exactly three (30+5+30+5+30); the fourth splices.
 	kt = NewKeysTrack(KeysKeycap)
-	kt.setCapacity(3)
+	kt.bind(func(*keyCap) int { return 30 }, 5, 100)
 	base := time.Duration(0)
 	for i, r := range "abcd" {
 		kt.AddKey(key.RuneKey(r), base+time.Duration(i)*700*time.Millisecond, false)
 	}
 	if len(kt.phrases) != 2 {
 		t.Fatalf("phrases = %d, want 2 after a width cut", len(kt.phrases))
+	}
+	if len(kt.phrases[0].caps) != 3 || len(kt.phrases[1].caps) != 1 {
+		t.Fatalf("cut split = %d+%d caps, want 3+1", len(kt.phrases[0].caps), len(kt.phrases[1].caps))
 	}
 	cutAt := 3 * 700 * time.Millisecond
 	if !kt.phrases[0].quick || kt.phrases[0].end != cutAt {
@@ -88,6 +93,29 @@ func TestKeysPhrasesFlushAndCut(t *testing.T) {
 	}
 	if a := kt.phrases[0].alphaAt(cutAt + keysCutFade/2); a == 0 || a == 255 {
 		t.Fatalf("mid-cut alpha = %d, want a quick-fade step", a)
+	}
+
+	// A coalescing counter that would spill past the edge splices too:
+	// the repeat opens the next take, the placed cap never grows over.
+	kt = NewKeysTrack(KeysKeycap)
+	kt.bind(func(c *keyCap) int {
+		if c.count > 1 {
+			return 60 // "j ×2" is wider than the strip's leftover
+		}
+		return 30
+	}, 5, 100)
+	kt.AddKey(key.RuneKey('a'), 0, false)
+	kt.AddKey(key.RuneKey('b'), 100*time.Millisecond, false)
+	kt.AddKey(key.RuneKey('j'), 200*time.Millisecond, false)
+	kt.AddKey(key.RuneKey('j'), 300*time.Millisecond, false) // ×2 needs 130px: splice
+	if len(kt.phrases) != 2 || len(kt.phrases[1].caps) != 1 {
+		t.Fatalf("coalesce overflow: phrases = %+v, want a splice with a fresh j", kt.phrases)
+	}
+	if last := kt.phrases[1].caps[0]; last.count != 1 || last.label != "j" {
+		t.Fatalf("the repeat must start the new take fresh: %+v", last)
+	}
+	if first := kt.phrases[0].caps[2]; first.count != 1 {
+		t.Fatalf("the placed cap must not have grown: %+v", first)
 	}
 }
 

@@ -105,6 +105,7 @@ type keyCap struct {
 	mod   bool // special/chord: accent styling
 	enter bool // closes the take: shorter flush idle
 	count int  // coalesced repeats (label gains " ×N")
+	w     int  // drawn width in scaled px (set via the bound measure)
 	first time.Duration
 	last  time.Duration
 }
@@ -129,6 +130,7 @@ func (c *keyCap) idleAfter() time.Duration {
 // fade schedule; the open phrase (at most one, the last) has end == -1.
 type phrase struct {
 	caps   []keyCap
+	width  int           // drawn px so far (caps + gaps) — the cut accounting
 	reveal time.Duration // caps draw from max(cap.first, reveal): after a width cut, the new phrase waits for the old one's quick fade
 	end    time.Duration // when the fade starts; -1 while open
 	quick  bool          // width cut (fast fade) vs idle flush (gentle)
@@ -140,24 +142,43 @@ type phrase struct {
 // a pure function of the track and the render time.
 type KeysTrack struct {
 	phrases  []phrase
-	capacity int // caps per phrase; assembly sets it from the band width
 	notation KeysNotation
 	t        time.Duration
+	// The width cut measures REAL caps (assembly binds the raster's
+	// own width math — shaping is deterministic, so so is the cut):
+	// the strip fills to its edge, then splices. Unbound (tests,
+	// headless misuse) falls back to a cap count.
+	measure func(*keyCap) int
+	gap     int
+	limit   int
 }
 
 // NewKeysTrack returns an empty input track speaking the given
 // notation (the cap face derives at AddKey time — coalescing compares
 // faces, so the vocabulary is fixed per recording).
 func NewKeysTrack(notation KeysNotation) *KeysTrack {
-	return &KeysTrack{capacity: keysMaxCaps, notation: notation}
+	return &KeysTrack{notation: notation}
 }
 
-// setCapacity bounds phrase length to what the band actually fits
-// (called once at assembly — same inputs, same capacity: deterministic).
-func (kt *KeysTrack) setCapacity(n int) {
-	if n > 0 && n < kt.capacity {
-		kt.capacity = n
+// bind wires the width-cut accounting to the raster (called once at
+// assembly): measure is the cap's drawn width, gap the inter-cap gap
+// and limit the strip's usable width, all in scaled px.
+func (kt *KeysTrack) bind(measure func(*keyCap) int, gap, limit int) {
+	kt.measure, kt.gap, kt.limit = measure, gap, limit
+}
+
+// fits reports whether the phrase can grow by w px — a new cap also
+// pays the inter-cap gap (the first one does not). Unbound tracks
+// fall back to counting caps.
+func (p *phrase) fits(kt *KeysTrack, w int, newCap bool) bool {
+	if kt.measure == nil {
+		return !newCap || len(p.caps) < keysMaxCaps
 	}
+	need := p.width + w
+	if newCap && len(p.caps) > 0 {
+		need += kt.gap
+	}
+	return need <= kt.limit
 }
 
 // AddKey records one injected keystroke. Hidden input is dropped: if
@@ -171,6 +192,9 @@ func (kt *KeysTrack) AddKey(k key.Key, at time.Duration, hidden bool) {
 		return
 	}
 	c.count, c.first, c.last = 1, at, at
+	if kt.measure != nil {
+		c.w = kt.measure(&c)
+	}
 	cur := kt.open()
 	// An idle gap flushes the phrase: it faded out before this key.
 	if cur != nil {
@@ -181,25 +205,39 @@ func (kt *KeysTrack) AddKey(k key.Key, at time.Duration, hidden bool) {
 		}
 	}
 	if cur != nil {
-		// Coalesce a repeat of the SAME cap inside the window.
+		// Coalesce a repeat of the SAME cap inside the window — unless
+		// the counter's growth would spill past the strip's edge; then
+		// the repeat starts the next take instead (a splice: the
+		// placed cap never moves nor shrinks, first law).
 		lc := &cur.caps[len(cur.caps)-1]
 		if lc.sameFace(c) && at-lc.last <= keysRepeat {
-			lc.count++
-			lc.last = at
+			grown := *lc
+			grown.count++
+			grown.last = at
+			if kt.measure != nil {
+				grown.w = kt.measure(&grown)
+			}
+			if delta := grown.w - lc.w; cur.fits(kt, delta, false) {
+				cur.width += delta
+				*lc = grown
+				return
+			}
+		} else if cur.fits(kt, c.w, true) {
+			cur.width += kt.gap + c.w
+			cur.caps = append(cur.caps, c)
 			return
 		}
 		// Width cut: the full phrase fades fast; the new one reveals
 		// after the cut (the mockup clears, then pushes).
-		if len(cur.caps) >= kt.capacity {
-			cur.end, cur.quick = at, true
-			kt.phrases = append(kt.phrases, phrase{reveal: at + keysCutFade, end: -1})
-			cur = &kt.phrases[len(kt.phrases)-1]
-		}
+		cur.end, cur.quick = at, true
+		kt.phrases = append(kt.phrases, phrase{reveal: at + keysCutFade, end: -1})
+		cur = &kt.phrases[len(kt.phrases)-1]
 	}
 	if cur == nil {
 		kt.phrases = append(kt.phrases, phrase{end: -1})
 		cur = &kt.phrases[len(kt.phrases)-1]
 	}
+	cur.width = c.w
 	cur.caps = append(cur.caps, c)
 }
 
@@ -406,6 +444,51 @@ func (r *Rasterizer) capStrip(c keyCap) textStrip {
 	return r.keyStrip(c.label, px)
 }
 
+// capContent is the cap's face and counter strips plus their combined
+// content width — the single width truth the cut accounting (via
+// capWidth, bound at assembly) and drawKeyChips share.
+func (r *Rasterizer) capContent(c keyCap) (strip, cnt textStrip, contentW int) {
+	if c.space {
+		if c.count > 1 {
+			cnt = r.keyStrip(r.keysMult+itoa(c.count), r.keysCapPx*7/10)
+		}
+		return textStrip{}, cnt, 0
+	}
+	strip = r.capStrip(c)
+	if strip.mask == nil {
+		return strip, cnt, 0
+	}
+	contentW = strip.mask.alpha.Bounds().Dx()
+	if c.count > 1 {
+		cnt = r.keyStrip(r.keysMult+itoa(c.count), r.keysCapPx*7/10)
+		if cnt.mask != nil {
+			contentW += 4*r.s + cnt.mask.alpha.Bounds().Dx()
+		}
+	}
+	return strip, cnt, contentW
+}
+
+// keysFrameH is the strip's frame-row height in scaled px, derivable
+// from the band before drawChrome ever runs.
+func (r *Rasterizer) keysFrameH() int {
+	return (r.opts.Window.KeysBand - keysBandPadTop - keysBandPadBot - 2*(keysSprocketH+2*keysSprocketPad)) * r.s
+}
+
+// capWidth is the cap's drawn width in scaled px.
+func (r *Rasterizer) capWidth(c *keyCap) int {
+	frameH := r.keysFrameH()
+	if c.space {
+		// The blank spacebar: 1.5× wide, no face.
+		return frameH * 3 / 2
+	}
+	_, _, contentW := r.capContent(*c)
+	w := contentW + 2*keysCapPad*r.s
+	if w < frameH {
+		w = frameH // square minimum, like a film frame
+	}
+	return w
+}
+
 // textStrip pairs a rendered label with its baseline ascent, so caps
 // can align BASELINES across sizes (the key and its counter).
 type textStrip struct {
@@ -506,46 +589,28 @@ func (r *Rasterizer) drawKeyChips(dst *image.RGBA, f *vtengine.Frame) {
 			if t < birth {
 				break // frames are chronological: nothing later is born
 			}
-			var counter string
-			if c.count > 1 {
-				counter = r.keysMult + itoa(c.count)
-			}
 			if c.space {
 				// The blank spacebar: 1.5× wide, window-toned, no face.
-				w := frameH * 3 / 2
+				w := r.capWidth(&c)
 				if x+w > r.bandRect.Max.X {
 					break
 				}
 				rect := image.Rect(x, cy-frameH/2, x+w, cy+frameH/2)
 				fillRoundedRect(dst, rect, keysCapRad*s, bg, alpha)
-				if counter != "" {
-					cnt := r.keyStrip(counter, r.keysCapPx*7/10)
-					if cnt.mask != nil {
-						cb := cnt.mask.alpha.Bounds()
-						blitMaskFaded(dst, cnt.mask, rect.Min.X+(w-cb.Dx())/2, rect.Min.Y+(frameH-cb.Dy())/2, subTxt, alpha)
-					}
+				if _, cnt, _ := r.capContent(c); cnt.mask != nil {
+					cb := cnt.mask.alpha.Bounds()
+					blitMaskFaded(dst, cnt.mask, rect.Min.X+(w-cb.Dx())/2, rect.Min.Y+(frameH-cb.Dy())/2, subTxt, alpha)
 				}
 				x += w + gap
 				continue
 			}
-			strip := r.capStrip(c)
+			strip, cnt, contentW := r.capContent(c)
 			if strip.mask == nil {
 				continue
 			}
-			var cnt textStrip
-			if counter != "" {
-				cnt = r.keyStrip(counter, r.keysCapPx*7/10)
-			}
-			contentW := strip.mask.alpha.Bounds().Dx()
-			if cnt.mask != nil {
-				contentW += 4*s + cnt.mask.alpha.Bounds().Dx()
-			}
-			w := contentW + 2*keysCapPad*s
-			if w < frameH {
-				w = frameH // square minimum, like a film frame
-			}
+			w := r.capWidth(&c)
 			if x+w > r.bandRect.Max.X {
-				break // clip guard; capacity should prevent this
+				break // clip guard; the width cut should prevent this
 			}
 			tx := txt
 			if c.mod {
