@@ -11,6 +11,18 @@ type shell struct {
 	env     []string
 }
 
+// runEnv is the shell-table env layer: the table's own variables plus
+// SHELL pinned to the launched shell's resolved path. The recorded
+// world's login shell IS the tape's shell — without the pin, $SHELL
+// leaks the HOST user's login shell and anything that consults it
+// (tmux default-shell, vim :terminal, fzf) diverges across machines
+// (found live: a tmux pane opening the host's zsh inside a
+// `Set Shell bash` take). Tape Env and -env still override by merge
+// order.
+func runEnv(sh shell, shellPath string) []string {
+	return append(append([]string(nil), sh.env...), "SHELL="+shellPath)
+}
+
 // shells reproduces VHS's shell table (shell.go of the pinned release,
 // MIT) verbatim: a migrated tape must meet the same prompt on the same
 // flags. Update by re-reading upstream when the vendor pin moves.
