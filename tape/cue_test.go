@@ -95,6 +95,25 @@ func TestCueScanner(t *testing.T) {
 			t.Fatalf("CRLF: err=%v ref=%+v", err, tp.DressCue())
 		}
 	})
+	t.Run("studio", func(t *testing.T) {
+		tp, err := tape.Parse("Output d.gif\n# foley: studio\nType \"x\"\n")
+		if err != nil || !tp.StudioCue() {
+			t.Fatalf("studio cue: err=%v studio=%v", err, tp.StudioCue())
+		}
+		if tp, _ := tape.Parse("Output d.gif\nType \"x\"\n"); tp.StudioCue() {
+			t.Fatal("a tape without the cue reports a studio")
+		}
+		cases := []struct{ src, want string }{
+			{"# foley: studio on", "takes no arguments"},
+			{"# foley: studio\n# foley: studio", "lines 2 and 3"},
+		}
+		for _, c := range cases {
+			_, err := tape.Parse("Output d.gif\n" + c.src + "\nType \"x\"\n")
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("%q: err = %v, want %q", c.src, err, c.want)
+			}
+		}
+	})
 	t.Run("plain_comments_are_not_cues", func(t *testing.T) {
 		tp, err := tape.Parse("Output d.gif\n# foley is great\n# foleys: nope\nType \"x\"\n")
 		if err != nil {

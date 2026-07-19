@@ -2,6 +2,7 @@ package tape
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -72,6 +73,13 @@ type RunOptions struct {
 	// Dir runs the tape's command in this working directory (#320's
 	// ask, without touching the vendored grammar). Empty inherits.
 	Dir string
+	// Studio builds a closed set for the take (ADR-023): a fresh
+	// directory becomes HOME, the working directory and every temp/XDG
+	// default, env identity reads foley@studio, and the set is struck
+	// when the run ends — nothing of the host's home on camera, nothing
+	// of the take left on the host. The tape's `# foley: studio` cue
+	// turns it on too; either source suffices. Contradicts Dir, loudly.
+	Studio bool
 	// ExtraEnv adds KEY=VALUE pairs to the child environment WITHOUT
 	// writing them into the tape (#621: secrets and machine-local
 	// values). They win over the tape's own Env. Prompt variables here
@@ -154,6 +162,12 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if err != nil {
 		return rep, err
 	}
+	// The studio (ADR-023) builds its OWN working directory; an explicit
+	// Dir contradicts it and dies here, before anything records.
+	studio := opts.Studio || t.StudioCue()
+	if studio && opts.Dir != "" {
+		return rep, errors.New("tape: studio with an explicit working directory — the studio builds its own set; drop Dir (-dir) or record without studio")
+	}
 	for _, kv := range opts.ExtraEnv {
 		if k, _, _ := strings.Cut(kv, "="); k == "PS1" || k == "PROMPT" {
 			warn("-env %s: prompt variables from the CLI do not retune bare Wait — put `Env %s` in the tape for a prompt-aware Wait", k, k)
@@ -173,7 +187,8 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if sh.generic {
 		warn("Set Shell %s: not in foley's table (VHS's nine) — launched bare with its own defaults; the standard `>` Wait pattern will not match: Wait /regex/ explicitly or set Env PS1 if it honors it", settings.Shell)
 	}
-	if _, err := execx.LookPath(sh.command[0]); err != nil {
+	shPath, err := execx.LookPath(sh.command[0])
+	if err != nil {
 		return rep, fmt.Errorf("tape: Set Shell %s: %w", settings.Shell, err)
 	}
 	// Neutral frame: the effective ThemeRef may come from Set Theme OR a
@@ -183,12 +198,36 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return rep, fmt.Errorf("tape: theme: %w", err)
 	}
 
+	// The studio layer (ADR-023): a fresh set the take lives in, struck
+	// on the way out — after the recorder's own Close, so the child is
+	// gone before the set goes. Tape Env and -env still win by merge
+	// order: a tape may pin its own HOSTNAME on top of the set's.
+	var studioEnv []string
+	dir := opts.Dir
+	if studio {
+		set, err := buildStudio()
+		if err != nil {
+			return rep, fmt.Errorf("tape: %w", err)
+		}
+		defer func() {
+			if err := set.strike(); err != nil {
+				warn("studio: the set was not fully struck: %v — remove %s by hand", err, set.root)
+			}
+		}()
+		studioEnv = set.env()
+		dir = set.stage()
+	}
+
 	// The base layer is foley's terminal identity (ADR-021): the host
 	// terminal's env scrubbed, foley's declared — a fastfetch inside
 	// the demo names foley, and the recording stops depending on which
-	// terminal it was launched from. Shell table, tape Env and -env
-	// still win, in that order.
-	env := mergeEnv(foley.TerminalEnv(os.Environ()), sh.env, envPairs(t.Env), opts.ExtraEnv)
+	// terminal it was launched from. Shell table, studio, tape Env and
+	// -env still win, in that order.
+	identEnv, identWarnings := foley.TerminalIdentity(os.Environ())
+	for _, w := range identWarnings {
+		warn("%s", w)
+	}
+	env := mergeEnv(identEnv, runEnv(sh, shPath), studioEnv, envPairs(t.Env), opts.ExtraEnv)
 
 	// A custom prompt (ADR-017): `Env PS1` was always legal grammar —
 	// mergeEnv above is what makes it actually WIN over the shell
@@ -220,30 +259,31 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		}
 	}
 	rec, err := foley.New(foley.Options{
-		Command:         sh.command,
-		Dir:             opts.Dir,
-		Env:             env,
-		Cols:            opts.Cols,
-		Rows:            opts.Rows,
-		PixelWidth:      settings.Width,
-		PixelHeight:     settings.Height,
-		PixelPadding:    settings.Padding,
-		Margin:          settings.Margin,
-		MarginFill:      settings.MarginFill,
-		WindowBar:       bar,
-		WindowBarSize:   settings.WindowBarSize,
-		WindowBarColor:  settings.WindowBarColor,
-		WindowTitle:     settings.WindowTitle,
-		WindowTitleLeft: settings.TitleAlign == "left",
-		KeysOverlay:     settings.KeysOverlay,
-		KeysSize:        settings.Keys.Size,
-		KeysNotation:    settings.Keys.Notation,
-		KeysAccent:      settings.Keys.Accent,
-		KeysPlain:       settings.Keys.Plain,
-		BorderRadius:    settings.BorderRadius,
-		FontSize:        settings.FontSize,
-		FontFamily:      fontFamilyFor(settings.FontFamily),
-		FontFile:        fontFileFor(settings.FontFamily),
+		Command:           sh.command,
+		Dir:               dir,
+		Env:               env,
+		Cols:              opts.Cols,
+		Rows:              opts.Rows,
+		PixelWidth:        settings.Width,
+		PixelHeight:       settings.Height,
+		PixelPadding:      settings.Padding,
+		Margin:            settings.Margin,
+		MarginFill:        settings.MarginFill,
+		WindowBar:         bar,
+		WindowBarSize:     settings.WindowBarSize,
+		WindowBarColor:    settings.WindowBarColor,
+		WindowTitle:       settings.WindowTitle,
+		WindowTitleLeft:   settings.TitleAlign == "left",
+		WindowTitleFollow: settings.WindowTitleFollow,
+		KeysOverlay:       settings.KeysOverlay,
+		KeysSize:          settings.Keys.Size,
+		KeysNotation:      settings.Keys.Notation,
+		KeysAccent:        settings.Keys.Accent,
+		KeysPlain:         settings.Keys.Plain,
+		BorderRadius:      settings.BorderRadius,
+		FontSize:          settings.FontSize,
+		FontFamily:        fontFamilyFor(settings.FontFamily),
+		FontFile:          fontFileFor(settings.FontFamily),
 		FontFiles: foley.FontFiles{
 			Regular: settings.FontFiles.Regular, Bold: settings.FontFiles.Bold,
 			Italic: settings.FontFiles.Italic, BoldItalic: settings.FontFiles.BoldItalic,

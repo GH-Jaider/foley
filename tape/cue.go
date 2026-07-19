@@ -41,13 +41,14 @@ type Cue struct {
 // CueKind identifies a cue type.
 type CueKind uint8
 
-// The cue types: dress (ADR-014), keys (ADR-016), highlight (ADR-018)
-// and zoom (ADR-019); captions extend the same scanner later.
+// The cue types: dress (ADR-014), keys (ADR-016), highlight (ADR-018),
+// zoom (ADR-019) and studio (ADR-023).
 const (
 	CueDress CueKind = iota
 	CueKeys
 	CueHighlight
 	CueZoom
+	CueStudio
 )
 
 // ZoomCue is one camera direction (ADR-019): frame a CELL rect
@@ -161,8 +162,15 @@ func scanCues(src string) ([]Cue, error) {
 				return nil, fmt.Errorf("tape: %d: %w", i+1, err)
 			}
 			cues = append(cues, Cue{Line: i + 1, Kind: CueZoom, AfterCommand: commands, Zoom: z})
+		case "studio":
+			// The studio (ADR-023) is a switch, not a knob: anything
+			// after the word is a mistake and dies here, in validate.
+			if rest != "" {
+				return nil, fmt.Errorf("tape: %d: studio: unexpected %q — the cue takes no arguments", i+1, rest)
+			}
+			cues = append(cues, Cue{Line: i + 1, Kind: CueStudio})
 		default:
-			return nil, fmt.Errorf("tape: %d: unknown cue %q (available cues: dress, keys, highlight, zoom)", i+1, kind)
+			return nil, fmt.Errorf("tape: %d: unknown cue %q (available cues: dress, keys, highlight, zoom, studio)", i+1, kind)
 		}
 	}
 	return cues, nil

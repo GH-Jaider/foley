@@ -360,7 +360,7 @@ Sleep 400ms
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"P=foley", "T=xterm-256color", "K=[]", "D=propio"} {
+	for _, want := range []string{"P=foley", "T=xterm-ghostty", "K=[]", "D=propio"} {
 		if !strings.Contains(string(text), want) {
 			t.Fatalf("final screen lacks %q — the identity layer leaked:\n%s", want, text)
 		}
@@ -683,5 +683,91 @@ Sleep 400ms
 	// exact quantization is pinned by the deterministic e2e instead.
 	if len(g.Image) < 4 {
 		t.Fatalf("gif has %d frames, want the zoom transitions captured", len(g.Image))
+	}
+}
+
+// TestStudioEndToEnd proves ADR-023 against a real bash: the take runs
+// INSIDE the set (the working directory is the set's home, $USER is the
+// set's identity), the tape's own Env still wins over the studio layer
+// (HOSTNAME reads the tape's value, not the set's), and the set is
+// struck by the time Run returns — nothing of the take on the host,
+// nothing of the host's home on camera.
+func TestStudioEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	_, err := execx.Find(ctx, execx.FFmpeg)
+	testassets.Require(t, err, "install ffmpeg (the CI workflow installs it)")
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	// FontSize 14 at Width 1200 leaves ~140 columns: the set's absolute
+	// path must fit on ONE line for the strike check below to read it.
+	src := `Output final.txt
+Require bash
+Set Shell bash
+Set Width 1200
+Set Height 400
+Set FontSize 14
+Set WaitTimeout 20s
+# foley: studio
+Env HOSTNAME "backlot"
+Sleep 300ms
+Type "echo $USER@$HOSTNAME"
+Enter
+Wait
+Type "pwd"
+Enter
+Wait
+Sleep 400ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts})
+	if err != nil {
+		t.Fatalf("run: %v (warnings: %v)", err, rep.Warnings)
+	}
+	text, err := os.ReadFile(filepath.Join(dir, "final.txt")) //nolint:gosec // TempDir path
+	if err != nil {
+		t.Fatal(err)
+	}
+	// USER comes from the studio layer; HOSTNAME from the tape's Env —
+	// one line proves both the layer and its place in the merge order.
+	if !strings.Contains(string(text), "foley@backlot") {
+		t.Fatalf("screen lacks foley@backlot (studio layer or merge order regressed):\n%s", text)
+	}
+	var setPath string
+	for _, line := range strings.Split(string(text), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "/") && strings.Contains(line, "foley-set-") {
+			setPath = line
+			break
+		}
+	}
+	if setPath == "" {
+		t.Fatalf("pwd printed no set path:\n%s", text)
+	}
+	if !strings.HasSuffix(setPath, "/home") {
+		t.Fatalf("working directory %q is not the set's home", setPath)
+	}
+	root := strings.TrimSuffix(setPath, "/home")
+	if _, err := os.Stat(root); !os.IsNotExist(err) { //nolint:gosec // the set's own path read back from the screen, asserting absence
+		t.Fatalf("the set was not struck: stat %v", err)
+	}
+	// len > 1 guards the degenerate HOME=/ (a bare root would match
+	// every absolute path on screen, including the set's own).
+	if home, herr := os.UserHomeDir(); herr == nil && len(home) > 1 && strings.Contains(string(text), home) {
+		t.Fatalf("the host home %q is on camera:\n%s", home, text)
 	}
 }
