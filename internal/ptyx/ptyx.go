@@ -35,10 +35,10 @@ type Options struct {
 	Dir string
 
 	// Env is the exact environment for the child. nil inherits the parent
-	// environment. The driver passes a sanitized environment for
-	// reproducible recordings; TERM defaults to xterm-256color when unset
-	// (ubiquitous terminfo — kitty graphics detection happens via the
-	// a=q query, not via TERM).
+	// environment. The driver passes a sanitized environment carrying
+	// foley's declared identity (ADR-021: TERM=xterm-ghostty plus its
+	// pinned terminfo); this plumbing-level fallback only guards a bare
+	// ptyx caller, with the one entry every host resolves.
 	Env []string
 
 	Size Winsize

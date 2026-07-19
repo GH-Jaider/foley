@@ -1,6 +1,8 @@
 package foley
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -34,11 +36,20 @@ func TestTerminalEnv(t *testing.T) {
 	if env["PATH"] != "/usr/bin" || env["HOME"] != "/Users/x" || env["EDITOR"] != "vim" {
 		t.Fatalf("non-terminal vars must pass through: %v", got)
 	}
-	if env["TERM"] != "xterm-256color" || env["COLORTERM"] != "truecolor" {
+	if env["TERM"] != "xterm-ghostty" || env["COLORTERM"] != "truecolor" {
 		t.Fatalf("TERM/COLORTERM not declared: %v", got)
 	}
 	if env["TERM_PROGRAM"] != "foley" || env["TERM_PROGRAM_VERSION"] == "" {
 		t.Fatalf("identity not declared: %v", got)
+	}
+	// The declared TERM only exists because foley SHIPS its entry: the
+	// env must carry TERMINFO and the entry must actually resolve there.
+	tinfo := env["TERMINFO"]
+	if tinfo == "" {
+		t.Fatalf("TERMINFO not declared alongside xterm-ghostty: %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(tinfo, "x", "xterm-ghostty")); err != nil {
+		t.Fatalf("pinned entry not materialized: %v", err)
 	}
 	for _, gone := range []string{"KITTY_WINDOW_ID", "GHOSTTY_RESOURCES_DIR", "WEZTERM_PANE", "ITERM_SESSION_ID", "TMUX"} {
 		if _, ok := env[gone]; ok {

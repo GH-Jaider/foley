@@ -1,8 +1,11 @@
 package foley
 
 import (
+	"fmt"
 	"runtime/debug"
 	"strings"
+
+	"github.com/GH-Jaider/foley/internal/terminfo"
 )
 
 // foley IS the terminal (ADR-021): a real emulator does not ask which
@@ -45,7 +48,24 @@ var hostTermPrefixes = []string{
 // veto. Options.Env == nil uses it automatically; callers building an
 // explicit Env should start from TerminalEnv(os.Environ()).
 func TerminalEnv(inherited []string) []string {
-	out := make([]string, 0, len(inherited)+4)
+	env, _ := TerminalIdentity(inherited)
+	return env
+}
+
+// TerminalIdentity is TerminalEnv plus its findings: the declared TERM
+// is xterm-ghostty — the entry emitted from the SAME libghostty pin the
+// engine is built from, so the name states exactly what the engine
+// implements — with TERMINFO pointing at the pinned entry materialized
+// under the user cache dir (apps resolve it on hosts that never
+// installed ghostty; ncurses still falls through to the system database
+// for other terms). The world detects capabilities by TERM allowlists,
+// not by probing: under the old xterm-256color, tools with native kitty
+// graphics support fell back to cell art INSIDE the one terminal that
+// records the protocol natively. If the entry cannot be materialized,
+// the identity degrades to xterm-256color and says so in warnings —
+// degraded, never silent (ADR-008).
+func TerminalIdentity(inherited []string) (env, warnings []string) {
+	out := make([]string, 0, len(inherited)+5)
 	for _, kv := range inherited {
 		k, _, ok := strings.Cut(kv, "=")
 		if !ok || hostTermVars[k] {
@@ -62,14 +82,27 @@ func TerminalEnv(inherited []string) []string {
 			out = append(out, kv)
 		}
 	}
-	return append(out,
+	term := "TERM=xterm-ghostty"
+	tinfo := ""
+	if dir, err := terminfo.Dir(); err != nil {
+		term = "TERM=xterm-256color"
+		warnings = append(warnings, fmt.Sprintf(
+			"terminfo: %v — recording declares TERM=xterm-256color; apps that detect capabilities by TERM (kitty graphics, styled underlines) will not see them", err))
+	} else {
+		tinfo = "TERMINFO=" + dir
+	}
+	out = append(out,
 		// What the embedded engine actually implements and the raster
 		// actually delivers — declared, not inherited.
-		"TERM=xterm-256color",
+		term,
 		"COLORTERM=truecolor",
 		"TERM_PROGRAM=foley",
 		"TERM_PROGRAM_VERSION="+foleyVersion(),
 	)
+	if tinfo != "" {
+		out = append(out, tinfo)
+	}
+	return out, warnings
 }
 
 // foleyVersion reports the module version baked by the Go toolchain —
