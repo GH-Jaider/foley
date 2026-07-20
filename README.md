@@ -10,10 +10,10 @@
 foley renders terminal demos from VHS-style `.tape` scripts — without opening a terminal window. Your app runs on a real pty, an embedded terminal engine (libghostty-vt, the brain of [Ghostty](https://ghostty.org)) keeps the screen, and foley draws every frame itself.
 
 <p align="center">
-  <img src="examples/fetch/fetch.gif" alt="fastfetch inside foley" width="720">
+  <img src="examples/showcase/showcase.gif" alt="the showcase — a trailer shot entirely inside foley" width="720">
 </p>
 
-<sub>Nothing in this shot is a mockup: that is a real `fastfetch` on a real pty, and the `Terminal: foley` line is genuine — foley <b>is</b> the terminal the demo runs in.</sub>
+<sub>One take, no window anywhere: real CLI tools on a real pty, a pixel-art film premiering over kitty graphics, and the camera, the highlight and the input reel added in post — by the renderer itself. A gif is a silent film, so the sound effects are written. The tape that shot all of it: <a href="examples/showcase">examples/showcase</a>.</sub>
 
 ## The stubborn route
 

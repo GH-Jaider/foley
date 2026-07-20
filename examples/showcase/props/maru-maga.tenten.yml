@@ -1,0 +1,2136 @@
+# maru-maga.tenten.yml — «La maga» · pieza coop
+#
+# maru encuentra el gorro de maga en su estudio, toma la varita y se
+# teletransporta al campo — donde koten y tenbo pastaban tan tranquilos.
+# koten se cae (obvio). tenbo la escanea, no le parece, y sigue comiendo.
+#
+# LA LEY DE ESTA PIEZA (el límite coop): el arte clave lo posó el humano
+# en el Studio — docs/design/maru-maga-muestra.tenten.yml es la copia
+# canónica (gorro, varita, y la pose de maru con la varita en la mano).
+# El agente midió, derivó y animó. Guion: docs/design/maru-maga.md
+#
+# ── planilla ──────────────────────────────────────────────────────────
+# · elenco FULL-FINE a 2×: arte en px finos, `at`/offsets en px base
+# · maru 40×18 (arte 36×18): tallitos filas 0-1 int., ojos 2-5, panza L,
+#   pies 16-17. Pose varita: brazo alzado der (filas int. 6-7), pie der
+#   recogido — VERBATIM de la muestra del humano
+# · gorro 36×24: arte con padding interno (1,1) — el puesto canónico es
+#   maru.bbox + (+1,−17) FINE (impar) ⇒ capa en maru.at + (0,−9) BASE.
+#   Va DETRÁS de maru: tallitos y ojos delante del ala. Delta de cabeza
+#   por frame de maru: corre-b +1 · agachada/arranca +2 · resto 0
+# · varita 14×12 DELANTE de maru: alzada = maru.at + (17,−2) · reposo
+#   (en la mano, brazo abajo) = maru.at + (15,+1) · x = con destello ·
+#   tenue = sin él
+# · koten2 26×24 (koten 2×, ojos e): mira DERECHA; susto/tiesa/espia
+#   canónicos; pasta-a/b = derivada (cabeza baja 5 filas base, barbita
+#   al suelo; mordisco = ±1 fila)
+# · tenbo2 22×24 (tenbo 2× ESPEJADA, ojos f): mira IZQUIERDA (hacia el
+#   centro); escaneo/esquiva/asoma canónicos espejados; pasta derivada
+# · bola: el remolino del teleport — disco G, banda-ecuador p (el gorro
+#   envolviéndola), S viajera + brillo L (el giro lo venden las fases)
+# · suelo de AMBOS actos: línea fine y=168 (pies del elenco en 166-167)
+# · T1 = 12496 ms (tick 781) · ciclo total = 23696 ms (1481 ticks)
+tenten: 1
+name: maru-maga
+canvas: { width: 160, height: 96 }
+tickMs: 16
+seed: 7
+
+palette:
+  # elenco
+  G: "#6aa05e"                # maru: cuerpo
+  L: "#d9e8b0"                # maru: panza
+  W: "#f2efe4"                # maru: ojos
+  E: "#1c1710"                # maru: pupilas
+  C: "#c99a72"                # koten: cuerpo
+  e: "#221a12"                # koten: ojos
+  T: "#d6c6a2"                # tenbo: cuerpo
+  f: "#262019"                # tenbo: ojos
+  # magia (de la muestra del humano)
+  p: "#7b6fc4"                # gorro: fieltro morado
+  B: "#4b4a8c"                # gorro: banda morado-noche
+  S: "#f2ecc0"                # estrellitas crema
+  y: "#e8c46a"                # destello dorado
+  v: "#2b2620"                # varita: palo
+  # campo
+  V: "#97b06b"                # pasto (más gris que maru: ella resalta)
+  # fondos halftone (mapa de tonos neutro de la casa)
+  a: { color: "#b1a695", dot: 2s }
+  b: { color: "#948a7c", dot: 2m }
+  c: { color: "#4e4738", dot: 2l }
+  d: { color: "#211c16", dot: 2l }
+  .: null
+
+sprites:
+  marca: # el reloj maestro (1 px transparente)
+    size: { width: 1, height: 1 }
+    frames:
+      x:
+        pixels:
+          - "."
+  maru:
+    size: { width: 40, height: 18 }
+    frames:
+      off:
+        pixels:
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+      idle:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      respira:
+        pixels:
+          - "........................................"
+          - "........................................"
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      parpadeo:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGGGGGGG........GGGGGGGG.........."
+          - "......GGGGGGGG........GGGGGGGG.........."
+          - "......GGGGGGGG........GGGGGGGG.........."
+          - "......GGGGGGGG........GGGGGGGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      mira-arriba:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      agachada:
+        pixels:
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "..GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG......"
+          - "..GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGGGG.."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGGGG.."
+      aire:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "......GGGGGG............GGGGGG.........."
+          - "......GGGGGG............GGGGGG.........."
+          - "........................................"
+          - "........................................"
+      corre-a:
+        pixels:
+          - "......GGGG............GGGG.............."
+          - "......GGGG............GGGG.............."
+          - "....GGWWWWGG........GGWWWWGG............"
+          - "....GGWWWWGG........GGWWWWGG............"
+          - "....GGWWEEGG........GGEEWWGG............"
+          - "....GGWWEEGG........GGEEWWGG............"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "....GGGGLLLLLLLLLLLLLLLLLLLLGGGG........"
+          - "......GGGGGG............GGGGGG.........."
+          - "......GGGGGG............GGGGGG.........."
+          - "........................................"
+          - "........................................"
+      corre-b:
+        pixels:
+          - "........................................"
+          - "........................................"
+          - "......GGGG............GGGG.............."
+          - "......GGGG............GGGG.............."
+          - "....GGWWWWGG........GGWWWWGG............"
+          - "....GGWWWWGG........GGWWWWGG............"
+          - "....GGWWEEGG........GGEEWWGG............"
+          - "....GGWWEEGG........GGEEWWGG............"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      arranca:
+        pixels:
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "........................................"
+          - "..........GGGG............GGGG.........."
+          - "..........GGGG............GGGG.........."
+          - "........GGWWWWGG........GGWWWWGG........"
+          - "........GGWWWWGG........GGWWWWGG........"
+          - "........GGWWEEGG........GGEEWWGG........"
+          - "........GGWWEEGG........GGEEWWGG........"
+          - "..GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG......"
+          - "..GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLLLLLGGGGGG.."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGGGG.."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGGGG.."
+      reojo:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWEEGG........GGWWWWGG.........."
+          - "......GGWWEEGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGEEWWGG.........."
+          - "......GGWWWWGG........GGEEWWGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      mira-lado:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGEEWWGG........GGWWEEGG.........."
+          - "......GGEEWWGG........GGWWEEGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      mira-der:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWEEGG........GGWWEEGG.........."
+          - "......GGWWEEGG........GGWWEEGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+          - "GGGGGGGG..GGGG........GGGG..GGGGGGGG...."
+      varita:
+        pixels:
+          - "........GGGG............GGGG............"
+          - "........GGGG............GGGG............"
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWWWGG........GGWWWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "......GGWWEEGG........GGEEWWGG.........."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG...."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG...."
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG......"
+          - "....GGGGGGGGGGGGGGGGGGGGGGGGGGGG........"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "..GGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGG......"
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGGLLLLLLLLLLLLLLLLLLLLGGGGGGGG...."
+          - "GGGGGGGG..GGGG..............GGGGGGGG...."
+          - "GGGGGGGG..GGGG..............GGGGGGGG...."
+  gorro:
+    size: { width: 36, height: 24 }
+    frames:
+      x:
+        pixels:
+          - "...................................."
+          - ".....pppppSSpppppp.................."
+          - ".....pppppSSpppppp.................."
+          - "...pppppppppppppSSpppppp............"
+          - "...pppppppppppppSSpppppp............"
+          - "...pp....pppppppppppppppSS.........."
+          - "...pp....pppppppppppppppSS.........."
+          - ".........pSSppppppppppppppp........."
+          - ".........pSSppppppppppppppp........."
+          - ".........pppppppppppSSppppppp......."
+          - ".........pppppppppppSSppppppp......."
+          - ".........pppppppppppppppppppp......."
+          - ".........pppppppppppppppppppp......."
+          - ".......pppppppSSppppppppppSSppp....."
+          - ".......pppppppSSppppppppppSSppp....."
+          - ".....BBBBBBBBBBBBBBBBBBBBBBBBBB....."
+          - ".....BBBBBBBBBBBBBBBBBBBBBBBBBB....."
+          - ".....BBBBBBBBBBBBBBBBBBBBBBBBBBBB..."
+          - ".....BBBBBBBBBBBBBBBBBBBBBBBBBBBB..."
+          - "...pppppSSppppppppppppppSSppppppp..."
+          - "...pppppSSppppppppppppppSSppppppp..."
+          - ".pppppppppppppppSSppppppppppppSSppp."
+          - ".pppppppppppppppSSppppppppppppSSppp."
+          - "...................................."
+      off:
+        pixels:
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+          - "...................................."
+  varita:
+    size: { width: 14, height: 12 }
+    frames:
+      x:
+        pixels:
+          - "..........yy.."
+          - "..........yy.."
+          - "........yyyyyy"
+          - "........yyyyyy"
+          - "......vvSSyy.."
+          - "......vvSSyy.."
+          - "....vvvv......"
+          - "....vvvv......"
+          - "..vvvv........"
+          - "..vvvv........"
+          - "vvvv.........."
+          - "vvvv.........."
+      tenue:
+        pixels:
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - "......vvyy...."
+          - "......vvyy...."
+          - "....vvvv......"
+          - "....vvvv......"
+          - "..vvvv........"
+          - "..vvvv........"
+          - "vvvv.........."
+          - "vvvv.........."
+      off:
+        pixels:
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+          - ".............."
+  bola:
+    size: { width: 24, height: 24 }
+    frames:
+      b75a:
+        pixels:
+          - "........................"
+          - "........................"
+          - ".........GGGGGG........."
+          - ".......GGGGGGGGGG......."
+          - ".....GGGGGGGGGGGGGG....."
+          - "....GGGGGGGGGGGGGGGG...."
+          - "....GGGGGGGGGGGGGGGG...."
+          - "...GGGGGGGGGGGGGLLGGG..."
+          - "...GGGGGGGGGGGGGGGGGG..."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "..ppppSppppppppppppppp.."
+          - "..ppppSppppppppppppppp.."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "...GGGGGGGGGGGGGGGGGG..."
+          - "...GGGGGGGGGGGGGGGGGG..."
+          - "....GGGGGGGGGGGGGGGG...."
+          - "....GGGGGGGGGGGGGGGG...."
+          - ".....GGGGGGGGGGGGGG....."
+          - ".......GGGGGGGGGG......."
+          - ".........GGGGGG........."
+          - "........................"
+          - "........................"
+      b75b:
+        pixels:
+          - "........................"
+          - "........................"
+          - ".........GGGGGG........."
+          - ".......GGGGGGGGGG......."
+          - ".....GGGGGGGGGGGGGG....."
+          - "....GGGGGGGGGGGGGGGG...."
+          - "....GGGGGGGGGGGGGGGG...."
+          - "...GGGLLGGGGGGGGGGGGG..."
+          - "...GGGGGGGGGGGGGGGGGG..."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "..pppppppppppppppSpppp.."
+          - "..pppppppppppppppSpppp.."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "..GGGGGGGGGGGGGGGGGGGG.."
+          - "...GGGGGGGGGGGGGGGGGG..."
+          - "...GGGGGGGGGGGGGGGGGG..."
+          - "....GGGGGGGGGGGGGGGG...."
+          - "....GGGGGGGGGGGGGGGG...."
+          - ".....GGGGGGGGGGGGGG....."
+          - ".......GGGGGGGGGG......."
+          - ".........GGGGGG........."
+          - "........................"
+          - "........................"
+      b50a:
+        pixels:
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - ".........GGGGGG........."
+          - "........GGGGGGGG........"
+          - ".......GGGGGGGGGG......."
+          - "......GGGGGGGGGLLG......"
+          - ".....GGGGGGGGGGGGGG....."
+          - ".....GGGGGGGGGGGGGG....."
+          - ".....pppSpppppppppp....."
+          - ".....pppSpppppppppp....."
+          - ".....GGGGGGGGGGGGGG....."
+          - ".....GGGGGGGGGGGGGG....."
+          - "......GGGGGGGGGGGG......"
+          - ".......GGGGGGGGGG......."
+          - "........GGGGGGGG........"
+          - ".........GGGGGG........."
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+      b50b:
+        pixels:
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - ".........GGGGGG........."
+          - "........GGGGGGGG........"
+          - ".......GGGGGGGGGG......."
+          - "......GLLGGGGGGGGG......"
+          - ".....GGGGGGGGGGGGGG....."
+          - ".....GGGGGGGGGGGGGG....."
+          - ".....ppppppppppSppp....."
+          - ".....ppppppppppSppp....."
+          - ".....GGGGGGGGGGGGGG....."
+          - ".....GGGGGGGGGGGGGG....."
+          - "......GGGGGGGGGGGG......"
+          - ".......GGGGGGGGGG......."
+          - "........GGGGGGGG........"
+          - ".........GGGGGG........."
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+      b25a:
+        pixels:
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "..........GGGG.........."
+          - ".........GGGGGG........."
+          - "........GGGGGLLG........"
+          - "........pSpppppp........"
+          - "........pSpppppp........"
+          - "........GGGGGGGG........"
+          - ".........GGGGGG........."
+          - "..........GGGG.........."
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+      b25b:
+        pixels:
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "..........GGGG.........."
+          - ".........GGGGGG........."
+          - "........GLLGGGGG........"
+          - "........ppppppSp........"
+          - "........ppppppSp........"
+          - "........GGGGGGGG........"
+          - ".........GGGGGG........."
+          - "..........GGGG.........."
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+      punto:
+        pixels:
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "...........GG..........."
+          - "..........SpLL.........."
+          - "..........Sppp.........."
+          - "...........GG..........."
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+      off:
+        pixels:
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+          - "........................"
+  halo:
+    size: { width: 48, height: 48 }
+    frames:
+      r1:
+        pixels:
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "......................yyyy......................"
+          - "....................yyyyyyyy...................."
+          - "...................yyy....yyy..................."
+          - "...................yy......yy..................."
+          - "..................yy........yy.................."
+          - "..................yy........yy.................."
+          - "..................yy........yy.................."
+          - "..................yy........yy.................."
+          - "...................yy......yy..................."
+          - "...................yyy....yyy..................."
+          - "....................yyyyyyyy...................."
+          - "......................yyyy......................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+      r2:
+        pixels:
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - ".....................yyyyyy....................."
+          - "..................yyyyyyyyyyyy.................."
+          - ".................yyy........yyy................."
+          - "................yy............yy................"
+          - "...............yy..............yy..............."
+          - "..............yy................yy.............."
+          - ".............yy..................yy............."
+          - ".............yy..................yy............."
+          - ".............y....................y............."
+          - "............yy....................yy............"
+          - "............yy....................yy............"
+          - "............yy....................yy............"
+          - "............yy....................yy............"
+          - "............yy....................yy............"
+          - "............yy....................yy............"
+          - ".............y....................y............."
+          - ".............yy..................yy............."
+          - ".............yy..................yy............."
+          - "..............yy................yy.............."
+          - "...............yy..............yy..............."
+          - "................yy............yy................"
+          - ".................yyy........yyy................."
+          - "..................yyyyyyyyyyyy.................."
+          - ".....................yyyyyy....................."
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+      r3:
+        pixels:
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "....................yyyyyyyy...................."
+          - ".................yyyyyyyyyyyyyy................."
+          - "...............yyyy..........yyyy..............."
+          - ".............yyyy..............yyyy............."
+          - "............yyy..................yyy............"
+          - "...........yyy....................yyy..........."
+          - "..........yyy......................yyy.........."
+          - ".........yyy........................yyy........."
+          - ".........yy..........................yy........."
+          - "........yy............................yy........"
+          - "........yy............................yy........"
+          - ".......yy..............................yy......."
+          - ".......yy..............................yy......."
+          - ".......y................................y......."
+          - "......yy................................yy......"
+          - "......yy................................yy......"
+          - "......yy................................yy......"
+          - "......yy................................yy......"
+          - "......yy................................yy......"
+          - "......yy................................yy......"
+          - "......yy................................yy......"
+          - "......yy................................yy......"
+          - ".......y................................y......."
+          - ".......yy..............................yy......."
+          - ".......yy..............................yy......."
+          - "........yy............................yy........"
+          - "........yy............................yy........"
+          - ".........yy..........................yy........."
+          - ".........yyy........................yyy........."
+          - "..........yyy......................yyy.........."
+          - "...........yyy....................yyy..........."
+          - "............yyy..................yyy............"
+          - ".............yyyy..............yyyy............."
+          - "...............yyyy..........yyyy..............."
+          - ".................yyyyyyyyyyyyyy................."
+          - "....................yyyyyyyy...................."
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+      off:
+        pixels:
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+          - "................................................"
+  polvo: # puff del aterrizaje (verbatim del trailer)
+    size: { width: 10, height: 6 }
+    frames:
+      off:
+        pixels:
+          - ".........."
+          - ".........."
+          - ".........."
+          - ".........."
+          - ".........."
+          - ".........."
+      p1:
+        pixels:
+          - "..bbbb...."
+          - "..bbbb...."
+          - "bbccccbb.."
+          - "bbccccbb.."
+          - "..bbbb...."
+          - "..bbbb...."
+      p2:
+        pixels:
+          - "..aaaaaa.."
+          - "..aaaaaa.."
+          - "aaaa..aaaa"
+          - "aaaa..aaaa"
+          - "..aaaaaa.."
+          - "..aaaaaa.."
+  koten2:
+    size: { width: 26, height: 24 }
+    frames:
+      idle:
+        pixels:
+          - ".........................."
+          - ".........................."
+          - "....................CC...."
+          - "....................CC...."
+          - "................CC..CC...."
+          - "................CC..CC...."
+          - "................CCCCCC...."
+          - "................CCCCCC...."
+          - "................eeCCee...."
+          - "................eeCCee...."
+          - "CC..............CCCCCC...."
+          - "CC..............CCCCCC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+      parpadeo:
+        pixels:
+          - ".........................."
+          - ".........................."
+          - "....................CC...."
+          - "....................CC...."
+          - "................CC..CC...."
+          - "................CC..CC...."
+          - "................CCCCCC...."
+          - "................CCCCCC...."
+          - "................CCCCCC...."
+          - "................CCCCCC...."
+          - "CC..............CCCCCC...."
+          - "CC..............CCCCCC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+      susto:
+        pixels:
+          - "....................CC...."
+          - "....................CC...."
+          - "................CC..CC...."
+          - "................CC..CC...."
+          - "................CCCCCC...."
+          - "................CCCCCC...."
+          - "................eeCCee...."
+          - "................eeCCee...."
+          - "CC..............CCCCCC...."
+          - "CC..............CCCCCC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "..CCCCCCCCCCCCCCCC........"
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+          - ".........................."
+          - ".........................."
+      tiesa:
+        pixels:
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC..CCCC"
+          - "......CC..CC..CC..CC..CCCC"
+          - "....CCCCCCCCCCCCCCCC..CCCC"
+          - "....CCCCCCCCCCCCCCCC..CCCC"
+          - "....CCCCCCCCCCCCCCCCCCCCCC"
+          - "....CCCCCCCCCCCCCCCCCCCCCC"
+          - "....CCCCCCCCCCCCCCCCCCCCCC"
+          - "....CCCCCCCCCCCCCCCCCCCCCC"
+      espia:
+        pixels:
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC......"
+          - "......CC..CC..CC..CC..CCCC"
+          - "......CC..CC..CC..CC..CCCC"
+          - "....CCCCCCCCCCCCCCCC..CCCC"
+          - "....CCCCCCCCCCCCCCCC..CCCC"
+          - "....CCCCCCCCCCCCCCCCCCeeCC"
+          - "....CCCCCCCCCCCCCCCCCCeeCC"
+          - "....CCCCCCCCCCCCCCCCCCCCCC"
+          - "....CCCCCCCCCCCCCCCCCCCCCC"
+      pasta-a:
+        pixels:
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - "CC........................"
+          - "CC........................"
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCCCCCC...."
+          - "..CCCCCCCCCCCCCCCCCCCC...."
+          - "..CCCCCCCCCCCCCCeeCCee...."
+          - "..CCCCCCCCCCCCCCeeCCee...."
+          - "....CCCC....CCCCCCCCCC...."
+          - "....CCCC....CCCCCCCCCC...."
+          - "....CCCC....CCCC....CC...."
+          - "....CCCC....CCCC....CC...."
+      pasta-b:
+        pixels:
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - "CC..................CC...."
+          - "CC..................CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCC..CC...."
+          - "..CCCCCCCCCCCCCCCCCCCC...."
+          - "..CCCCCCCCCCCCCCCCCCCC...."
+          - "..CCCCCCCCCCCCCCeeCCee...."
+          - "..CCCCCCCCCCCCCCeeCCee...."
+          - "..CCCCCCCCCCCCCCCCCCCC...."
+          - "..CCCCCCCCCCCCCCCCCCCC...."
+          - "....CCCC....CCCC....CC...."
+          - "....CCCC....CCCC....CC...."
+          - "....CCCC....CCCC.........."
+          - "....CCCC....CCCC.........."
+      off:
+        pixels:
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+          - ".........................."
+  tenbo2:
+    size: { width: 22, height: 24 }
+    frames:
+      idle:
+        pixels:
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....ffTTff............"
+          - "....ffTTff............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT..........TT"
+          - "....TTTTTT..........TT"
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+      parpadeo:
+        pixels:
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT..........TT"
+          - "....TTTTTT..........TT"
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+      escaneo-medio:
+        pixels:
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....ffTTff............"
+          - "....ffTTff............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT..........TT"
+          - "....TTTTTT..........TT"
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+      escaneo-bajo:
+        pixels:
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....TTTTTT............"
+          - "....ffTTff............"
+          - "....ffTTff............"
+          - "....TTTTTT..........TT"
+          - "....TTTTTT..........TT"
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+      esquiva:
+        pixels:
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT.........."
+          - "......TTTTTT........TT"
+          - "......TTTTTT........TT"
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+      asoma:
+        pixels:
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..ffTTff.............."
+          - "..ffTTff.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT.............."
+          - "..TTTTTT............TT"
+          - "..TTTTTT............TT"
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTTTTTTTTTTTTTT.."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+      pasta-a:
+        pixels:
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "....TTTTTT..........TT"
+          - "....TTTTTT..........TT"
+          - "..TTTTTTTTTTTTTTTTTT.."
+          - "..TTTTTTTTTTTTTTTTTT.."
+          - "TTTTTTTTTTTTTTTTTTTT.."
+          - "TTTTTTTTTTTTTTTTTTTT.."
+          - "TTTTTTTTTTTTTTTTTTTT.."
+          - "TTTTTTTTTTTTTTTTTTTT.."
+          - "ffTTTTTT......TTTT...."
+          - "ffTTTTTT......TTTT...."
+          - "TTTTTTTT......TTTT...."
+          - "TTTTTTTT......TTTT...."
+      pasta-b:
+        pixels:
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "....TTTTTT..........TT"
+          - "....TTTTTT..........TT"
+          - "..TTTTTTTTTTTTTTTTTT.."
+          - "..TTTTTTTTTTTTTTTTTT.."
+          - "TTTTTTTTTTTTTTTTTTTT.."
+          - "TTTTTTTTTTTTTTTTTTTT.."
+          - "ffTTTTTTTTTTTTTTTTTT.."
+          - "ffTTTTTTTTTTTTTTTTTT.."
+          - "TTTTTTTT......TTTT...."
+          - "TTTTTTTT......TTTT...."
+          - "....TTTT......TTTT...."
+          - "....TTTT......TTTT...."
+      off:
+        pixels:
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+          - "......................"
+  pasto: # tuft de 3 hojas (conexo), sway a↔b
+    size: { width: 10, height: 8 }
+    frames:
+      a:
+        pixels:
+          - ".........."
+          - ".V........"
+          - ".V...V...."
+          - "..V..V...V"
+          - "..V..V..V."
+          - "...V.V.V.."
+          - "....VVV..."
+          - "....VV...."
+      b:
+        pixels:
+          - ".........."
+          - "..V......."
+          - "..V...V..."
+          - "...V..V..V"
+          - "...V..V.V."
+          - "....V.VV.."
+          - "....VVV..."
+          - "....VV...."
+  pastito: # tuft chico
+    size: { width: 8, height: 6 }
+    frames:
+      a:
+        pixels:
+          - "........"
+          - "V..V..V."
+          - "V..V..V."
+          - ".V.V.V.."
+          - ".V.V.V.."
+          - "..VVV..."
+      b:
+        pixels:
+          - "........"
+          - ".V..V..V"
+          - ".V..V..V"
+          - "..V.V.V."
+          - "..V.V.V."
+          - "...VVV.."
+
+timelines:
+  banda: # 26 cues (beat 1 silencio; cue i = beat i+1) — ver .sfx.yml
+    beats:
+      - { frame: x, hold: 3136 }
+      - { frame: x, hold: 288, sfx: step }
+      - { frame: x, hold: 992, sfx: { sound: step, seed: 2 } }
+      - { frame: x, hold: 736, sfx: jump }
+      - { frame: x, hold: 416, sfx: { sound: jump, seed: 2 } }
+      - { frame: x, hold: 256, sfx: { sound: silba, seed: 7 } }
+      - { frame: x, hold: 1744, sfx: { sound: fump, seed: 7 } }
+      - { frame: x, hold: 288, sfx: { sound: step, seed: 3 } }
+      - { frame: x, hold: 512, sfx: { sound: step, seed: 4 } }
+      - { frame: x, hold: 480, sfx: { sound: ding, seed: 7 } }
+      - { frame: x, hold: 192, sfx: { sound: tw1, seed: 7 } }
+      - { frame: x, hold: 192, sfx: { sound: tw2, seed: 7 } }
+      - { frame: x, hold: 192, sfx: { sound: tw3, seed: 7 } }
+      - { frame: x, hold: 1760, sfx: { sound: alza, seed: 7 } }
+      - { frame: x, hold: 192, sfx: { sound: giro1, seed: 7 } }
+      - { frame: x, hold: 192, sfx: { sound: giro2, seed: 7 } }
+      - { frame: x, hold: 192, sfx: { sound: giro3, seed: 7 } }
+      - { frame: x, hold: 1536, sfx: { sound: zap, seed: 7 } }
+      - { frame: x, hold: 1120, sfx: { sound: pio, seed: 7 } }
+      - { frame: x, hold: 640, sfx: { sound: pio, seed: 7 } }
+      - { frame: x, hold: 192, sfx: { sound: brillo, seed: 7 } }
+      - { frame: x, hold: 448, sfx: { sound: brillo, seed: 7 } }
+      - { frame: x, hold: 576, sfx: { sound: crece, seed: 7 } }
+      - { frame: x, hold: 320, sfx: { sound: zap, seed: 7 } }
+      - { frame: x, hold: 160, sfx: { sound: fump, seed: 7 } }
+      - { frame: x, hold: 4944, sfx: { sound: thud, seed: 3 } }
+      - { frame: x, hold: 2000, sfx: { sound: pio, seed: 7 } }
+  guion: # reloj de actos: estudio · campo
+    beats:
+      - { frame: x, hold: 12496 }
+      - { frame: x, hold: 11200 }
+  maru-a1:
+    beats:
+      - { frame: idle, hold: 800 }
+      - { frame: parpadeo, hold: 96 }
+      - { frame: idle, hold: 704 }
+      - { frame: respira, hold: 320 }
+      - { frame: idle, hold: 480 }
+      - { frame: mira-der, hold: 480 }
+      - { frame: arranca, hold: 160 }
+      - { frame: corre-a, hold: 96 }
+      - { frame: corre-b, hold: 96 }
+      - { frame: corre-a, hold: 96 }
+      - { frame: corre-b, hold: 96 }
+      - { frame: corre-a, hold: 96 }
+      - { frame: corre-b, hold: 96 }
+      - { frame: idle, hold: 160 }
+      - { frame: mira-arriba, hold: 640 }
+      - { frame: aire, hold: 96 }
+      - { frame: aire, hold: 64 }
+      - { frame: idle, hold: 160 }
+      - { frame: idle, hold: 320 }
+      - { frame: arranca, hold: 96 }
+      - { frame: aire, hold: 96 }
+      - { frame: aire, hold: 96 }
+      - { frame: agachada, hold: 96 }
+      - { frame: mira-arriba, hold: 256 }
+      - { frame: parpadeo, hold: 96 }
+      - { frame: agachada, hold: 160 }
+      - { frame: idle, hold: 208 }
+      - { frame: mira-arriba, hold: 480 }
+      - { frame: parpadeo, hold: 96 }
+      - { frame: idle, hold: 320 }
+      - { frame: mira-der, hold: 320 }
+      - { frame: arranca, hold: 96 }
+      - { frame: corre-a, hold: 96 }
+      - { frame: corre-b, hold: 96 }
+      - { frame: corre-a, hold: 96 }
+      - { frame: corre-b, hold: 96 }
+      - { frame: corre-a, hold: 96 }
+      - { frame: corre-b, hold: 96 }
+      - { frame: corre-a, hold: 96 }
+      - { frame: idle, hold: 96 }
+      - { frame: varita, hold: 128 }
+      - { frame: varita, hold: 480 }
+      - { frame: varita, hold: 576 }
+      - { frame: varita, hold: 1024 }
+      - { frame: varita, hold: 320 }
+      - { frame: varita, hold: 320 }
+      - { frame: agachada, hold: 96 }
+      - { frame: off, hold: 12512 }
+    offset:
+      x:    [ 0, 0, 0, 0, 0, 0, 0, 0, 6, 12, 18, 24, 30, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 42, 49, 55, 62, 68, 75, 81, 81, 81, 81, 81, 81, 81, 81, 81 ]
+      y:    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -4, 0, 0, 0, 0, -7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -14, -15, -14, -14 ]
+      ease: [ step, step, step, step, step, step, step, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, step, step, sine-out, pow3-in, step, step, step, sine-out, pow3-in, step, step, step, step, step, step, step, step, step, step, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, step, step, step, step, sine-in-out, sine-in-out, sine-in-out, step, step ]
+  gorro-a1:
+    beats:
+      - { frame: x, hold: 5248 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 128 }
+      - { frame: x, hold: 256 }
+      - { frame: x, hold: 48 }
+      - { frame: x, hold: 48 }
+      - { frame: x, hold: 32 }
+      - { frame: x, hold: 16 }
+      - { frame: x, hold: 1408 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 1184 }
+      - { frame: x, hold: 1024 }
+      - { frame: x, hold: 320 }
+      - { frame: x, hold: 304 }
+      - { frame: x, hold: 16 }
+      - { frame: x, hold: 96 }
+      - { frame: off, hold: 12512 }
+    offset:
+      x:    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 13, 19, 26, 32, 39, 45, 45, 45, 45, 45, 45, 45, 45 ]
+      y:    [ 0, 0, -1, 0, 0, 41, 40, 41, 41, 39, 41, 39, 40, 39, 40, 39, 40, 39, 39, 39, 39, 25, 24, 25, 27, 27 ]
+      ease: [ step, sine-out, pow3-in, step, pow3-in, sine-out, pow3-in, step, sine-out, step, step, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, sine-in-out, step, step, sine-in-out, sine-in-out, sine-in-out, step, step, step ]
+  varita-a1:
+    beats:
+      - { frame: tenue, hold: 8240 }
+      - { frame: tenue, hold: 128 }
+      - { frame: x, hold: 96 }
+      - { frame: tenue, hold: 384 }
+      - { frame: x, hold: 96 }
+      - { frame: tenue, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: tenue, hold: 96 }
+      - { frame: x, hold: 96 }
+      - { frame: tenue, hold: 96 }
+      - { frame: x, hold: 1024 }
+      - { frame: x, hold: 320 }
+      - { frame: x, hold: 304 }
+      - { frame: x, hold: 16 }
+      - { frame: x, hold: 96 }
+      - { frame: off, hold: 12512 }
+    offset:
+      x:    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+      y:    [ 0, 0, 9, 9, 9, 9, 9, 9, 9, 9, 9, -5, -6, -5, -3, -3 ]
+      ease: [ step, pow3-in, step, step, step, step, step, step, step, step, sine-in-out, sine-in-out, sine-in-out, step, step, step ]
+  bola-a1:
+    beats:
+      - { frame: off, hold: 11184 }
+      - { frame: b75a, hold: 96 }
+      - { frame: b75b, hold: 96 }
+      - { frame: b50a, hold: 96 }
+      - { frame: b50b, hold: 96 }
+      - { frame: b25a, hold: 96 }
+      - { frame: punto, hold: 96 }
+      - { frame: off, hold: 11936 }
+    offset:
+      x:    [ 0, 0, 0, 0, 0, 0, 0, 0 ]
+      y:    [ 0, 0, -1, -1, -2, -2, -3, -3 ]
+      ease: [ step, linear, linear, linear, linear, linear, linear, step ]
+  halo-a1:
+    beats:
+      - { frame: off, hold: 8848 }
+      - { frame: r1, hold: 96 }
+      - { frame: r2, hold: 96 }
+      - { frame: r3, hold: 96 }
+      - { frame: off, hold: 608 }
+      - { frame: r1, hold: 96 }
+      - { frame: r2, hold: 96 }
+      - { frame: r3, hold: 96 }
+      - { frame: off, hold: 1728 }
+      - { frame: r1, hold: 48 }
+      - { frame: r2, hold: 48 }
+      - { frame: r3, hold: 96 }
+      - { frame: off, hold: 11744 }
+    offset:
+      x:    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+      y:    [ 0, 0, 0, 0, 0, -6, -6, -6, -6, -16, -16, -16, -16 ]
+      ease: [ step, step, step, step, step, step, step, step, step, step, step, step, step ]
+  maru-a2:
+    beats:
+      - { frame: off, hold: 16272 }
+      - { frame: varita, hold: 320 }
+      - { frame: agachada, hold: 96 }
+      - { frame: idle, hold: 224 }
+      - { frame: mira-lado, hold: 800 }
+      - { frame: mira-der, hold: 800 }
+      - { frame: reojo, hold: 640 }
+      - { frame: idle, hold: 352 }
+      - { frame: aire, hold: 96 }
+      - { frame: aire, hold: 64 }
+      - { frame: idle, hold: 160 }
+      - { frame: parpadeo, hold: 96 }
+      - { frame: idle, hold: 704 }
+      - { frame: respira, hold: 320 }
+      - { frame: idle, hold: 800 }
+      - { frame: parpadeo, hold: 96 }
+      - { frame: idle, hold: 704 }
+      - { frame: respira, hold: 320 }
+      - { frame: idle, hold: 832 }
+    offset:
+      x:    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+      y:    [ -19, -19, 0, 0, 0, 0, 0, 0, 0, -4, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+      ease: [ step, pow3-in, step, step, step, step, step, step, sine-out, pow3-in, step, step, step, step, step, step, step, step, step ]
+  gorro-a2:
+    beats:
+      - { frame: off, hold: 16272 }
+      - { frame: x, hold: 320 }
+      - { frame: x, hold: 16 }
+      - { frame: x, hold: 80 }
+      - { frame: x, hold: 224 }
+      - { frame: x, hold: 800 }
+      - { frame: x, hold: 800 }
+      - { frame: x, hold: 640 }
+      - { frame: x, hold: 352 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 64 }
+      - { frame: x, hold: 4032 }
+    offset:
+      x:    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+      y:    [ -19, -19, 0, 2, 0, 0, 0, 0, 0, 0, -4, 0 ]
+      ease: [ step, pow3-in, step, step, step, step, step, step, step, sine-out, pow3-in, step ]
+  varita-a2:
+    beats:
+      - { frame: off, hold: 16272 }
+      - { frame: x, hold: 320 }
+      - { frame: x, hold: 16 }
+      - { frame: tenue, hold: 80 }
+      - { frame: tenue, hold: 224 }
+      - { frame: tenue, hold: 800 }
+      - { frame: tenue, hold: 800 }
+      - { frame: tenue, hold: 640 }
+      - { frame: tenue, hold: 352 }
+      - { frame: x, hold: 96 }
+      - { frame: x, hold: 64 }
+      - { frame: tenue, hold: 4032 }
+    offset:
+      x:    [ 0, 0, 0, 0, -2, -2, -2, -2, -2, -2, -2, -2 ]
+      y:    [ -19, -19, 0, 2, 3, 3, 3, 3, 3, 3, -1, 3 ]
+      ease: [ step, pow3-in, step, sine-out, step, step, step, step, step, sine-out, pow3-in, step ]
+  bola-a2:
+    beats:
+      - { frame: off, hold: 15696 }
+      - { frame: punto, hold: 96 }
+      - { frame: b25a, hold: 96 }
+      - { frame: b25b, hold: 96 }
+      - { frame: b50a, hold: 96 }
+      - { frame: b50b, hold: 96 }
+      - { frame: b75a, hold: 96 }
+      - { frame: off, hold: 7424 }
+  halo-a2:
+    beats:
+      - { frame: off, hold: 15056 }
+      - { frame: r1, hold: 96 }
+      - { frame: off, hold: 96 }
+      - { frame: r1, hold: 96 }
+      - { frame: off, hold: 928 }
+      - { frame: r2, hold: 96 }
+      - { frame: r3, hold: 96 }
+      - { frame: off, hold: 7232 }
+  koten-a2:
+    beats:
+      - { frame: off, hold: 12496 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: idle, hold: 800 }
+      - { frame: parpadeo, hold: 96 }
+      - { frame: idle, hold: 224 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 128 }
+      - { frame: susto, hold: 128 }
+      - { frame: tiesa, hold: 2048 }
+      - { frame: espia, hold: 944 }
+      - { frame: tiesa, hold: 544 }
+      - { frame: idle, hold: 640 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: idle, hold: 800 }
+      - { frame: parpadeo, hold: 96 }
+      - { frame: idle, hold: 592 }
+  tenbo-a2:
+    beats:
+      - { frame: off, hold: 12496 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: idle, hold: 640 }
+      - { frame: escaneo-medio, hold: 752 }
+      - { frame: escaneo-bajo, hold: 752 }
+      - { frame: escaneo-medio, hold: 544 }
+      - { frame: idle, hold: 640 }
+      - { frame: esquiva, hold: 1504 }
+      - { frame: asoma, hold: 384 }
+      - { frame: esquiva, hold: 320 }
+      - { frame: pasta-a, hold: 480 }
+      - { frame: pasta-b, hold: 320 }
+      - { frame: pasta-a, hold: 384 }
+  polvo-i:
+    beats:
+      - { frame: off, hold: 16592 }
+      - { frame: p1, hold: 96 }
+      - { frame: p2, hold: 96 }
+      - { frame: off, hold: 6912 }
+  polvo-d:
+    beats:
+      - { frame: off, hold: 16624 }
+      - { frame: p1, hold: 96 }
+      - { frame: p2, hold: 96 }
+      - { frame: off, hold: 6880 }
+  pasto-1:
+    beats:
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 16 }
+  pasto-2:
+    beats:
+      - { frame: b, hold: 288 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 448 }
+  pasto-3:
+    beats:
+      - { frame: b, hold: 368 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 288 }
+  pasto-4:
+    beats:
+      - { frame: b, hold: 320 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 336 }
+  pasto-5:
+    beats:
+      - { frame: b, hold: 96 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 560 }
+      - { frame: b, hold: 560 }
+      - { frame: a, hold: 80 }
+  pasto-6:
+    beats:
+      - { frame: b, hold: 176 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 720 }
+      - { frame: b, hold: 720 }
+      - { frame: a, hold: 480 }
+  pasto-7:
+    beats:
+      - { frame: b, hold: 480 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 640 }
+      - { frame: b, hold: 640 }
+      - { frame: a, hold: 176 }
+
+layers:
+  # ═══ ACTO 1 · EL ESTUDIO DE LA MAGA (0–781) — noche, vela, luna ═══
+  - type: generator
+    use: tonemap
+    at: { x: 0, y: 0 }
+    fine: true
+    window: { until: 781 }
+    params:
+      width: 320
+      rows: 192
+      ramp: [a, b, c, d]
+      noise: 0.08
+      shapes:
+        # ── piso ─────────────────────────────────────────────────────
+        - { shape: line, from: [0, 168], to: [319, 168], tone: 0.65 }
+        - { shape: rect, at: [0, 170], size: [320, 22], tone: [0.1, 0.22], id: suelo }
+        # ── estantería de pociones (izquierda) ───────────────────────
+        - { shape: rect, at: [8, 60], size: [56, 108], tone: 0.65, stroke: 2, id: estanteria }
+        - { shape: line, from: [10, 96], to: [62, 96], tone: 0.65, w: 2 }
+        - { shape: line, from: [10, 132], to: [62, 132], tone: 0.65, w: 2 }
+        - { shape: rect, at: [14, 74], size: [8, 20], tone: 0.4 }      # frascos (fila alta)
+        - { shape: ellipse, at: [26, 80], size: [10, 14], tone: 0.65 }
+        - { shape: rect, at: [40, 70], size: [7, 24], tone: 0.9 }
+        - { shape: ellipse, at: [50, 84], size: [8, 10], tone: 0.4, pulse: { amp: 0.15, ticks: 90 } } # poción burbujeante
+        - { shape: rect, at: [14, 112], size: [10, 18], tone: 0.65 }   # fila media
+        - { shape: rect, at: [27, 116], size: [8, 14], tone: 0.4 }
+        - { shape: ellipse, at: [38, 114], size: [9, 16], tone: 0.65 }
+        - { shape: rect, at: [50, 108], size: [8, 22], tone: 0.4 }
+        - { shape: rect, at: [14, 146], size: [16, 20], tone: 0.4, stroke: 1 } # caja
+        - { shape: rect, at: [34, 152], size: [24, 14], tone: 0.35 }   # papeles
+        # ── la vela sobre la estantería (llama que late) ─────────────
+        - { shape: rect, at: [30, 48], size: [6, 12], tone: 0.9, id: vela }
+        - { shape: ellipse, at: [29, 36], size: [7, 10], tone: 0.35, pulse: { amp: 0.25, ticks: 45 }, id: llama }
+        # ── la percha del gorro (centro) ─────────────────────────────
+        - { shape: line, from: [128, 76], to: [128, 166], tone: 0.65, w: 2, id: percha }
+        - { shape: rect, at: [126, 74], size: [6, 4], tone: 0.65 }     # perilla
+        - { shape: ellipse, at: [118, 162], size: [22, 8], tone: 0.65 } # base
+        # ── la mesita de la varita (derecha) ─────────────────────────
+        - { shape: rect, at: [224, 138], size: [44, 5], tone: 0.9, id: mesita }
+        - { shape: rect, at: [228, 143], size: [4, 25], tone: 0.65 }   # patas
+        - { shape: rect, at: [258, 143], size: [4, 25], tone: 0.65 }
+        # ── ventana redonda con la luna ──────────────────────────────
+        - { shape: ellipse, at: [242, 16], size: [60, 60], tone: 0.65, stroke: 2, id: ventana }
+        - { shape: ellipse, at: [262, 30], size: [14, 14], tone: 0.5, id: luna }
+        # ── cuadro entre percha y mesita ─────────────────────────────
+        - { shape: rect, at: [176, 84], size: [18, 22], tone: 0.65, stroke: 1, id: cuadro }
+        - { shape: line, from: [180, 98], to: [190, 90], tone: 0.35 }
+      anchors:
+        piso: 168
+        percha: [118, 74, 22, 94]
+        mesita: [224, 138, 44, 30]
+        ventana: [242, 16, 60, 60]
+        estanteria: [8, 60, 56, 108]
+  # elenco del acto 1 (el gorro DETRÁS de maru: ojos delante del ala)
+  - { type: sprite, use: gorro, timeline: gorro-a1, at: { x: 56, y: 27 }, fine: true, window: { until: 781 } }
+  - { type: sprite, use: maru, timeline: maru-a1, at: { x: 20, y: 75 }, fine: true, window: { until: 781 } }
+  - { type: sprite, use: varita, timeline: varita-a1, at: { x: 118, y: 64 }, fine: true, window: { until: 781 } }
+  - { type: sprite, use: bola, timeline: bola-a1, at: { x: 104, y: 59 }, fine: true, window: { until: 781 } }
+  - { type: sprite, use: halo, timeline: halo-a1, at: { x: 98, y: 67 }, fine: true, window: { until: 781 } }
+
+  # ═══ ACTO 2 · EL CAMPO (781–fin) — día, sol, nubes en deriva ═════
+  - type: generator
+    use: tonemap
+    at: { x: 0, y: 0 }
+    fine: true
+    window: { from: 781 }
+    params:
+      width: 320
+      rows: 192
+      ramp: [a, b, c, d]
+      noise: 0.1
+      shimmerTicks: 180
+      shapes:
+        # ── piso (el MISMO suelo del estudio: mundo consistente) ─────
+        - { shape: line, from: [0, 168], to: [319, 168], tone: 0.65 }
+        - { shape: rect, at: [0, 170], size: [320, 22], tone: [0.12, 0.25], id: suelo }
+        # ── colinas del horizonte ────────────────────────────────────
+        - { shape: poly, pts: [[0, 168], [60, 120], [140, 168]], tone: 0.15 }
+        - { shape: poly, pts: [[100, 168], [200, 112], [300, 168]], tone: 0.12 }
+        - { shape: poly, pts: [[240, 168], [320, 132], [320, 168]], tone: 0.18 }
+        # ── el sol con sus rayos ─────────────────────────────────────
+        - { shape: ellipse, at: [30, 18], size: [22, 22], tone: 0.4, id: sol }
+        - { shape: line, from: [41, 8], to: [41, 12], tone: 0.4 }
+        - { shape: line, from: [41, 44], to: [41, 48], tone: 0.4 }
+        - { shape: line, from: [12, 29], to: [16, 29], tone: 0.4 }
+        - { shape: line, from: [66, 29], to: [70, 29], tone: 0.4 }
+        - { shape: line, from: [20, 14], to: [23, 17], tone: 0.4 }
+        - { shape: line, from: [59, 41], to: [62, 44], tone: 0.4 }
+        - { shape: line, from: [20, 44], to: [23, 41], tone: 0.4 }
+        - { shape: line, from: [59, 17], to: [62, 14], tone: 0.4 }
+        # ── matas lejanas (guiones en el suelo) ──────────────────────
+        - { shape: line, from: [80, 150], to: [84, 150], tone: 0.3 }
+        - { shape: line, from: [170, 144], to: [174, 144], tone: 0.28 }
+        - { shape: line, from: [230, 152], to: [234, 152], tone: 0.3 }
+        - { shape: line, from: [120, 158], to: [123, 158], tone: 0.3 }
+        - { shape: line, from: [280, 148], to: [283, 148], tone: 0.28 }
+      anchors:
+        piso: 168
+  - type: generator # nube cercana (deriva)
+    use: backdrop
+    at: { x: 16, y: 10 }
+    fine: true
+    window: { from: 781 }
+    params: { width: 120, rows: 36, ramp: [a, b, c], kind: cumulus, span: 64, scrollTicks: 26 }
+  - type: generator # nube lejana (parallax: más lenta)
+    use: backdrop
+    at: { x: 180, y: 22 }
+    fine: true
+    window: { from: 781 }
+    params: { width: 100, rows: 28, ramp: [a, b, c], kind: cumulus, span: 56, scrollTicks: 40 }
+  # pasto de fondo (detrás del elenco) — koten y tenbo pastan del suyo
+  - { type: sprite, use: pasto, timeline: pasto-1, at: { x: 28, y: 80 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: pastito, timeline: pasto-2, at: { x: 46, y: 81 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: pasto, timeline: pasto-3, at: { x: 95, y: 80 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: pastito, timeline: pasto-4, at: { x: 110, y: 81 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: pasto, timeline: pasto-5, at: { x: 145, y: 80 }, fine: true, window: { from: 781 } }
+  # elenco del acto 2
+  - { type: sprite, use: koten2, timeline: koten-a2, at: { x: 37, y: 72 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: tenbo2, timeline: tenbo-a2, at: { x: 112, y: 72 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: gorro, timeline: gorro-a2, at: { x: 71, y: 66 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: maru, timeline: maru-a2, at: { x: 71, y: 75 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: varita, timeline: varita-a2, at: { x: 88, y: 73 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: bola, timeline: bola-a2, at: { x: 74, y: 54 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: halo, timeline: halo-a2, at: { x: 68, y: 48 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: polvo, timeline: polvo-i, at: { x: 67, y: 81 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: polvo, timeline: polvo-d, at: { x: 76, y: 81 }, fine: true, window: { from: 781 } }
+  # pasto de primer término (DELANTE del elenco)
+  - { type: sprite, use: pasto, timeline: pasto-6, at: { x: 60, y: 86 }, fine: true, window: { from: 781 } }
+  - { type: sprite, use: pastito, timeline: pasto-7, at: { x: 126, y: 86 }, fine: true, window: { from: 781 } }
+
+  # ═══ el reloj maestro (siempre visible; 1px transparente) ════════
+  - { type: sprite, use: marca, timeline: guion, at: { x: 0, y: 0 } }
+  - { type: sprite, use: marca, timeline: banda, at: { x: 0, y: 0 } }
+
+sounds:
+  silba: { wave: saw, f0: 900, f1: 280, ms: 230, volume: 0.3 }
+  fump: { wave: sine, f0: 150, f1: 60, ms: 110, volume: 0.5 }
+  ding: { wave: sine, f0: 1175, f1: 1760, ms: 110, volume: 0.35 }
+  tw1: { wave: triangle, f0: 880, f1: 1320, ms: 120, volume: 0.3 }
+  tw2: { wave: triangle, f0: 1046, f1: 1568, ms: 120, volume: 0.3 }
+  tw3: { wave: triangle, f0: 1175, f1: 1760, ms: 120, volume: 0.32 }
+  alza: { wave: sine, f0: 240, f1: 520, ms: 700, volume: 0.25 }
+  giro1: { wave: square, f0: 420, f1: 640, ms: 90, volume: 0.3 }
+  giro2: { wave: square, f0: 520, f1: 820, ms: 90, volume: 0.32 }
+  giro3: { wave: square, f0: 640, f1: 1040, ms: 90, volume: 0.34 }
+  zap: { wave: square, f0: 700, f1: 1900, ms: 60, volume: 0.45 }
+  pio: { wave: sine, f0: 1900, f1: 2300, ms: 60, volume: 0.18 }
+  brillo: { wave: triangle, f0: 620, f1: 980, ms: 160, volume: 0.22 }
+  crece: { wave: sine, f0: 220, f1: 460, ms: 480, volume: 0.22 }

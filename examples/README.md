@@ -50,9 +50,16 @@ Regenerate everything with `make examples`.
 - **`highlight/`** — point the viewer's eye (`# foley: highlight`):
   the theme's Selection color under a /regex/ from its position in
   the script until `off`. The zombie theme field, finally employed.
-- **`showcase/`** — almost everything in one take: find the file with
-  fzf, read it with bat, highlight the bug, push the camera — dress,
-  prompt, reel, highlight and camera over real tools.
+- **`showcase/`** — the trailer: a gif is a silent film and foley is
+  the craft that adds the sound, so every sound effect is WRITTEN —
+  intertitle cards in trailer voice ([ BWAAAAAH ], [ APPLAUSE
+  INTENSIFIES ]). The brand chip wipes in, cfonts + tte raise the
+  title, a dossier decrypts under the highlight, and the premiere is
+  pixel art living in kitty graphics with the camera pushing onto live
+  pixels. Cast: `tte`, `cfonts`, `gum`, `tenten` — plus a hidden crew
+  (`props/cast.sh`) the pty never sees typed: the tape only ever keys
+  plain ASCII scene names. Recorded in realtime — the one clock the
+  animations need.
 - **`prompt/`** — your prompt, your rules: `Env PS1` (always legal
   grammar) actually WINS here, and a bare `Wait` learns the new
   prompt automatically. In VHS the same tape records with its pinned

@@ -67,8 +67,14 @@ fi
 current=prompt
 want "$@" && take prompt demo.tape
 
+# The showcase records inside the studio in REALTIME (tte/cfonts
+# animate and the tenten premiere needs the wall clock); the hidden
+# crew arrives via -env PROPS and the brand chip via -env LOGO.
+# Full scale on purpose: this is the README's centerpiece.
 current=showcase
-want "$@" && take showcase demo.tape
+want "$@" && take showcase -mode realtime \
+	-env "PROPS=$root/examples/showcase/props" \
+	-env "LOGO=$root/assets/logo" demo.tape
 
 # tenten records in REALTIME: a continuous animation needs the wall
 # clock (every other example runs deterministic).
