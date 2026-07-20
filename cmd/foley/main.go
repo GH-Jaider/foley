@@ -121,14 +121,14 @@ var flagGroups = []struct {
 }
 
 // printGroupedFlags renders the record flags under flagGroups' headers.
-func printGroupedFlags(w io.Writer, fs *flag.FlagSet) {
+func printGroupedFlags(w io.Writer, fs *flag.FlagSet, st styles) {
 	seen := map[string]bool{}
 	for _, g := range flagGroups {
-		_, _ = fmt.Fprintf(w, "%s:\n", g.title)
+		_, _ = fmt.Fprintf(w, "%s\n", st.head.Render(g.title+":"))
 		for _, name := range g.names {
 			if f := fs.Lookup(name); f != nil {
 				seen[name] = true
-				printFlag(w, f)
+				printFlag(w, f, st)
 			}
 		}
 		_, _ = fmt.Fprintln(w)
@@ -142,12 +142,12 @@ func printGroupedFlags(w io.Writer, fs *flag.FlagSet) {
 			headed = true
 			_, _ = fmt.Fprintln(w, "ungrouped (add to flagGroups):")
 		}
-		printFlag(w, f)
+		printFlag(w, f, st)
 	})
 }
 
 // printFlag renders one flag PrintDefaults-style, minus the sorting.
-func printFlag(w io.Writer, f *flag.Flag) {
+func printFlag(w io.Writer, f *flag.Flag, st styles) {
 	arg, usage := flag.UnquoteUsage(f)
 	head := "  -" + f.Name
 	if arg != "" {
@@ -156,7 +156,7 @@ func printFlag(w io.Writer, f *flag.Flag) {
 	if f.DefValue != "" && f.DefValue != "false" && f.DefValue != "0" {
 		usage += fmt.Sprintf(" (default %s)", f.DefValue)
 	}
-	_, _ = fmt.Fprintln(w, head)
+	_, _ = fmt.Fprintln(w, st.accent.Render(head))
 	_, _ = fmt.Fprintln(w, "        "+usage)
 }
 
@@ -192,6 +192,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runThemes(args[1:], stdout, stderr)
 		case "doctor":
 			return runDoctor(args[1:], stdout, stderr)
+		case "manual":
+			return runManual(args[1:], stdout, stderr)
 		case "new":
 			return runNew(args[1:], stdout, stderr)
 		case "wardrobe":
@@ -255,26 +257,34 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       foley sew [-from <dress>] <name>\n" +
 		"       foley doctor [-fonts dir]\n" +
 		"       foley themes | fonts | wardrobe [name]\n" +
+		"       foley manual\n" +
 		"       foley completion bash|zsh|fish\n"
 	welcome := func(w io.Writer) {
 		showLogo(w)
-		_, _ = fmt.Fprint(w, pitch+"\n"+
-			"start here:\n"+
-			"  foley new demo.tape        a starter tape to edit\n"+
-			"  foley demo.tape            record its outputs (gif/mp4/webm/webp/cast/txt)\n"+
-			"  foley play demo.tape       watch it right here, in this terminal\n"+
-			"  foley -watch demo.tape     re-record every time you save\n"+
-			"  foley validate demo.tape   the spotting session: lint + cue sheet\n"+
-			"  foley doctor               check fonts, engine and ffmpeg\n\n"+
-			"also: sew (make a dress) · themes · fonts · wardrobe · completion\n"+
-			"flags: foley -h              the full reference\n")
+		st := newStyles(w)
+		var b strings.Builder
+		b.WriteString(pitch + "\n" + st.head.Render("start here:") + "\n")
+		for _, c := range [...]struct{ cmd, what string }{
+			{"foley new demo.tape", "a starter tape to edit"},
+			{"foley demo.tape", "record its outputs (gif/mp4/webm/webp/cast/txt)"},
+			{"foley play demo.tape", "watch it right here, in this terminal"},
+			{"foley -watch demo.tape", "re-record every time you save"},
+			{"foley validate demo.tape", "the spotting session: lint + cue sheet"},
+			{"foley doctor", "check fonts, engine and ffmpeg"},
+			{"foley manual", "the manual, right here in the terminal"},
+		} {
+			b.WriteString("  " + st.accent.Render(fmt.Sprintf("%-25s", c.cmd)) + "  " + c.what + "\n")
+		}
+		b.WriteString("\nalso: sew (make a dress) · themes · fonts · wardrobe · completion\n")
+		b.WriteString("flags: " + st.accent.Render("foley -h") + "              the full reference\n")
+		_, _ = fmt.Fprint(w, b.String())
 	}
 	fullHelp := func(w io.Writer) {
 		_, _ = fmt.Fprint(w, pitch+"\n"+usageLines+"\n"+
 			"\"-\" reads the tape from stdin. Relative paths in the tape (Output,\n"+
 			"Screenshot, Source) resolve against the current working directory,\n"+
 			"exactly like VHS. Flags go before or after the tape path — both work.\n\n")
-		printGroupedFlags(w, fs)
+		printGroupedFlags(w, fs, newStyles(w))
 	}
 	fs.Usage = func() {
 		_, _ = fmt.Fprint(stderr, usageLines+"\nfoley -h lists every flag\n")
@@ -346,6 +356,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// developing — only when stderr is a terminal; CI and pipes stay
 	// silent as always.
 	progress := newProgressRenderer(stderr)
+	// One style probe per invocation: building styles interrogates the
+	// terminal (background query), so recordOnce must not re-probe per
+	// output — and -watch re-records forever.
+	st := newStyles(stdout)
 	opts := tape.RunOptions{
 		Mode:            m,
 		ModifyOtherKeys: *mok,
@@ -377,7 +391,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
 			switch tapeArg {
-			case "play", "validate", "themes", "doctor", "new", "sew", "fonts", "wardrobe", "completion":
+			case "play", "validate", "themes", "doctor", "manual", "new", "sew", "fonts", "wardrobe", "completion":
 				_, _ = fmt.Fprintf(stderr, "foley: (did you mean `foley %s …`? subcommands go before flags)\n", tapeArg)
 			}
 			return watchPaths, 1
@@ -403,7 +417,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return watchPaths, 1
 		}
 		for _, out := range rep.Outputs {
-			_, _ = fmt.Fprintf(stdout, "foley: wrote %s\n", out)
+			_, _ = fmt.Fprintf(stdout, "foley: wrote %s\n", st.accent.Render(out))
 		}
 		return watchPaths, 0
 	}
@@ -456,6 +470,7 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 		return 2
 	}
 	opts := tape.RunOptions{Mode: m, ModifyOtherKeys: *mok}
+	st := newStyles(stderr)
 	exit := 0
 	for _, arg := range files {
 		src, err := readTape(arg, stdin)
@@ -471,7 +486,7 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 			continue
 		}
 		for _, w := range tape.Lint(t, opts) {
-			_, _ = fmt.Fprintf(stderr, "%s: warning: %s\n", arg, w)
+			_, _ = fmt.Fprintf(stderr, "%s: %s %s\n", arg, st.warn.Render("warning:"), w)
 		}
 		if n := len(t.Cues); n > 0 {
 			dresses, keys, highlights, zooms, studios := 0, 0, 0, 0, 0
@@ -493,9 +508,9 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 			if n == 1 {
 				plural = ""
 			}
-			_, _ = fmt.Fprintf(stderr, "%s: cue sheet: %d cue%s — %d dress, %d keys, %d highlight, %d zoom, %d studio\n", arg, n, plural, dresses, keys, highlights, zooms, studios)
+			_, _ = fmt.Fprintf(stderr, "%s: %s %d cue%s — %d dress, %d keys, %d highlight, %d zoom, %d studio\n", arg, st.accent.Render("cue sheet:"), n, plural, dresses, keys, highlights, zooms, studios)
 			if zooms > 0 {
-				_, _ = fmt.Fprintf(stderr, "%s: note: the zoom sharp-cap check needs the real font geometry — it runs at frame zero of the recording, before any key is typed\n", arg)
+				_, _ = fmt.Fprintf(stderr, "%s: %s\n", arg, st.dim.Render("note: the zoom sharp-cap check needs the real font geometry — it runs at frame zero of the recording, before any key is typed"))
 			}
 		}
 	}
@@ -529,6 +544,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ok := true
+	st := newStyles(stdout)
 	// Ctrl-C must run the deferred cleanups (staging dirs, child, pty)
 	// instead of leaving litter — doctor promises "changes nothing".
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -540,35 +556,35 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	cancel()
 	if ffErr != nil {
 		ok = false
-		_, _ = fmt.Fprintf(stdout, "✗ ffmpeg: %v\n", ffErr)
+		_, _ = fmt.Fprintf(stdout, "%s ffmpeg: %v\n", st.bad.Render("✗"), ffErr)
 		hint := "apt-get install ffmpeg (or your distro's package manager)"
 		if runtime.GOOS == "darwin" {
 			hint = "brew install ffmpeg"
 		}
-		_, _ = fmt.Fprintf(stdout, "  gif/mp4/webm/webp outputs need it — install: %s\n", hint)
+		_, _ = fmt.Fprintf(stdout, "  %s\n", st.dim.Render("gif/mp4/webm/webp outputs need it — install: "+hint))
 	} else {
 		// No verification claim: execx deliberately passes unparseable
 		// version strings (git builds), so "verified" would sometimes lie.
-		_, _ = fmt.Fprintf(stdout, "✓ ffmpeg: %s\n", path)
+		_, _ = fmt.Fprintf(stdout, "%s ffmpeg: %s\n", st.ok.Render("✓"), path)
 	}
 
-	if err := doctorSmoke(ctx, *fonts, stdout); err != nil {
+	if err := doctorSmoke(ctx, *fonts, stdout, st); err != nil {
 		ok = false
-		_, _ = fmt.Fprintf(stdout, "✗ record: %v\n", err)
+		_, _ = fmt.Fprintf(stdout, "%s record: %v\n", st.bad.Render("✗"), err)
 	}
 
 	if !ok {
-		_, _ = fmt.Fprintln(stdout, "doctor: NOT ready — fix the ✗ items above")
+		_, _ = fmt.Fprintln(stdout, "doctor: "+st.bad.Render("NOT ready")+" — fix the ✗ items above")
 		return 1
 	}
-	_, _ = fmt.Fprintln(stdout, "doctor: ready — record something!")
+	_, _ = fmt.Fprintln(stdout, "doctor: "+st.ok.Render("ready")+" — record something!")
 	return 0
 }
 
 // doctorSmoke records 2 declared seconds against /bin/sh and renders
 // frames to a throwaway dir: fonts (hash-verified by New), engine, pty,
 // driver and rasterizer all prove themselves in one pass.
-func doctorSmoke(ctx context.Context, fontsDir string, stdout io.Writer) error {
+func doctorSmoke(ctx context.Context, fontsDir string, stdout io.Writer, st styles) error {
 	rec, err := foley.New(foley.Options{
 		Command:  []string{"/bin/sh"},
 		Cols:     40,
@@ -612,7 +628,7 @@ func doctorSmoke(ctx context.Context, fontsDir string, stdout io.Writer) error {
 	if len(frames) == 0 {
 		return errors.New("smoke rendered no frames")
 	}
-	_, _ = fmt.Fprintf(stdout, "✓ record: fonts verified, engine up, 2s smoke → %d frame(s)\n", len(frames))
+	_, _ = fmt.Fprintf(stdout, "%s record: fonts verified, engine up, 2s smoke → %d frame(s)\n", st.ok.Render("✓"), len(frames))
 	return nil
 }
 
@@ -686,7 +702,8 @@ Sleep 2s
 		_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "foley: wrote %s — record it with: foley %s\n", path, path)
+	st := newStyles(stdout)
+	_, _ = fmt.Fprintf(stdout, "foley: wrote %s — record it with: %s\n", st.accent.Render(path), st.accent.Render("foley "+path))
 	return 0
 }
 
@@ -738,10 +755,11 @@ func runWardrobe(args []string, stdout, stderr io.Writer) int {
 	for _, b := range tape.BuiltinDresses() {
 		builtins[b] = true
 	}
+	st := newStyles(stdout)
 	switch len(args) {
 	case 0:
 		for _, name := range tape.BuiltinDresses() {
-			_, _ = fmt.Fprintf(stdout, "%s (built-in)\n", name)
+			_, _ = fmt.Fprintf(stdout, "%s %s\n", name, st.dim.Render("(built-in)"))
 		}
 		dir := userDressDir()
 		if dir == "" {
@@ -761,9 +779,9 @@ func runWardrobe(args []string, stdout, stderr io.Writer) int {
 			name := strings.TrimSuffix(e.Name(), ".json")
 			mark := ""
 			if builtins[name] {
-				mark = " — SHADOWED by the built-in; rename it or use its path"
+				mark = st.warn.Render(" — SHADOWED by the built-in; rename it or use its path")
 			}
-			_, _ = fmt.Fprintf(stdout, "%s (yours: %s)%s\n", name, filepath.Join(dir, e.Name()), mark)
+			_, _ = fmt.Fprintf(stdout, "%s %s%s\n", name, st.dim.Render("(yours: "+filepath.Join(dir, e.Name())+")"), mark)
 		}
 		return 0
 	case 1:
@@ -877,14 +895,15 @@ func runSew(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "foley: sew: %v\n", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "sewed %s\n\n", path)
-	_, _ = fmt.Fprintf(stdout, "  wear it in a tape:  # foley: dress ./%s\n", path)
-	_, _ = fmt.Fprintf(stdout, "  or per run:         foley -dress ./%s demo.tape\n\n", path)
-	_, _ = fmt.Fprint(stdout, "  fields: theme (foley themes), font (foley fonts, ./file.ttf, or\n"+
+	st := newStyles(stdout)
+	_, _ = fmt.Fprintf(stdout, "sewed %s\n\n", st.accent.Render(path))
+	_, _ = fmt.Fprintf(stdout, "  wear it in a tape:  %s\n", st.accent.Render("# foley: dress ./"+path))
+	_, _ = fmt.Fprintf(stdout, "  or per run:         %s\n\n", st.accent.Render("foley -dress ./"+path+" demo.tape"))
+	_, _ = fmt.Fprint(stdout, st.dim.Render("  fields: theme (foley themes), font (foley fonts, ./file.ttf, or\n"+
 		"  {regular/bold/italic/boldItalic} files), fontSize, windowBar,\n"+
 		"  windowBarSize, windowBarColor, windowTitle, titleAlign, margin,\n"+
 		"  marginFill, borderRadius, padding — delete what the dress\n"+
-		"  should not touch; the tape's explicit Sets always win.\n")
+		"  should not touch; the tape's explicit Sets always win.")+"\n")
 	return 0
 }
 
@@ -896,11 +915,13 @@ func runFonts(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "usage: foley fonts")
 		return 2
 	}
+	st := newStyles(stdout)
 	for _, n := range foley.FontFamilies() {
+		suffix := ""
 		if n == foley.DefaultFontFamily {
-			n += " (default)"
+			suffix = " " + st.dim.Render("(default)")
 		}
-		_, _ = fmt.Fprintln(stdout, n)
+		_, _ = fmt.Fprintln(stdout, n+suffix)
 	}
 	return 0
 }

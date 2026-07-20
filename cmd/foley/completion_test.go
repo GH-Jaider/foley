@@ -28,7 +28,7 @@ func TestCompletionScripts(t *testing.T) {
 			}
 			// Every subcommand completes in every shell — a new
 			// subcommand must reach the scripts, loudly.
-			for _, sub := range []string{"play", "validate", "sew", "wardrobe", "completion"} {
+			for _, sub := range []string{"play", "validate", "sew", "wardrobe", "manual", "completion"} {
 				if !strings.Contains(stdout, sub) {
 					t.Fatalf("%s script does not know the %q subcommand", c.shell, sub)
 				}
