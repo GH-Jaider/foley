@@ -53,7 +53,7 @@ want "$@" && take keys demo.tape
 current=kitty-graphics
 want "$@" && take kitty-graphics demo.tape
 
-# lf records inside the studio (ADR-023): the committed props reach
+# lf records inside the studio: the committed props reach
 # the closed set through -env PROPS.
 current=lf
 want "$@" && take kitty-graphics/lf -env "PROPS=$root/examples/kitty-graphics/lf" demo.tape
@@ -77,5 +77,22 @@ want "$@" && take kitty-graphics/tenten -mode realtime demo.tape
 
 current=zoom
 want "$@" && take zoom demo.tape
+
+# The README's mini-gifs (assets/readme): one feature per take, a few
+# seconds each — the compact row the front page embeds; the narrative
+# takes above stay the linked deep dives. The dress mini records twice
+# on purpose: same tape, two looks.
+current=readme
+if want "$@"; then
+	printf '>> assets/readme\n'
+	cd "$root/assets/readme"
+	foley -dress macos -o dress-macos.gif dress.tape
+	foley -dress noir -o dress-noir.gif dress.tape
+	foley keys.tape
+	foley highlight.tape
+	foley studio.tape
+	foley title.tape
+	foley zoom.tape
+fi
 
 printf 'examples: done\n'
