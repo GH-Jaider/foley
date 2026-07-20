@@ -1,7 +1,7 @@
 # Pineado a golangci-lint v2.12.2 (Makefile lo verifica; CI lo instala exacto).
 # Set curado a propósito — encender linters por volumen también es slop.
 #
-# depguard (ADR-009): reglas por ZONA, mutuamente excluyentes vía globs.
+# depguard: reglas por ZONA, mutuamente excluyentes vía globs.
 # Semántica verificada empíricamente (2026-07-15): entre reglas distintas un
 # allow puede tragarse un deny, pero DENTRO de una regla deny > allow. Por eso
 # cada zona es autocontenida: presupuesto de deps (allow strict) + sus propias
@@ -44,7 +44,7 @@ linters:
             - golang.org/x/term
         # internal/ptyx: segundo sitio sancionado de os/exec — spawnea EL
         # COMANDO DEMO del usuario sobre el pty (distinto de execx, que
-        # invoca herramientas con tabla de versiones). Enmienda a ADR-009.
+        # invoca herramientas con tabla de versiones).
         zona-ptyx:
           list-mode: strict
           files:
@@ -88,13 +88,42 @@ linters:
             - "**/internal/testassets/**"
           allow:
             - $gostd
+        # cmd/foley: la puerta. La ÚNICA zona con lipgloss (ADR-024) —
+        # presentación del binario; la librería jamás lo importa. Sus
+        # tests quedan en zona-general-tests (pinean texto, no ANSI).
+        zona-cli:
+          list-mode: strict
+          files:
+            - "**/cmd/foley/**"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/GH-Jaider/foley
+            - github.com/creack/pty
+            - github.com/go-text/typesetting
+            - golang.org/x/image
+            - golang.org/x/sys
+            - golang.org/x/term
+            - github.com/charmbracelet/lipgloss
+          deny:
+            - pkg: github.com/GH-Jaider/foley/internal/vtengine/ghostty
+              desc: solo la factory internal/vtengine puede importar motores concretos (cuarentena cgo)
+            - pkg: github.com/GH-Jaider/foley/internal/vtengine/fake
+              desc: el motor títere es solo para tests
+            - pkg: github.com/GH-Jaider/foley/internal/testassets
+              desc: infraestructura de tests — jamás en producción
+            - pkg: testing
+              desc: producción no importa testing (arrastra el runtime de tests al binario)
+            - pkg: os/exec
+              desc: binarios externos solo a través de internal/execx (tabla única de tools)
         # Resto del árbol, código de PRODUCCIÓN (API raíz, tape, key, driver,
-        # raster, fontpack, ptyx, encode, theme, cmd): presupuesto + fronteras.
+        # raster, fontpack, ptyx, encode, theme): presupuesto + fronteras.
         zona-general:
           list-mode: strict
           files:
             - $all
             - "!$test"
+            - "!**/cmd/foley/**"
             - "!**/internal/execx/**"
             - "!**/internal/ptyx/**"
             - "!**/internal/vtengine/**"
@@ -109,7 +138,7 @@ linters:
             - golang.org/x/term
           deny:
             - pkg: github.com/GH-Jaider/foley/internal/vtengine/ghostty
-              desc: solo la factory internal/vtengine puede importar motores concretos (cuarentena cgo, ADR-009)
+              desc: solo la factory internal/vtengine puede importar motores concretos (cuarentena cgo)
             - pkg: github.com/GH-Jaider/foley/internal/vtengine/fake
               desc: el motor títere es solo para tests
             - pkg: github.com/GH-Jaider/foley/internal/testassets
@@ -146,7 +175,7 @@ linters:
         - map
     misspell:
       locale: US
-  # La gramática vendoreada de VHS (ADR-008) no se lintea: fidelidad
+  # La gramática vendoreada de VHS no se lintea: fidelidad
   # bug-por-bug con upstream y diffs limpios al subir el pin.
   exclusions:
     paths:

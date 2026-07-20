@@ -1,4 +1,4 @@
-# The keys reel (ADR-016) on its motivating case: a TUI. lazygit's
+# The keys reel on its motivating case: a TUI. lazygit's
 # whole grammar is invisible keystrokes — j/k to move, space to stage,
 # c to commit — and the film strip under the window is the only place
 # they can be seen. Words as a real keycap prints them, a blank
@@ -27,7 +27,7 @@ Env GIT_COMMITTER_EMAIL "demo@foley"
 Env GIT_AUTHOR_DATE "2026-01-01T00:00:00Z"
 Env GIT_COMMITTER_DATE "2026-01-01T00:00:00Z"
 
-# The studio is the whole old ritual (ADR-023): the set is HOME and
+# The studio is the whole old ritual: the set is HOME and
 # cwd, lazygit finds its config at the set's own XDG path, and
 # everything is struck when the take ends.
 Hide

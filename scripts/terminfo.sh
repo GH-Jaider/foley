@@ -1,5 +1,5 @@
 #!/bin/sh
-# Regenera internal/terminfo desde el PIN del motor (ADR-021): ghostty
+# Regenera internal/terminfo desde el PIN del motor: ghostty
 # mantiene su terminfo como fuente Zig (src/terminfo/ghostty.zig) y la
 # emite en build — aquí la emitimos desde el MISMO commit pineado en
 # build.zig.zon y la compilamos con tic. Así la entrada que foley

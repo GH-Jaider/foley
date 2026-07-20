@@ -17,7 +17,7 @@ Set FontSize 15
 Set TypingSpeed 55ms
 
 Hide
-# The studio (ADR-023) is the set; the example's committed props
+# The studio is the set; the example's committed props
 # arrive via -env PROPS (see scripts/examples.sh). lf's config goes
 # through -config EXPLICITLY (its per-OS search paths ignore a set
 # HOME on macOS) behind an alias, so the visible command stays a

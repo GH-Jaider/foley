@@ -1,7 +1,7 @@
 # The VHS-style fetch shot, the foley way: REAL fastfetch, no mockup —
 # the film chip is the logo (foley.ans, the brand's single source) and
 # the `Terminal: foley` line is GENUINE: foley IS the terminal the demo
-# runs in (ADR-021); fastfetch just reports it.
+# runs in; fastfetch just reports it.
 
 Output fetch.gif
 # foley: dress foley

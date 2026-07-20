@@ -1,5 +1,5 @@
 #!/bin/sh
-# Vendors VHS's REAL .tape grammar (ADR-008), pinned by release.
+# Vendors VHS's REAL .tape grammar, pinned by release.
 #
 # Brings token/, lexer/, parser/ (code + tests), the example corpus
 # (*.tape only) and the LICENSE, rewriting import paths into foley's
@@ -74,7 +74,7 @@ cat > "$dst/PROVENANCE.md" <<EOF
 - License: MIT (LICENSE in this directory)
 - Changes: import-path rewrite only
   (github.com/charmbracelet/vhs/* -> .../tape/internal/vhsgrammar/*).
-- Regenerate with: scripts/vendor-vhs.sh (ADR-008).
+- Regenerate with: scripts/vendor-vhs.sh.
 EOF
 
 count=$(find "$dst" -name '*.tape' | wc -l | tr -d ' ')

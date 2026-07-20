@@ -1,11 +1,11 @@
-# The camera (ADR-019) earning its keep: tmux splits the screen, the
+# The camera earning its keep: tmux splits the screen, the
 # right pane runs the tests, and the FAIL is too small to read — so
 # the camera pushes onto THAT PANE, holds, and pulls back. The scene
 # renders on a 2x supersampled master: the zoom is a 1:1 crop, never
 # an upscale, never blur. The keys reel narrates the tmux chord.
 
 Output zoom.gif
-# noir, plus the reactive title (ADR-022): the bar starts as "~" and
+# noir, plus the reactive title: the bar starts as "~" and
 # becomes "tmux" the moment tmux declares itself via OSC 2 — like a
 # real terminal's tab. Footage, not host state.
 # foley: dress {"theme":"TokyoNight","windowBar":"Colorful","windowBarSize":28,"windowTitle":"~","borderRadius":10,"padding":30,"margin":36,"marginFill":"#0d0e16","windowTitleFollow":true}
@@ -21,7 +21,7 @@ Set FontSize 15
 Set TypingSpeed 55ms
 
 Hide
-# The studio (ADR-023) is the set: tmux reads the take's own
+# The studio is the set: tmux reads the take's own
 # ~/.tmux.conf (no status clock — the recording must not tick; the
 # default status-right even carries the HOSTNAME) and set-titles makes
 # it DECLARE its title over OSC 2 (the string is pinned: the default

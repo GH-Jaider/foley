@@ -53,7 +53,7 @@ fetch JetBrainsMono-BoldItalic.ttf "$jb/JetBrainsMono-BoldItalic.ttf" \
 fetch NotoColorEmoji.ttf "$noto/NotoColorEmoji.ttf" \
   39ee3c587e10e89669b9ff32703261d10d5f9c4dd5ad147b6b5a1c5200591817
 
-# The by-NAME family catalog (ADR-015): popular terminal fonts,
+# The by-NAME family catalog: popular terminal fonts,
 # free licenses (OFL / UFL / Hack), immutable URLs
 # (tag or commit SHA) and pinned sha256 — Set FontFamily "Fira Code"
 # resolves against THIS catalog, never against the system.

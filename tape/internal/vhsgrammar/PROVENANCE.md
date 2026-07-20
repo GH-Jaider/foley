@@ -6,4 +6,4 @@
 - License: MIT (LICENSE in this directory)
 - Changes: import-path rewrite only
   (github.com/charmbracelet/vhs/* -> .../tape/internal/vhsgrammar/*).
-- Regenerate with: scripts/vendor-vhs.sh (ADR-008).
+- Regenerate with: scripts/vendor-vhs.sh.

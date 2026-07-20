@@ -21,7 +21,7 @@ Hide
 # tenten's own hello-world: scaffold the commented pet template. No
 # TENTEN_PIXEL, no --pixel: tenten detects kitty graphics by terminal
 # identity, and foley declares the one its engine implements —
-# TERM=xterm-ghostty with its pinned terminfo shipped (ADR-021).
+# TERM=xterm-ghostty with its pinned terminfo shipped.
 Type@0ms "tenten new critter --template pet >/dev/null"
 Enter
 Type@0ms "clear"
@@ -34,7 +34,7 @@ Sleep 300ms
 Enter
 
 # tenten sees a kitty-graphics terminal — foley declares the one its
-# engine implements (TERM=xterm-ghostty, ADR-021) — and asks once per
+# engine implements (TERM=xterm-ghostty) — and asks once per
 # fresh HOME. Answered on camera: the question IS the demo.
 Sleep 1200ms
 Type "y"

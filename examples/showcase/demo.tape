@@ -16,12 +16,12 @@ Set Height 520
 Set FontSize 15
 Set TypingSpeed 70ms
 
-# The prompt is yours too (ADR-017): PS1 wins and bare Wait learns it.
+# The prompt is yours too: PS1 wins and bare Wait learns it.
 Env PS1 "❯ "
 # A pinned walker: fzf's default find order is filesystem-dependent.
 Env FZF_DEFAULT_COMMAND "ls -1"
 
-# The studio (ADR-023) is the set: files land on a fresh stage, struck
+# The studio is the set: files land on a fresh stage, struck
 # after the take.
 Hide
 Type@0ms "printf 'package retry\n\nfunc Handle() error {\n\treturn run(0) // FIXME: zero disables the retry loop\n}\n' > retry.go"

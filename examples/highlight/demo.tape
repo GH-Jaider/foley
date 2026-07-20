@@ -1,4 +1,4 @@
-# The highlight cue (ADR-018): point the viewer's eye. It paints the
+# The highlight cue: point the viewer's eye. It paints the
 # theme's Selection color under a /regex/ from its position in the
 # script until `off` — pure post-production, the terminal never knows.
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Construye libghostty-vt.a PINEADA (ADR-010).
+# Construye libghostty-vt.a PINEADA.
 #
 # Uso: scripts/engine-lib.sh [goos-goarch ...]
 #   Sin argumentos construye los 4 targets de v1; con argumentos, solo los

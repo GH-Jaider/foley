@@ -15,8 +15,8 @@ foley demo.tape
 
 Compatibility gaps are never silent: staged visuals (window bar,
 margins, cursor blink) and deliberate divergences (pinned fonts,
-internal clipboard) warn loudly at run time — see ADR-008's three-tier
-contract in the repository docs.
+internal clipboard) warn loudly at run time — parsed always, executed
+faithfully or warned, never silent.
 
 ## What VHS cannot record
 

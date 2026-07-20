@@ -1,6 +1,6 @@
 // The foley fetch look: the film chip as logo (foley.ans, the brand's
 // single source), the modules that matter. `Terminal: foley` is not
-// styling — foley IS the terminal the demo runs in (ADR-021);
+// styling — foley IS the terminal the demo runs in;
 // fastfetch simply reports it.
 {
   "logo": {

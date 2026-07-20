@@ -1,4 +1,4 @@
-# A custom prompt (ADR-017): Env PS1 was always legal grammar — foley
+# A custom prompt: Env PS1 was always legal grammar — foley
 # makes it WIN over the pinned shell table, and a bare Wait learns the
 # new prompt (its pattern derives from PS1, loudly when it cannot).
 # This tape still records in VHS too — there the Env has no effect and
