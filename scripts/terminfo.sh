@@ -19,10 +19,10 @@ dst=$root/internal/terminfo
 
 url=$(sed -n 's/^ *\.url = "\(.*\)",$/\1/p' "$zon")
 hash=$(sed -n 's/^ *\.hash = "\(.*\)",$/\1/p' "$zon")
-[ -n "$url" ] && [ -n "$hash" ] || {
+if [ -z "$url" ] || [ -z "$hash" ]; then
   echo "terminfo: no pude leer url/hash de $zon" >&2
   exit 1
-}
+fi
 
 # zig fetch baja el paquete al cache global y devuelve su hash de
 # contenido — la verificación contra el pin es exactamente la del build.
@@ -51,10 +51,10 @@ else
   echo "terminfo: el paquete $hash no aparece en el cache de zig ($cache/p)" >&2
   exit 1
 fi
-[ -n "$src" ] && [ -f "$src/ghostty.zig" ] || {
+if [ -z "$src" ] || [ ! -f "$src/ghostty.zig" ]; then
   echo "terminfo: src/terminfo/ghostty.zig no está en el paquete del pin" >&2
   exit 1
-}
+fi
 cp "$src/ghostty.zig" "$src/Source.zig" "$work/"
 
 # Emisor mínimo. Writer.fixed + debug.print (stderr) esquiva el churn
