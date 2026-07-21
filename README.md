@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://pkg.go.dev/github.com/GH-Jaider/foley"><img src="https://pkg.go.dev/badge/github.com/GH-Jaider/foley.svg" alt="Go Reference"></a>
   <a href="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml"><img src="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/GH-Jaider/foley/releases/latest"><img src="https://img.shields.io/github/v/release/GH-Jaider/foley" alt="latest release"></a>
+  <a href="https://github.com/GH-Jaider/foley/releases"><img src="https://img.shields.io/github/v/release/GH-Jaider/foley?include_prereleases&sort=semver" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FF4F45.svg" alt="MIT license"></a>
 </p>
 
@@ -34,7 +34,7 @@ That one decision turned out to carry the whole project. When the frame is yours
 - every take renders from a supersampled master, so a camera is just arithmetic: push onto a region, hold, pull back, and the zoom is a 1:1 crop that is never blurry.
 - the clock is virtual, so the same tape produces byte-identical output on any machine. Demos double as visual regression tests, and a ~32-second script exports in under 5.
 - the recording never touches your real session, so one cue builds a closed set per take: fresh HOME, fresh paths, and your machine stays off camera.
-- nobody else is hired to draw the screen. No browser offstage, no display server on set, so takes render headless anywhere CI runs, and the whole studio ships as a 72 MB container.
+- nobody else is hired to draw the screen. No browser offstage, no display server on set, so takes render headless anywhere CI runs, and the whole studio builds into a considerably small container.
 - a finished take is just frames, so it screens anywhere: a gif in a README, an asciicast, golden text for CI, or live in your own terminal.
 - and the kitty graphics that started all this render byte-exactly, because the engine underneath is a real terminal's.
 
