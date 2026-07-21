@@ -1,0 +1,289 @@
+# Release: build the four native binaries, package them, cut a GitHub
+# release, and update the Homebrew tap. foley is cgo (links the pinned
+# libghostty-vt.a) and bakes the fonts in with -tags embedfonts, so a
+# release binary is self-contained — no $FOLEY_FONTS, one file.
+#
+# Cross-compiling cgo for four targets from one host is the hard path,
+# and the darwin .a needs Apple's libtool. So this does NOT cross-build:
+# the engine .a for each target is cross-compiled with zig-in-Docker on
+# ubuntu (the same scripts/engine-lib.sh the repo already uses), then
+# each binary is built on its own NATIVE runner. Mirrors the ci.yml
+# darwin-lib / crossos-macos pattern, extended to all four targets.
+#
+# Trigger: push a tag `vX.Y.Z`. Or run manually (workflow_dispatch) with
+# dry_run=true to build+package+validate WITHOUT publishing anything —
+# the first real release should be rehearsed that way.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for a manual run, e.g. 0.1.0-rc1 (no leading v)'
+        required: true
+      dry_run:
+        description: 'Build and package but do not publish (release + tap skipped)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write # cut the release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Resolve the version once: from the tag on a push, from the input on
+  # a manual run. `ver` has no leading v; `tag` keeps it.
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      ver: ${{ steps.v.outputs.ver }}
+      tag: ${{ steps.v.outputs.tag }}
+      dry: ${{ steps.v.outputs.dry }}
+    steps:
+      - id: v
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            ver="${{ inputs.version }}"
+            dry="${{ inputs.dry_run }}"
+          else
+            ver="${GITHUB_REF_NAME#v}"
+            dry=false
+          fi
+          {
+            echo "ver=$ver"
+            echo "tag=v$ver"
+            echo "dry=$dry"
+          } >> "$GITHUB_OUTPUT"
+          echo "releasing v$ver (dry_run=$dry)"
+
+  # The pinned engine .a for each target — all four cross-compiled on
+  # ubuntu with zig-in-Docker (engine-lib.sh). The darwin ones are NOT
+  # yet repacked (that needs Apple's libtool; the macOS build job does
+  # it). Same cache key shape as ci.yml so a warm pin is reused.
+  libs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [linux-amd64, linux-arm64, darwin-amd64, darwin-arm64]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: restore libghostty-vt (${{ matrix.target }})
+        id: libcache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/${{ matrix.target }}
+          key: libghostty-${{ matrix.target }}-${{ hashFiles('internal/vtengine/ghostty/libbuild/build.zig.zon', 'scripts/engine-lib.sh') }}
+      - name: build libghostty-vt (${{ matrix.target }}) from the pin
+        if: steps.libcache.outputs.cache-hit != 'true'
+        run: scripts/engine-lib.sh ${{ matrix.target }}
+      - name: save libghostty-vt (${{ matrix.target }})
+        if: always() && steps.libcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/vtengine/ghostty/lib/${{ matrix.target }}
+          key: ${{ steps.libcache.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lib-${{ matrix.target }}
+          path: internal/vtengine/ghostty/lib/${{ matrix.target }}/libghostty-vt.a
+
+  # One native runner per target: bring in its .a, bake fonts, build a
+  # self-contained binary, package a reproducible tarball + checksum.
+  binaries:
+    needs: [meta, libs]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-amd64,  runner: ubuntu-24.04,     static: true  }
+          - { target: linux-arm64,  runner: ubuntu-24.04-arm, static: true  }
+          - { target: darwin-amd64, runner: macos-15-intel,   static: false }
+          - { target: darwin-arm64, runner: macos-15,         static: false }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: cache pinned fonts
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: internal/fontpack/fonts
+          key: fonts-${{ hashFiles('scripts/fonts.sh') }}
+      - name: fonts
+        run: make fonts
+      - name: bring in the engine .a
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: lib-${{ matrix.target }}
+          path: internal/vtengine/ghostty/lib/${{ matrix.target }}
+      # The darwin .a was cross-compiled on ubuntu; zig's archiver
+      # misaligns and Apple's ld rejects it. Repack with libtool — the
+      # exact step scripts/engine-lib.sh runs when the host is macOS.
+      - name: repack the darwin .a with Apple libtool
+        if: startsWith(matrix.target, 'darwin')
+        run: |
+          dir="$GITHUB_WORKSPACE/internal/vtengine/ghostty/lib/${{ matrix.target }}"
+          work=$(mktemp -d); cd "$work"
+          ar x "$dir/libghostty-vt.a"
+          chmod 644 ./*
+          libtool -static -o "$dir/libghostty-vt.a" ./*.o
+      # -tags "ghosttyvt embedfonts": real engine + baked-in fonts.
+      # linux is fully static (safe: foley uses no NSS/DNS) so the
+      # tarball runs on any glibc/musl distro; darwin links normally.
+      - name: build foley (${{ matrix.target }})
+        run: |
+          V='${{ needs.meta.outputs.ver }}'
+          LD="-X main.version=v${V}"
+          if [ "${{ matrix.static }}" = true ]; then
+            LD="$LD -linkmode external -extldflags \"-static\""
+          fi
+          CGO_ENABLED=1 go build -tags "ghosttyvt embedfonts" \
+            -ldflags "$LD" -o foley ./cmd/foley
+      - name: self-contained smoke (no FOLEY_FONTS)
+        run: env -u FOLEY_FONTS ./foley doctor
+      - name: package
+        run: |
+          os=${{ startsWith(matrix.target, 'darwin') && 'darwin' || 'linux' }}
+          arch=${{ endsWith(matrix.target, 'arm64') && 'arm64' || 'amd64' }}
+          scripts/package.sh ./foley "$os" "$arch" '${{ needs.meta.outputs.ver }}'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tarball-${{ matrix.target }}
+          path: dist/*
+
+  # Aggregate the tarballs, one checksums.txt, cut the GitHub release
+  # with the CHANGELOG section for this tag as the body.
+  release:
+    needs: [meta, binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: tarball-*
+          path: dist
+          merge-multiple: true
+      - name: checksums.txt over every tarball
+        run: |
+          cd dist
+          rm -f ./*.sha256 # per-file sums; the release ships one combined file
+          sha256sum ./*.tar.gz > checksums.txt
+          cat checksums.txt
+      - name: extract this tag's CHANGELOG section
+        id: notes
+        run: |
+          # Everything between "## vX.Y.Z" and the next "## " heading.
+          awk -v tag="${{ needs.meta.outputs.tag }}" '
+            $0 ~ "^## " tag "( |$)" {grab=1; next}
+            grab && /^## / {exit}
+            grab {print}
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "no CHANGELOG.md section for ${{ needs.meta.outputs.tag }}" >&2
+            echo "See CHANGELOG.md." > notes.md
+          fi
+          cat notes.md
+      - name: publish the release
+        if: needs.meta.outputs.dry != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create '${{ needs.meta.outputs.tag }}' \
+            --title 'foley ${{ needs.meta.outputs.tag }}' \
+            --notes-file notes.md \
+            --prerelease \
+            dist/*.tar.gz dist/checksums.txt
+      - name: dry run — what WOULD publish
+        if: needs.meta.outputs.dry == 'true'
+        run: |
+          echo "DRY RUN — would publish ${{ needs.meta.outputs.tag }} with:"
+          ls -la dist/*.tar.gz dist/checksums.txt
+
+  # Regenerate the tap formula (Formula/foley.rb in GH-Jaider/homebrew-foley)
+  # pointing at this release's tarballs, with their sha256. Needs a PAT
+  # with write access to the tap repo, stored as the TAP_GITHUB_TOKEN
+  # secret. Skipped on dry runs.
+  homebrew:
+    needs: [meta, release]
+    if: needs.meta.outputs.dry != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: tarball-*
+          path: dist
+          merge-multiple: true
+      - name: render Formula/foley.rb
+        run: |
+          V='${{ needs.meta.outputs.ver }}'
+          base="https://github.com/GH-Jaider/foley/releases/download/v${V}"
+          sha() { sha256sum "dist/foley_${V}_$1.tar.gz" | cut -d' ' -f1; }
+          mkdir -p Formula
+          cat > Formula/foley.rb <<RUBY
+          # Generated by the release workflow — do not edit by hand.
+          class Foley < Formula
+            desc "Render terminal demos from .tape scripts — no window, no capture"
+            homepage "https://github.com/GH-Jaider/foley"
+            version "${V}"
+            license "MIT"
+            depends_on "ffmpeg"
+
+            on_macos do
+              on_arm do
+                url "${base}/foley_${V}_darwin_arm64.tar.gz"
+                sha256 "$(sha darwin_arm64)"
+              end
+              on_intel do
+                url "${base}/foley_${V}_darwin_amd64.tar.gz"
+                sha256 "$(sha darwin_amd64)"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${base}/foley_${V}_linux_arm64.tar.gz"
+                sha256 "$(sha linux_arm64)"
+              end
+              on_intel do
+                url "${base}/foley_${V}_linux_amd64.tar.gz"
+                sha256 "$(sha linux_amd64)"
+              end
+            end
+
+            def install
+              bin.install "foley"
+              generate_completions_from_executable(bin/"foley", "completion", shells: [:bash, :zsh, :fish])
+            end
+
+            test do
+              system "#{bin}/foley", "--version"
+            end
+          end
+          RUBY
+          cat Formula/foley.rb
+      - name: push to the tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "TAP_GITHUB_TOKEN not set — skipping tap update (add the secret to enable)." >&2
+            exit 0
+          fi
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/GH-Jaider/homebrew-foley.git" tap
+          mkdir -p tap/Formula
+          cp Formula/foley.rb tap/Formula/foley.rb
+          cd tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/foley.rb
+          git commit -m "foley ${{ needs.meta.outputs.tag }}" || { echo "no change"; exit 0; }
+          git push

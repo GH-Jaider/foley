@@ -7,25 +7,27 @@
 > In film, a foley artist recreates sound in the studio, with real objects instead of set recordings.
 > Foley recreates the terminal in the studio, with your real app instead of a screen recording.
 
-foley renders terminal demos from VHS-style `.tape` scripts — without opening a terminal window. Your app runs on a real pty, an embedded terminal engine (libghostty-vt, the brain of [Ghostty](https://ghostty.org)) keeps the screen, and foley draws every frame itself.
+foley renders terminal demos from VHS-style `.tape` scripts without opening a terminal window. Your app runs on a real pty, an embedded terminal engine (libghostty-vt, the brain of [Ghostty](https://ghostty.org)) keeps the screen, and foley draws every frame itself.
 
 <p align="center">
   <img src="examples/showcase/showcase.gif" alt="the showcase — a trailer shot entirely inside foley" width="720">
 </p>
 
-<sub>One take, no window anywhere: real CLI tools on a real pty, a pixel-art film premiering over kitty graphics, and the camera, the highlight and the input reel added in post — by the renderer itself. A gif is a silent film, so the sound effects are written. The tape that shot all of it: <a href="examples/showcase">examples/showcase</a>.</sub>
+<sub>One take, no window anywhere: real CLI tools on a real pty, a pixel-art film premiering over kitty graphics, and the camera, the highlight and the input reel added in post by the renderer itself. A gif is a silent film, so the sound effects are written. The tape that shot all of it: <a href="examples/showcase">examples/showcase</a>.</sub>
 
-## The stubborn route
+## Render the terminal
 
-foley started as one demo I couldn't record. I was building a TUI that draws pixel art straight into the terminal, went looking for a recorder, and found [VHS](https://github.com/charmbracelet/vhs) — which won me over on sight: write the demo as code, a `.tape` script instead of a shaky screen recording. I still think that model is exactly right. But my app speaks the kitty graphics protocol, and those pixels never arrived on the recording — the screen being filmed didn't speak it. I wanted the tape workflow anyway, so I took the stubborn route: render the terminal myself.
+foley started as one demo I couldn't record. I was building a TUI that draws pixel art straight into the terminal, went looking for a recorder, and found [VHS](https://github.com/charmbracelet/vhs) which won me over on sight: write the demo as code, a `.tape` script instead of a shaky screen recording. I still think that model is exactly right. But my app speaks the kitty graphics protocol, and those pixels never arrived on the recording because the screen being filmed didn't speak it.
+
+I loved the workflow and couldn't use it, so my first move was to fix it at the source: teach VHS the kitty graphics protocol. But VHS films an [xterm.js](https://xtermjs.org) terminal, and xterm.js doesn't render kitty graphics; getting it there is a long road through a project that hasn't chosen to walk it, and waiting on that meant shelving the tape workflow indefinitely. The only route that kept both the authoring model *and* the pixels was **to render the terminal myself**.
 
 That one decision turned out to carry the whole project. When the frame is yours from the pty up, things stop being features you bolt on and start being consequences of the architecture:
 
-- foley is the one pressing the keys, so an input reel under the window is almost free — the track is *emitted* with exact timing, not captured and guessed at.
+- foley is the one pressing the keys, so an input reel under the window is almost free. The track is *emitted* with exact timing, not captured and guessed at.
 - every take renders from a supersampled master, so a camera is just arithmetic: push onto a region, hold, pull back, and the zoom is a 1:1 crop that is never blurry.
-- the clock is virtual, so the same tape produces byte-identical output on any machine — demos double as visual regression tests — and a ~32-second script exports in under 5.
+- the clock is virtual, so the same tape produces byte-identical output on any machine. Demos double as visual regression tests, and a ~32-second script exports in under 5.
 - the recording never touches your real session, so one cue builds a closed set per take: fresh HOME, fresh paths, and your machine stays off camera.
-- nobody else is hired to draw the screen — no browser offstage, no display server on set — so takes render headless anywhere CI runs, and the whole studio ships as a 72 MB container.
+- nobody else is hired to draw the screen. No browser offstage, no display server on set, so takes render headless anywhere CI runs, and the whole studio ships as a 72 MB container.
 - a finished take is just frames, so it screens anywhere: a gif in a README, an asciicast, golden text for CI, or live in your own terminal.
 - and the kitty graphics that started all this render byte-exactly, because the engine underneath is a real terminal's.
 
@@ -33,20 +35,41 @@ So that's foley: VHS's authoring model, kept whole, plus the post-production tha
 
 ## Setting up the studio
 
-A studio gets built once. foley needs `ffmpeg`, and for now builds from source — Go 1.26+, with Docker for the one-time engine build:
+foley needs one thing at runtime: `ffmpeg`. The binary itself is
+self-contained: the terminal engine and the fonts are baked in, so
+there is no `$FOLEY_FONTS` to set and no fonts to fetch.
+
+**Homebrew** (macOS and Linux):
 
 ```sh
-git clone https://github.com/GH-Jaider/Foley && cd Foley
-make engine-lib fonts                       # pinned libghostty-vt + pinned fonts
-go install -tags ghosttyvt ./cmd/foley
-export FOLEY_FONTS="$PWD/internal/fontpack/fonts"
+brew install ffmpeg
+brew install GH-Jaider/foley/foley
 ```
+
+**Prebuilt binary.** Grab the tarball for your platform from the
+[latest release](https://github.com/GH-Jaider/foley/releases), then:
+
+```sh
+tar xzf foley_*_$(uname -s | tr A-Z a-z)_*.tar.gz
+sudo mv foley /usr/local/bin/          # or anywhere on your PATH
+```
+
+**From source.** Needs Go 1.26+ and Docker for the one-time engine
+build. This is also how you develop foley:
+
+```sh
+git clone https://github.com/GH-Jaider/foley && cd foley
+make engine-lib fonts                  # pinned libghostty-vt + pinned fonts
+go install -tags "ghosttyvt embedfonts" ./cmd/foley   # embedfonts bakes the fonts in
+```
+
+<sub>Without <code>-tags embedfonts</code> the source build reads fonts from a directory: set <code>FOLEY_FONTS=$PWD/internal/fontpack/fonts</code>, or pass <code>-fonts</code>.</sub>
 
 When in doubt, `foley doctor` checks fonts, engine and ffmpeg.
 
 ## The script — a `.tape`
 
-A demo is written before it is recorded. The script is a `.tape` file — settings, keystrokes, waits — and the grammar is VHS's own, vendored from the pinned release ([VHS's reference](https://github.com/charmbracelet/vhs#vhs-command-reference) documents all of it):
+A demo is written before it is recorded. The script is a `.tape` file of settings, keystrokes and waits, and the grammar is VHS's own, vendored from the pinned release ([VHS's reference](https://github.com/charmbracelet/vhs#vhs-command-reference) documents all of it):
 
 ```elixir
 Output demo.gif
@@ -58,14 +81,24 @@ Enter
 Sleep 2s
 ```
 
-**Every VHS tape is a foley tape.** The upstream example corpus — all 106 tapes — parses and runs under conformance tests, and where foley differs on purpose (pinned fonts, an internal clipboard), it says so loudly at run time instead of silently drifting.
+**Every VHS tape is a foley tape.** The upstream example corpus, all 106 tapes, parses and runs under conformance tests, and where foley differs on purpose (pinned fonts, an internal clipboard), it says so loudly at run time instead of silently drifting.
 
 ```sh
 foley new demo.tape        # a starter tape to edit
 foley validate demo.tape   # the spotting session: lint + cue sheet, nothing records
 foley -watch demo.tape     # re-record every time you save
-foley manual               # the manual, right in the terminal — cues included
+foley manual               # the manual in your terminal, cues included
 ```
+
+### Agents write tapes too
+
+Most tapes today aren't typed by hand; an AI agent writes them. [`foley.md`](foley.md) is the agent-facing manual: the whole grammar, every cue, the CLI and the authoring loop (validate → record → inspect the `.txt`/frames → iterate) in one file your agent loads as a skill. The binary carries it, so you can install it anywhere, even from a `brew` install with no repo checkout:
+
+```sh
+foley skill > .claude/skills/foley/SKILL.md   # or point your agent straight at foley.md
+```
+
+Every form it teaches parses against the real grammar.
 
 ## The take — a terminal with no window
 
@@ -77,25 +110,29 @@ One command calls action and the whole take rolls. There is no window to arrange
 
 ### Two clocks
 
-Time on set passes one of two ways. **Deterministic** (the default) is a virtual clock: output is attributed to the step that caused it, every run of a tape produces identical bytes, and rendering runs faster than real time. **Realtime** rolls on the wall clock and captures every byte as it happened — the clock a continuously animating TUI needs (`-mode realtime`). Honest limits either way: waits synchronize against the real app, so they spend the time they spend.
+Time on set passes one of two ways. **Deterministic** (the default) is a virtual clock: output is attributed to the step that caused it, every run of a tape produces identical bytes, and rendering runs faster than real time. **Realtime** rolls on the wall clock and captures every byte as it happened, the clock a continuously animating TUI needs (`-mode realtime`). Honest limits either way: waits synchronize against the real app, so they spend the time they spend.
+
+Choosing between them is about how the app treats silence. The virtual clock advances when the pty goes quiet — for shell sessions and CLI runs, quiet means *done*, and the attribution is exact. But a full-screen app that spends its startup working *off* screen (spawning a server, loading providers) is silent too, and the virtual clock reads that silence as the scene ending: a `Sleep` after launching it stamps time, it does not wait. If a TUI records as a blank frame in deterministic mode, that is the signature — anchor the take on something the app draws, `Wait+Screen /Ask anything/`, and the take synchronizes with the real program while staying deterministic. (The terminal interrogation a modern TUI fires at startup — colors, pixel size, capabilities — is answered instantly, so probing costs the take nothing.) Rule of thumb: prompts, commands, output → deterministic as-is; a TUI with a slow curtain-up → deterministic plus a `Wait` anchor; content that never stops animating → realtime.
 
 → pixel art living in the terminal, recorded in realtime: [examples/kitty-graphics/tenten](examples/kitty-graphics/tenten)
 
 ### `studio` — a closed set
 
-Direction in foley is written as comments in the tape — cues, the whole next section. One cue, though, belongs to the set rather than to the footage:
+Direction in foley is written as comments in the tape. Cues are the whole next section. One cue, though, belongs to the set rather than to the footage:
 
 ```elixir
 # foley: studio
 ```
 
-HOME, the working directory and every temp default move to a fresh stage, struck when the take ends — your dotfiles, your paths and your username never make it on camera, and the take leaves nothing behind:
+HOME, the working directory and every temp default move to a fresh stage, struck when the take ends. Your dotfiles, your paths and your username never make it on camera, and the take leaves nothing behind:
 
 <p align="center">
   <img src="assets/readme/studio.gif" alt="the studio cue" width="640">
 </p>
 
-<sub><code>foley@studio</code> is nobody's real machine — the set is built fresh for the take and struck when it ends.</sub>
+<sub><code>foley@studio</code> is nobody's real machine: the set is built fresh for the take and struck when it ends.</sub>
+
+The honest boundary: a set moves the **defaults**, it forbids nothing. An app you hand an absolute host path can still read it, and a tool that asks the kernel (hostname, `$HOST`) still sees the host. For a hard boundary, record in the container.
 
 Your prompt is part of the set too: `Env PS1` wins over the pinned shell prompt, and a bare `Wait` learns the new one automatically.
 
@@ -103,18 +140,18 @@ Your prompt is part of the set too: `Env PS1` wins over the pinned shell prompt,
 
 ## Post-production — the `# foley:` cues
 
-The tape is the recording; foley adds the post-production — and the footage is never touched. Cues are the director's notes in the margins of the script: each one names a piece of the scene for foley to recreate — wardrobe, camera, where the viewer should look — and they are written as comments:
+The tape is the recording; foley adds the post-production, and the footage is never touched. Cues are the director's notes in the margins of the script: each one names a piece of the scene for foley to recreate (wardrobe, camera, where the viewer should look), and they are written as comments:
 
 ```elixir
 # foley: dress macos
 # foley: zoom 0,1 40x9 600ms
 ```
 
-Because they are comments, VHS ignores them: the same tape still runs there — cues only ever add. Inside the namespace they are strict (a typo is a parse error, never a silent no-op). `dress` and `keys` shape the whole take, `highlight` and `zoom` act at their position in the script, and `studio` — the closed set above — is the one cue that works on the set instead of the footage. `foley validate` prints the cue sheet before anything records.
+Because they are comments, VHS ignores them: the same tape still runs there, since cues only ever add. Inside the namespace they are strict (a typo is a parse error, never a silent no-op). `dress` and `keys` shape the whole take, `highlight` and `zoom` act at their position in the script, and `studio` (the closed set above) is the one cue that works on the set instead of the footage. `foley validate` prints the cue sheet before anything records.
 
 ### `dress` — one take, many looks
 
-A dress is the window's whole wardrobe — theme, bar, padding, margins — as one named layer. The tape never changes:
+A dress is the window's whole wardrobe (theme, bar, padding, margins) as one named layer. The tape never changes:
 
 ```sh
 foley -dress macos demo.tape
@@ -126,15 +163,15 @@ foley -dress noir  demo.tape
   <img src="assets/readme/dress-noir.gif" alt="the noir dress" width="49%">
 </p>
 
-<sub>The same take, recorded twice — between the two commands, only the flag changed.</sub>
+<sub>The same take, recorded twice: between the two commands, only the flag changed.</sub>
 
-`foley wardrobe` lists the built-ins, `foley sew` cuts a new one. The window bar behaves like a real terminal's — when the app declares its title (OSC 2), the bar follows it on camera:
+`foley wardrobe` lists the built-ins, `foley sew` cuts a new one. The window bar behaves like a real terminal's: when the app declares its title (OSC 2), the bar follows it on camera:
 
 <p align="center">
   <img src="assets/readme/title.gif" alt="the window bar follows the app's title" width="640">
 </p>
 
-<sub>That isn't vim — it's a <code>printf</code> declaring vim's title. The bar can't tell either.</sub>
+<sub>That isn't vim; it's a <code>printf</code> declaring vim's title. The bar can't tell either.</sub>
 
 → every built-in, on the same take: [examples/dresses](examples/dresses)
 
@@ -144,13 +181,13 @@ foley -dress noir  demo.tape
 # foley: keys
 ```
 
-Every keystroke lands on the film strip under the window, with its exact timing — recall, chords, all of it. This is the namesake's own trade: a performance track, laid under the footage in perfect sync by the one who performed it:
+Every keystroke lands on the film strip under the window, with its exact timing: recall, chords, all of it. This is the namesake's own trade: a performance track, laid under the footage in perfect sync by the one who performed it:
 
 <p align="center">
   <img src="assets/readme/keys.gif" alt="the keys reel" width="640">
 </p>
 
-<sub>The strip is emitted with the input, not read off the pixels — that <code>Ctrl+C</code> lands exactly when it was pressed.</sub>
+<sub>The strip is emitted with the input, not read off the pixels, so that <code>Ctrl+C</code> lands exactly when it was pressed.</sub>
 
 → the reel over a real TUI: [examples/keys](examples/keys)
 
@@ -168,7 +205,7 @@ A band of the theme's own selection color, from that beat of the script until `o
   <img src="assets/readme/highlight.gif" alt="the highlight cue" width="640">
 </p>
 
-<sub>The <code>FAIL</code> is a prop, staged for this shot — the real run is one link down.</sub>
+<sub>The <code>FAIL</code> is a prop, staged for this shot; the real run is one link down.</sub>
 
 → a real test run: [examples/highlight](examples/highlight)
 
@@ -180,19 +217,19 @@ Sleep 2s
 # foley: zoom off 600ms
 ```
 
-Push onto a region, hold, pull back. `0,1` is the framed region's top-left cell and `40x9` its size — cells, 0-based, the same standard `highlight` uses. The `600ms` is the length of the move, and it's optional (the house default is exactly that); there is no easing knob — the duration is the shot. `zoom off` pulls back the same way:
+Push onto a region, hold, pull back. `0,1` is the framed region's top-left cell and `40x9` its size, in cells, 0-based, the same standard `highlight` uses. The `600ms` is the length of the move, and it's optional (the house default is exactly that); there is no easing knob, since the duration is the shot. `zoom off` pulls back the same way:
 
 <p align="center">
   <img src="assets/readme/zoom.gif" alt="the zoom cue" width="640">
 </p>
 
-<sub>The push-in is a 1:1 crop of the supersampled master — that's why the hold stays crisp.</sub>
+<sub>The push-in is a 1:1 crop of the supersampled master, which is why the hold stays crisp.</sub>
 
 → the camera over tmux panes: [examples/zoom](examples/zoom)
 
 ### Dark/light pairs — one tape, two palettes
 
-`-theme` replaces the recording's palette without editing the tape — record it twice and let GitHub pick per viewer:
+`-theme` replaces the recording's palette without editing the tape: record it twice and let GitHub pick per viewer:
 
 ```sh
 foley -theme "Catppuccin Mocha" -o dark.gif  demo.tape
@@ -211,13 +248,13 @@ foley -theme "Catppuccin Latte" -o light.gif demo.tape
   <img src="examples/pair/light.gif" alt="the same tape in two palettes" width="720">
 </picture>
 
-<sub>Which palette you're seeing right now depends on your GitHub theme — same tape either way.</sub>
+<sub>Which palette you're seeing right now depends on your GitHub theme; same tape either way.</sub>
 
 → [examples/pair](examples/pair)
 
 ## The screening — outputs
 
-The finished take screens right where you are — in your own terminal, over kitty graphics:
+The finished take screens right where you are, in your own terminal, over kitty graphics:
 
 ```sh
 foley play demo.tape    # record, then watch it right here
@@ -228,14 +265,14 @@ For every other venue, format follows the extension, straight from the tape's `O
 | Extension | What you get |
 |---|---|
 | `.gif` / `.mp4` / `.webm` / `.webp` | video, encoded reproducibly (`-gif-loop`, `-output-scale` to trade weight for crispness) |
-| `.cast` | [asciicast v2](https://docs.asciinema.org/manual/asciicast/v2/) — the raw byte stream for asciinema players |
-| `.txt` | the final screen as text — golden files for CI |
+| `.cast` | [asciicast v2](https://docs.asciinema.org/manual/asciicast/v2/), the raw byte stream for asciinema players |
+| `.txt` | the final screen as text, golden files for CI |
 | `.png` | `Screenshot` frames along the way |
 | a directory | every frame as PNG + a timing manifest |
 
 ## Demos as tests
 
-A take can be reshot forever, byte for byte — which turns demos into tests: record a `.txt` (or the gif itself) as a golden file and diff it on every push; if a frame changes, something changed it. foley's own CI records the same tape on macOS and Linux and compares the frames by hash. For pipelines there is a container image (72 MB: the binary, ffmpeg, bash and the fonts).
+A take can be reshot forever, byte for byte, which turns demos into tests: record a `.txt` (or the gif itself) as a golden file and diff it on every push; if a frame changes, something changed it. The guarantee covers what foley controls (the terminal, the timing, the rendering); the footage is the app's own output, so freeze what ticks (status-bar clocks, random IDs) before goldening a take. foley's own CI records the same tape on macOS and Linux and compares the frames by hash. For pipelines there is a container image (72 MB: the binary, ffmpeg, bash and the fonts).
 
 ## The library
 
@@ -256,7 +293,7 @@ rec.Sleep(ctx, 2*time.Second)
 rec.Output(ctx, "demo.gif")
 ```
 
-Everything the CLI does — cues, dresses, the camera — is public API (`tape.Run` executes whole tapes). Error handling elided above.
+Everything the CLI does, from cues to dresses to the camera, is public API (`tape.Run` executes whole tapes). Error handling elided above.
 
 ## The CLI
 
@@ -267,7 +304,8 @@ Everything the CLI does — cues, dresses, the camera — is public API (`tape.R
 | `foley validate` | lint + cue sheet, nothing records |
 | `foley new` / `foley sew` | scaffold a tape / a dress |
 | `foley themes` / `fonts` / `wardrobe` | the catalogs |
-| `foley manual` | the manual — commands, settings and cues, in the terminal |
+| `foley manual` | the manual: commands, settings and cues, in the terminal |
+| `foley skill` | the same knowledge as one file an AI agent loads (`foley skill > SKILL.md`) |
 | `foley doctor` | check fonts, engine and ffmpeg |
 | `foley completion bash\|zsh\|fish` | shell completions |
 
@@ -275,7 +313,7 @@ Flags go before or after the tape path; `foley -h` is the grouped reference.
 
 ## The grammar — at a glance
 
-A tape speaks these commands — plus foley's cue layer on top:
+A tape speaks these commands, plus foley's cue layer on top:
 
 - `Output <path>` — specify file output
 - `Require <program>` — specify required programs for tape file
@@ -299,7 +337,11 @@ A tape speaks these commands — plus foley's cue layer on top:
 
 ## Examples
 
-The [examples gallery](examples/) holds the full takes: real tools (tmux, lazygit, lf, fastfetch, git), image previews over kitty graphics, and the tapes that recorded everything you see on this page — each one regenerable with `make examples`. Syntax highlighting for `.tape` files: [VHS's tree-sitter grammar](https://github.com/charmbracelet/tree-sitter-vhs) works as-is (same grammar).
+The [examples gallery](examples/) holds the full takes: real tools (tmux, lazygit, lf, fastfetch, git), image previews over kitty graphics, and the tapes that recorded everything you see on this page, each one regenerable with `make examples`. Syntax highlighting for `.tape` files: [VHS's tree-sitter grammar](https://github.com/charmbracelet/tree-sitter-vhs) works as-is (same grammar).
+
+## The crew
+
+So far it's a one-person production (the credits aren't kidding), but bugs, fixes and ideas are welcome. The boundaries every change keeps are in [AGENTS.md](AGENTS.md); how to get rolling, in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits
 
