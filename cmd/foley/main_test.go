@@ -122,10 +122,17 @@ func TestCLIValidate(t *testing.T) {
 	bad := filepath.Join(dir, "bad.tape")
 	writeFile(t, bad, "Foo bar\n")
 
-	t.Run("clean_tape_is_quiet", func(t *testing.T) {
+	t.Run("clean_tape_signs_off", func(t *testing.T) {
+		// A clean spotting session says so out loud — an empty response
+		// reads as "did nothing" (found live by an agent re-validating
+		// in confusion). One summary line, no warnings.
 		exit, stdout, stderr := cli([]string{"validate", good}, "")
-		if exit != 0 || stdout != "" || stderr != "" {
-			t.Fatalf("exit=%d stdout=%q stderr=%q, want silent success", exit, stdout, stderr)
+		if exit != 0 || stdout != "" {
+			t.Fatalf("exit=%d stdout=%q, want clean pass", exit, stdout)
+		}
+		want := good + ": ok — commands: 2 · cues: 0 · outputs: d.gif\n"
+		if stderr != want {
+			t.Fatalf("stderr = %q, want exactly %q", stderr, want)
 		}
 	})
 	t.Run("warnings_surface_but_pass", func(t *testing.T) {
@@ -157,8 +164,8 @@ func TestCLIValidate(t *testing.T) {
 	})
 	t.Run("stdin_dash", func(t *testing.T) {
 		exit, _, stderr := cli([]string{"validate", "-"}, "Output d.gif\nType \"hi\"\n")
-		if exit != 0 || stderr != "" {
-			t.Fatalf("exit=%d stderr=%q", exit, stderr)
+		if exit != 0 || !strings.Contains(stderr, "-: ok — ") {
+			t.Fatalf("exit=%d stderr=%q, want the ok line labeled '-'", exit, stderr)
 		}
 	})
 }
@@ -190,7 +197,8 @@ func TestCLINewScaffold(t *testing.T) {
 	if !strings.Contains(stdout, "wrote "+path) {
 		t.Fatalf("stdout = %q", stdout)
 	}
-	if exit, _, stderr := cli([]string{"validate", path}, ""); exit != 0 || stderr != "" {
+	if exit, _, stderr := cli([]string{"validate", path}, ""); exit != 0 ||
+		!strings.Contains(stderr, "ok — ") || strings.Contains(stderr, "warning:") {
 		t.Fatalf("scaffold does not validate cleanly: exit=%d stderr=%q", exit, stderr)
 	}
 	if exit, _, stderr := cli([]string{"new", path}, ""); exit != 1 || !strings.Contains(stderr, "refusing to overwrite") {
@@ -232,7 +240,8 @@ func TestCLINewScaffold(t *testing.T) {
 		if !strings.Contains(stdout, "wrote "+want) {
 			t.Fatalf("stdout = %q, want mention of %s", stdout, want)
 		}
-		if exit, _, stderr := cli([]string{"validate", want}, ""); exit != 0 || stderr != "" {
+		if exit, _, stderr := cli([]string{"validate", want}, ""); exit != 0 ||
+			!strings.Contains(stderr, "ok — ") || strings.Contains(stderr, "warning:") {
 			t.Fatalf("scaffold in subdir does not validate: exit=%d stderr=%q", exit, stderr)
 		}
 	})

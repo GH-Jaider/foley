@@ -517,6 +517,12 @@ func runValidate(args []string, stdin io.Reader, stderr io.Writer) int {
 				_, _ = fmt.Fprintf(stderr, "%s: %s\n", arg, st.dim.Render("note: the zoom sharp-cap check needs the real font geometry — it runs at frame zero of the recording, before any key is typed"))
 			}
 		}
+		// The spotting session signs off out loud: silence reads as
+		// "did nothing" to humans and agents alike (found live by an
+		// agent double-checking an empty validate). Parse failures
+		// already spoke and continued before reaching here.
+		_, _ = fmt.Fprintf(stderr, "%s: %s commands: %d · cues: %d · outputs: %s\n",
+			arg, st.ok.Render("ok —"), len(t.Commands), len(t.Cues), strings.Join(t.Outputs, ", "))
 	}
 	return exit
 }
