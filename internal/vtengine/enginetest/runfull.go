@@ -149,7 +149,7 @@ func RunFull(t *testing.T, factory Factory) {
 			t.Fatalf("OSC 2 title = %q, want vim retry.go", f.Title)
 		}
 		// A PURE title change (no cell touched) must still dirty the
-		// frame — chrome following the title cannot skip it (ADR-022).
+		// frame — chrome following the title cannot skip it.
 		snapshot(t, e) // drain dirty
 		mustWrite(t, e, "\x1b]0;tmux\x07")
 		f = snapshot(t, e)
@@ -492,6 +492,63 @@ func RunFull(t *testing.T, factory Factory) {
 		if got := responses.String(); !bytes.Contains([]byte(got), []byte("\x1b_G")) ||
 			!bytes.Contains([]byte(got), []byte("OK")) {
 			t.Fatalf("kitty a=q response = %q, want APC …OK", got)
+		}
+	})
+
+	t.Run("geometry_query_responses", func(t *testing.T) {
+		// XTWINOPS reports and XTGETTCAP: the startup interrogation of
+		// modern TUIs (opencode-class). An engine must answer them —
+		// pixel geometry from its Geometry, identity from the pinned
+		// terminfo — or a deterministic take reads the app's reply
+		// timeouts as silence and moves on before it draws (ADR-025).
+		opts := defaultOpts() // 20×4 cells of 8×16 px
+		opts.Colors = &vtengine.Colors{
+			FG: vtengine.RGB{R: 200, G: 200, B: 200},
+			BG: vtengine.RGB{R: 30, G: 30, B: 46}, // dark: scheme report = 1
+		}
+		var responses bytes.Buffer
+		opts.Responses = &responses
+		e := factory(t, opts)
+		defer func() { _ = e.Close() }()
+
+		cases := []struct{ name, query, want string }{
+			{"window_state_11t", "\x1b[11t", "\x1b[1t"},
+			{"text_area_px_14t", "\x1b[14t", "\x1b[4;64;160t"},
+			{"screen_px_15t", "\x1b[15t", "\x1b[5;64;160t"},
+			{"cell_px_16t", "\x1b[16t", "\x1b[6;16;8t"},
+			{"text_area_cells_18t", "\x1b[18t", "\x1b[8;4;20t"},
+			{"screen_cells_19t", "\x1b[19t", "\x1b[9;4;20t"},
+			// XTGETTCAP: TN answers the declared identity and Tc the
+			// truecolor flag, both from the pinned terminfo story;
+			// unknown capabilities get an immediate negative — a prompt
+			// "no" ends a reply timeout just as well as a "yes". Same
+			// doctrine for DECRQSS (vim's startup probes) and the
+			// color-scheme report neovim-era apps use to pick a theme.
+			{
+				"xtgettcap_tn", "\x1bP+q544e\x1b\\",
+				"\x1bP1+r544e=787465726d2d67686f73747479\x1b\\",
+			},
+			{"xtgettcap_truecolor_flag", "\x1bP+q5463\x1b\\", "\x1bP1+r5463\x1b\\"},
+			{"xtgettcap_unknown", "\x1bP+q6e6f7065\x1b\\", "\x1bP0+r\x1b\\"},
+			{"decrqss_negative", "\x1bP$qm\x1b\\", "\x1bP0$r\x1b\\"},
+			{"color_scheme_996", "\x1b[?996n", "\x1b[?997;1n"},
+		}
+		for _, c := range cases {
+			responses.Reset()
+			mustWrite(t, e, c.query)
+			if got := responses.String(); got != c.want {
+				t.Fatalf("%s response = %q, want %q", c.name, got, c.want)
+			}
+		}
+
+		// Geometry answers must track Resize.
+		if err := e.Resize(vtengine.Geometry{Cols: 10, Rows: 2, CellW: 10, CellH: 20}); err != nil {
+			t.Fatalf("resize: %v", err)
+		}
+		responses.Reset()
+		mustWrite(t, e, "\x1b[14t")
+		if got := responses.String(); got != "\x1b[4;40;100t" {
+			t.Fatalf("14t after resize = %q, want %q", got, "\x1b[4;40;100t")
 		}
 	})
 }

@@ -46,7 +46,7 @@ import (
 )
 
 // Engine implements vtengine.Engine on libghostty-vt (the pinned static
-// library; see libbuild/ and ADR-010).
+// library; see libbuild/).
 type Engine struct {
 	term    C.GhosttyTerminal
 	rstate  C.GhosttyRenderState
@@ -60,9 +60,12 @@ type Engine struct {
 	geo    vtengine.Geometry
 	opts   vtengine.Options
 	closed bool
+	// qf answers the queries the lib will not (queries.go); its state
+	// carries partial sequences across Write boundaries.
+	qf queryFilter
 	// lastTitle detects OSC 0/2 title changes between snapshots: a pure
 	// title change carries no dirty cells, but the frame must not be
-	// skipped (ADR-022).
+	// skipped.
 	lastTitle string
 	// lastGfxGen detects kitty-graphics mutations between snapshots: an
 	// animation retransmitting frames over the protocol never touches
@@ -83,9 +86,18 @@ func New(opts vtengine.Options) (*Engine, error) {
 	e := &Engine{geo: opts.Geometry, opts: opts}
 
 	copts := C.GhosttyTerminalOptions{
-		cols:           C.uint16_t(opts.Geometry.Cols),
-		rows:           C.uint16_t(opts.Geometry.Rows),
-		max_scrollback: 0,
+		cols: C.uint16_t(opts.Geometry.Cols),
+		rows: C.uint16_t(opts.Geometry.Rows),
+		// Scrollback MUST be nonzero even though foley never renders
+		// history: kitty placements are anchored by tracked pins, and
+		// with zero scrollback a scrolled-off anchor line is DESTROYED —
+		// ghostty re-clamps the orphaned pin to the top of the page, so
+		// the image parks over the viewport forever instead of scrolling
+		// away (found live: the foley welcome logo painting over its own
+		// help text). With history the pin scrolls out like in any real
+		// terminal: negative viewport rows, then not visible. Units are
+		// lines; the cap only bounds memory on long demos.
+		max_scrollback: 10_000,
 	}
 	if rc := C.ghostty_terminal_new(nil, &e.term, copts); rc != C.GHOSTTY_SUCCESS {
 		return nil, fmt.Errorf("ghostty: terminal_new failed: rc=%d", int(rc))
@@ -174,16 +186,27 @@ func (e *Engine) applyGeometry(g vtengine.Geometry) error {
 
 // Write feeds raw pty output bytes to the VT parser. Terminal query
 // responses arrive synchronously on Options.Responses via the WRITE_PTY
-// callback.
+// callback; the queries the lib leaves silent (XTWINOPS geometry,
+// XTGETTCAP — see queries.go) are answered here, interleaved in stream
+// order: the lib is fed up to the end of each matched query before its
+// answer is written.
 func (e *Engine) Write(p []byte) (int, error) {
 	if e.closed {
 		return 0, vtengine.ErrClosed
 	}
-	if len(p) > 0 {
-		C.ghostty_terminal_vt_write(e.term,
-			(*C.uint8_t)(unsafe.Pointer(&p[0])), C.size_t(len(p)))
+	total := len(p)
+	for len(p) > 0 {
+		n, ev := e.qf.scan(p)
+		if n > 0 {
+			C.ghostty_terminal_vt_write(e.term,
+				(*C.uint8_t)(unsafe.Pointer(&p[0])), C.size_t(n))
+		}
+		if ev != nil {
+			e.answerQuery(ev)
+		}
+		p = p[n:]
 	}
-	return len(p), nil
+	return total, nil
 }
 
 // Resize changes grid and cell geometry.
@@ -242,7 +265,7 @@ func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 	}
 
 	// Title (OSC 0/2): a borrowed string, len 0 until the app sets one
-	// (ADR-022). A change dirties the frame even with a quiet grid.
+	// A change dirties the frame even with a quiet grid.
 	var title C.GhosttyString
 	dst.Title = ""
 	if rc := C.ghostty_terminal_get(e.term, C.GHOSTTY_TERMINAL_DATA_TITLE, unsafe.Pointer(&title)); rc == C.GHOSTTY_SUCCESS && title.len > 0 {
@@ -397,6 +420,19 @@ func resolveColor(c C.GhosttyStyleColor, colors *vtengine.Colors, fallback vteng
 	default:
 		return fallback
 	}
+}
+
+// effectiveBG reads the terminal's CURRENT background — including any
+// OSC 11 override the app made mid-stream — for the color-scheme
+// report (queries.go). The lib is the source of truth, never a stale
+// copy of the seed colors.
+func (e *Engine) effectiveBG() (vtengine.RGB, bool) {
+	var c C.GhosttyColorRgb
+	if rc := C.ghostty_terminal_get(e.term, C.GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND,
+		unsafe.Pointer(&c)); rc != C.GHOSTTY_SUCCESS {
+		return vtengine.RGB{}, false
+	}
+	return rgbGo(c), true
 }
 
 func (e *Engine) graphics() (C.GhosttyKittyGraphics, bool) {
