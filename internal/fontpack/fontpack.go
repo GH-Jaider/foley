@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -80,10 +80,22 @@ type Pack struct {
 	Emoji          []byte
 }
 
-// readPinned reads one pinned file from dir and verifies its hash —
+// source returns the filesystem the pinned files live in: the fonts
+// EMBEDDED in the binary when dir is empty (a build with -tags
+// embedfonts — the release binary is self-contained), otherwise the
+// directory on disk. Either way the hash pin is verified identically,
+// so byte-for-byte rendering is the same from either source.
+func source(dir string) (fs.FS, error) {
+	if dir == "" {
+		return embeddedFonts()
+	}
+	return os.DirFS(dir), nil
+}
+
+// readPinned reads one pinned file from fsys and verifies its hash —
 // never a silent fallback to system fonts.
-func readPinned(dir, name string) ([]byte, error) {
-	b, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // paths come from the pin table
+func readPinned(fsys fs.FS, name string) ([]byte, error) {
+	b, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		return nil, fmt.Errorf("fontpack: %s: %w", name, err)
 	}
@@ -94,30 +106,33 @@ func readPinned(dir, name string) ([]byte, error) {
 	return b, nil
 }
 
-// Load reads and hash-verifies the pinned fonts from dir. Any missing or
-// tampered file is an error — never a silent fallback to system fonts.
+// Load reads and hash-verifies the pinned fonts from dir (empty dir =
+// the embedded set). Any missing or tampered file is an error — never a
+// silent fallback to system fonts.
 func Load(dir string) (*Pack, error) {
+	fsys, err := source(dir)
+	if err != nil {
+		return nil, err
+	}
 	var p Pack
-	var err error
-	if p.Text, err = readPinned(dir, "JetBrainsMono-Regular.ttf"); err != nil {
-		return nil, err
-	}
-	if p.TextBold, err = readPinned(dir, "JetBrainsMono-Bold.ttf"); err != nil {
-		return nil, err
-	}
-	if p.TextItalic, err = readPinned(dir, "JetBrainsMono-Italic.ttf"); err != nil {
-		return nil, err
-	}
-	if p.TextBoldItalic, err = readPinned(dir, "JetBrainsMono-BoldItalic.ttf"); err != nil {
-		return nil, err
-	}
-	if p.Emoji, err = readPinned(dir, "NotoColorEmoji.ttf"); err != nil {
-		return nil, err
+	for _, f := range []struct {
+		dst  *[]byte
+		name string
+	}{
+		{&p.Text, "JetBrainsMono-Regular.ttf"},
+		{&p.TextBold, "JetBrainsMono-Bold.ttf"},
+		{&p.TextItalic, "JetBrainsMono-Italic.ttf"},
+		{&p.TextBoldItalic, "JetBrainsMono-BoldItalic.ttf"},
+		{&p.Emoji, "NotoColorEmoji.ttf"},
+	} {
+		if *f.dst, err = readPinned(fsys, f.name); err != nil {
+			return nil, err
+		}
 	}
 	return &p, nil
 }
 
-// LoadFile reads a USER font file (ADR-015). No hash pin: the file is
+// LoadFile reads a USER font file. No hash pin: the file is
 // the user's own input — their repo pins it — and determinism becomes
 // parametrized: same tape + same font bytes → same frames. Whether the
 // bytes parse as a font is the raster's to report, path included.
@@ -139,7 +154,7 @@ const DefaultFamily = "JetBrains Mono"
 // the slant degrades — the grid metrics never change.
 type familyFiles [4]string
 
-// families is the name catalog (ADR-015): `Set FontFamily "Fira Code"`
+// families is the name catalog: `Set FontFamily "Fira Code"`
 // resolves HERE — hash-pinned files fetched by scripts/fonts.sh — and
 // never against the system font database. Keys are canonical names.
 func families() map[string]familyFiles {
@@ -210,17 +225,22 @@ type Family struct {
 	Regular, Bold, Italic, BoldItalic []byte
 }
 
-// LoadFamily reads a catalog family from dir, hash-verified like the
-// pack. Unknown names return ErrUnknownFamily listing the catalog.
+// LoadFamily reads a catalog family from dir (empty dir = the embedded
+// set), hash-verified like the pack. Unknown names return
+// ErrUnknownFamily listing the catalog.
 func LoadFamily(dir, name string) (*Family, error) {
 	want := normalizeFamily(name)
 	for canonical, files := range families() {
 		if normalizeFamily(canonical) != want {
 			continue
 		}
+		fsys, err := source(dir)
+		if err != nil {
+			return nil, err
+		}
 		f := &Family{Name: canonical}
 		for i, dst := range []*[]byte{&f.Regular, &f.Bold, &f.Italic, &f.BoldItalic} {
-			b, err := readPinned(dir, files[i])
+			b, err := readPinned(fsys, files[i])
 			if err != nil {
 				return nil, err
 			}
