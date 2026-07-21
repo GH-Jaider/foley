@@ -586,7 +586,7 @@ func (o *scriptedOverlay) Breakpoints(from, to time.Duration) []time.Duration {
 	return out
 }
 
-// TestOverlaySplitsAdvances pins the ADR-016 emission contract: a span
+// TestOverlaySplitsAdvances pins the keys-band emission contract: a span
 // crossing overlay breakpoints splits into exact sub-frames — a chip
 // fading mid-Sleep gets its own frames even though the GRID never
 // changed — and every render sees the frame's START instant.

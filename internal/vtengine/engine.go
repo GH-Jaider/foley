@@ -83,7 +83,7 @@ type KeyEvent struct {
 // output (io.Writer) and owns the resulting state — grid, styles, cursor,
 // and kitty-graphics storage. Implementations live behind the factory in
 // this package; nothing outside internal/vtengine may import them
-// (depguard, ADR-009).
+// (depguard).
 //
 // Engines are not safe for concurrent use; the driver serializes access.
 type Engine interface {

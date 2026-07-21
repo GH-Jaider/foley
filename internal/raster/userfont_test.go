@@ -65,7 +65,7 @@ func jbFile(t *testing.T, name string) []byte {
 
 // TestUserFontFamilyNeutrality: a user FAMILY made of the pinned
 // JetBrains files must be byte-identical to the pack path across all
-// four styles — pinning the whole per-style plumbing (ADR-015).
+// four styles — pinning the whole per-style plumbing.
 func TestUserFontFamilyNeutrality(t *testing.T) {
 	base, warns := renderStyled(t, raster.UserFonts{})
 	if len(warns) != 0 {
@@ -150,7 +150,7 @@ func TestUserFontFamilyNeedsRegular(t *testing.T) {
 	}
 }
 
-// TestHighlightPaintsSelection is the pixel proof (ADR-018): the cells
+// TestHighlightPaintsSelection is the pixel proof: the cells
 // under a regex match carry the Selection color while unmatched cells
 // keep the theme background — and the glyphs still draw on top.
 func TestHighlightPaintsSelection(t *testing.T) {

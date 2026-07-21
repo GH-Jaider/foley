@@ -1,5 +1,5 @@
 // Package preview replays a closed recording's frames in the user's
-// OWN terminal via the kitty graphics protocol (ADR-020) — the tool
+// OWN terminal via the kitty graphics protocol — the tool
 // that exists because VHS could not speak kitty graphics, speaking it
 // back. Support is decided by asking the terminal itself, never by
 // sniffing environment variables.

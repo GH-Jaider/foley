@@ -36,7 +36,7 @@ type Options struct {
 
 	// Env is the exact environment for the child. nil inherits the parent
 	// environment. The driver passes a sanitized environment carrying
-	// foley's declared identity (ADR-021: TERM=xterm-ghostty plus its
+	// foley's declared identity (TERM=xterm-ghostty plus its
 	// pinned terminfo); this plumbing-level fallback only guards a bare
 	// ptyx caller, with the one entry every host resolves.
 	Env []string

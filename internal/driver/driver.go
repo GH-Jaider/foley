@@ -1,4 +1,4 @@
-// Package driver owns the recording timeline (ADR-012). In deterministic
+// Package driver owns the recording timeline. In deterministic
 // mode virtual time advances ONLY by script declaration: every action is a
 // step — write bytes, settle (wall-clock wait for the app to quiesce,
 // consuming ZERO virtual time), advance the declared duration. The output
@@ -76,7 +76,7 @@ type Sink interface {
 	Still(name string, img *image.RGBA) error
 }
 
-// SettleOptions are the wall-clock knobs of a settle (ADR-012 D5).
+// SettleOptions are the wall-clock knobs of a settle.
 type SettleOptions struct {
 	// First bounds the wait for the first byte after a step's write; a
 	// step may legitimately produce no output at all.
@@ -87,7 +87,7 @@ type SettleOptions struct {
 	Max time.Duration
 }
 
-// Overlay is a time-driven composited layer (the keys band, ADR-016).
+// Overlay is a time-driven composited layer (the keys band).
 // The driver sets its clock to each frame's START instant before
 // rendering, and splits time advances at its breakpoints so the
 // overlay's animation lands on exact frames. Implementations live in
@@ -223,7 +223,7 @@ func (d *Driver) Sleep(ctx context.Context, dur time.Duration) error {
 
 // Wait blocks until pred matches a snapshot, feeding the engine as output
 // arrives. The timeout is wall-clock and the wait consumes zero virtual
-// time (ADR-012 D3). The frame passed to pred is borrowed for the call.
+// time. The frame passed to pred is borrowed for the call.
 // On timeout the error wraps ErrWaitTimeout and includes the screen text.
 func (d *Driver) Wait(ctx context.Context, pred func(*vtengine.Frame) bool, timeout time.Duration) error {
 	f, err := d.snapshot()
@@ -326,7 +326,7 @@ func (d *Driver) Finish() error {
 	return err
 }
 
-// step is the universal primitive: write, settle, advance (ADR-012 D1).
+// step is the universal primitive: write, settle, advance.
 // The very first step runs a LAUNCH settle before writing anything: the
 // shell's initial paint (its prompt) must land before the first
 // keystroke, or the keystroke races it and the recording opens with the

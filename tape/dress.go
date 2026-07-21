@@ -14,18 +14,18 @@ import (
 )
 
 // Dress is a named appearance preset that EXPANDS to the VHS chrome
-// primitives (ADR-014): the `Set` commands stay the primitives, a dress
+// primitives: the `Set` commands stay the primitives, a dress
 // fills them as a base layer, and the tape's explicit Sets always win.
 // Pointer fields distinguish "not part of this dress" from an explicit
 // zero (a dress may force Padding 0). The JSON shape is public API.
 type Dress struct {
-	// Paint doctrine (ADR-014 v2): a dress may change everything about
+	// Paint doctrine: a dress may change everything about
 	// how the footage is PAINTED — palette, typography, chrome — and
 	// nothing about what happened (grid size, shell, timing).
 	Theme    *DressTheme `json:"theme,omitempty"`
 	FontSize *int        `json:"fontSize,omitempty"`
 	// Font is a .ttf/.otf path, a pinned catalog family name, or a
-	// per-style family object (ADR-015) — it fills FontFamily/
+	// per-style family object — it fills FontFamily/
 	// FontFiles, so an explicit Set FontFamily beats it.
 	Font           *DressFont `json:"font,omitempty"`
 	Margin         *int       `json:"margin,omitempty"`
@@ -38,7 +38,7 @@ type Dress struct {
 	// Foley-only primitives (no VHS Set exists for them): static bar
 	// title and its alignment ("center" default, or "left"), and the
 	// reactive follow — the bar tracks the app's OSC 0/2 title with
-	// the static one as fallback (ADR-022).
+	// the static one as fallback.
 	WindowTitle       *string `json:"windowTitle,omitempty"`
 	TitleAlign        *string `json:"titleAlign,omitempty"`
 	WindowTitleFollow *bool   `json:"windowTitleFollow,omitempty"`
@@ -224,7 +224,7 @@ func (d *Dress) rebase(dir string) {
 
 // applyDress layers a dress under the tape's explicit Sets: a dress
 // field lands only where the tape did not `Set` that name itself —
-// defaults < dress < explicit Sets (ADR-014). It writes into the given
+// defaults < dress < explicit Sets. It writes into the given
 // COPY of the settings; the parsed Tape itself is never mutated.
 func applyDress(s *Settings, explicit map[string]bool, d Dress) {
 	if d.Theme != nil && !explicit["Theme"] {

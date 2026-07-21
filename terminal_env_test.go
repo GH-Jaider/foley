@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestTerminalEnv pins ADR-021: the host terminal's identity is
+// TestTerminalEnv pins the terminal-identity doctrine: the host terminal's identity is
 // scrubbed from the inherited environment, foley's is declared, and
 // everything else passes through untouched.
 func TestTerminalEnv(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// The camera (ADR-019): a viewport over the supersampled MASTER frame,
+// The camera: a viewport over the supersampled MASTER frame,
 // eased on the virtual clock, downscaled to the output with exact
 // integer arithmetic. Constitutional rule: no float ever crosses the
 // output boundary — the easing runs in Q16 fixed point and the scaler
@@ -275,7 +275,7 @@ func (ct *CameraTrack) Breakpoints(from, to time.Duration) []time.Duration {
 }
 
 // WorldRect is the camera's world on the master: the canvas minus the
-// keys band — the HUD stays glued to the camera glass (ADR-019).
+// keys band — the HUD stays glued to the camera glass.
 func (r *Rasterizer) WorldRect() image.Rectangle {
 	win := r.opts.Window
 	return image.Rect(0, 0, win.CanvasW*r.s, (win.CanvasH-win.KeysBand)*r.s)
@@ -346,8 +346,8 @@ func (r *Rasterizer) ZoomTarget(col, row, w, h int) (image.Rectangle, error) {
 
 // Composite develops the master through the camera: the WORLD part of
 // the frame is the viewport downscaled into the output; the HUD band
-// (the keys reel, ADR-016) is glued under it at a fixed 2:1 — pinned to
-// the camera glass, never zoomed (ADR-019 stratification). dst is
+// (the keys reel) is glued under it at a fixed 2:1 — pinned to
+// the camera glass, never zoomed (stratification). dst is
 // reused when it already has the output size.
 func (r *Rasterizer) Composite(master *image.RGBA, vp image.Rectangle, dst *image.RGBA) *image.RGBA {
 	ss := r.SuperSample()

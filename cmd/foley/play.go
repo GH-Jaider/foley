@@ -22,7 +22,7 @@ import (
 const playHandshakeTimeout = 400 * time.Millisecond
 
 // runPlay records the tape and replays it in the user's own terminal
-// via kitty graphics (ADR-020). Terminals that don't speak the
+// via kitty graphics. Terminals that don't speak the
 // protocol — decided by handshake, not env sniffing — get the honest
 // fallback: the tape's first output opened with the system viewer.
 func runPlay(args []string, stdin io.Reader, stdout, stderr io.Writer) int {

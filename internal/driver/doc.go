@@ -6,5 +6,5 @@
 // rasterization instants on the timeline (Hide/Show/Screenshot included).
 //
 // The driver depends only on the vtengine contract and the raster/encode
-// seams — never on a concrete engine (enforced by depguard, ADR-009).
+// seams — never on a concrete engine (enforced by depguard).
 package driver

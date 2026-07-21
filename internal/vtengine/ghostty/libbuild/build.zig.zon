@@ -4,7 +4,7 @@
     .fingerprint = 0xb6ef922d12303e57,
     .minimum_zig_version = "0.15.1",
     .dependencies = .{
-        // PIN de libghostty-vt (ADR-010): commit b0947378349eff70f7030dda0e6d022fae1e6fbd
+        // PIN de libghostty-vt: commit b0947378349eff70f7030dda0e6d022fae1e6fbd
         // (main, 2026-07-15). El hash de contenido lo verifica zig en cada build.
         .ghostty = .{
             .url = "https://github.com/ghostty-org/ghostty/archive/b0947378349eff70f7030dda0e6d022fae1e6fbd.tar.gz",

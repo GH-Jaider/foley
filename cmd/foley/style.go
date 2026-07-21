@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// styles is the CLI's presentation kit (ADR-024): one brand accent —
+// styles is the CLI's presentation kit: one brand accent —
 // the REC light of the logo — plus the terminal's own status colors,
 // bold and faint. Errors stay plain (foley-voice); what dresses up is
 // structure and state, never the failure text.

@@ -125,7 +125,7 @@ func TestCueScanner(t *testing.T) {
 	})
 }
 
-// TestDressPrecedence: defaults < dress < explicit Sets (ADR-014),
+// TestDressPrecedence: defaults < dress < explicit Sets,
 // exercised through the inline form.
 func TestDressPrecedence(t *testing.T) {
 	src := "Output d.gif\n# foley: dress {\"windowBar\": \"Colorful\", \"margin\": 24, \"padding\": 40, \"borderRadius\": 10}\nSet BorderRadius 2\nType \"hi\"\n"
@@ -152,8 +152,8 @@ func TestDressPrecedence(t *testing.T) {
 	}
 }
 
-// TestDressPaintFields: theme and fontSize are dress-able paint
-// (ADR-014 v2) — they land where the tape stayed silent and lose to
+// TestDressPaintFields: theme and fontSize are dress-able paint —
+// they land where the tape stayed silent and lose to
 // explicit Sets, like every other dress field.
 func TestDressPaintFields(t *testing.T) {
 	dress := `{"theme": "Dracula", "fontSize": 18}`
@@ -340,7 +340,7 @@ func TestBuiltinWardrobe(t *testing.T) {
 
 // TestDressOverrideSemantics pins the -dress layer replacement: the CLI
 // ref REPLACES the tape's cue, `none` strips the layer, the tape's
-// explicit Sets beat both (ADR-014) — and the Tape is never mutated.
+// explicit Sets beat both — and the Tape is never mutated.
 func TestDressOverrideSemantics(t *testing.T) {
 	tp, err := tape.Parse("Output d.gif\n# foley: dress {\"margin\": 24, \"windowBar\": \"Rings\"}\nSet BorderRadius 2\nType \"x\"\n")
 	if err != nil {
@@ -392,7 +392,7 @@ func TestSourcedCuesAreLoud(t *testing.T) {
 	}
 }
 
-// TestKeysCue: the second cue (ADR-016) — parses bare and with knobs,
+// TestKeysCue: the second cue — parses bare and with knobs,
 // rejects unknown tokens and duplicates, layers under the CLI override.
 func TestKeysCue(t *testing.T) {
 	tp, err := tape.Parse("Output d.gif\n# foley: keys\nType \"x\"\n")
@@ -456,7 +456,7 @@ func TestKeysCue(t *testing.T) {
 	}
 }
 
-// TestHighlightCue: the third cue (ADR-018) — three forms, loud
+// TestHighlightCue: the third cue — three forms, loud
 // errors, and POSITION: AfterCommand counts command lines with the
 // inverted keyword list, immune to interleaved settings and comments.
 func TestHighlightCue(t *testing.T) {
@@ -566,7 +566,7 @@ func TestHighlightModifiers(t *testing.T) {
 	}
 }
 
-// TestZoomCue pins the camera grammar (ADR-019): rect + optional
+// TestZoomCue pins the camera grammar: rect + optional
 // duration, off + optional duration, positional anchoring, and the loud
 // error paths — a bare number without unit dies at parse.
 func TestZoomCue(t *testing.T) {

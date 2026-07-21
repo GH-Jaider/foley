@@ -105,7 +105,7 @@ type Frame struct {
 	// Title is the window title the APPLICATION declared via OSC 0/2,
 	// empty until one is set. It is footage — it travels the pty like
 	// any output, never derived from the host — so chrome may follow
-	// it without touching determinism (ADR-022).
+	// it without touching determinism.
 	Title string
 
 	Graphics Graphics

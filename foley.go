@@ -74,7 +74,7 @@ type RGB struct{ R, G, B uint8 }
 // Theme is foley's neutral color model: defaults plus the 16 ANSI slots.
 // The remaining 240 palette entries are always the standard xterm cube
 // and grayscale ramp. A zero Cursor follows the foreground. Selection
-// paints the highlight cue (ADR-018) — terminal themes always carry it;
+// paints the highlight cue — terminal themes always carry it;
 // it finally has a job.
 type Theme struct {
 	Foreground RGB
@@ -128,8 +128,8 @@ const (
 	WindowBarGnomeCSD
 )
 
-// KeysSize scales the input reel's caps relative to the grid's font
-// (ADR-016). The zero value is medium — the grid's own size.
+// KeysSize scales the input reel's caps relative to the grid's font.
+// The zero value is medium — the grid's own size.
 type KeysSize uint8
 
 // The reel sizes.
@@ -139,7 +139,7 @@ const (
 	KeysLarge
 )
 
-// KeysNotation picks the reel's cap vocabulary (ADR-016 v3): what a
+// KeysNotation picks the reel's cap vocabulary: what a
 // cap prints for named keys. The zero value is keycap.
 type KeysNotation uint8
 
@@ -219,7 +219,7 @@ type Options struct {
 	// Dir is the command's working directory (empty = inherit).
 	Dir string
 	// Env is the exact child environment. nil inherits the process
-	// environment THROUGH foley's terminal identity (ADR-021): the
+	// environment THROUGH foley's terminal identity: the
 	// host terminal's variables scrubbed, foley's declared. Callers
 	// building an explicit Env should start from
 	// TerminalEnv(os.Environ()) for the same behavior.
@@ -230,7 +230,7 @@ type Options struct {
 	Cols, Rows int
 	// PixelWidth, PixelHeight size the recording the way VHS does — in
 	// pixels of a logical window — and PixelPadding is the inner margin
-	// that shrinks the content area (ADR-008 D6):
+	// that shrinks the content area:
 	//
 	//	cols = (PixelWidth - 2*PixelPadding) / cellW
 	//
@@ -256,18 +256,18 @@ type Options struct {
 	WindowTitleLeft bool
 	// WindowTitleFollow lets the bar follow the title the recorded
 	// APPLICATION declares via OSC 0/2 — tmux, vim, the shell — like a
-	// real terminal's tab (ADR-022), with WindowTitle as the fallback
+	// real terminal's tab, with WindowTitle as the fallback
 	// until one is set. Footage, not host state: deterministic.
 	WindowTitleFollow bool
 	// KeysOverlay draws the injected input track as film-strip frames
-	// on a stage band UNDER the window (ADR-016). The canvas GROWS by
+	// on a stage band UNDER the window. The canvas GROWS by
 	// the band height — the footage is never covered and the grid
 	// never shrinks (a deliberate, documented divergence from VHS's
 	// "declared size = canvas": VHS has no such feature). KeysSize
 	// picks the reel size; zero = medium.
 	KeysOverlay bool
 	KeysSize    KeysSize
-	// KeysNotation picks the cap vocabulary (ADR-016 v3); zero =
+	// KeysNotation picks the cap vocabulary; zero =
 	// keycap (words + drawn arrows).
 	KeysNotation KeysNotation
 	// KeysAccent colors the special/chord caps: empty = the theme's
@@ -297,7 +297,7 @@ type Options struct {
 	// caller owns deletion from then on. `foley play` replays it;
 	// FramesDir names it.
 	KeepFrames bool
-	// Zoom reserves the camera (ADR-019): the scene renders on a 2×
+	// Zoom reserves the camera: the scene renders on a 2×
 	// supersampled master and Recorder.Zoom/ZoomOff drive a viewport
 	// over it — every frame stays an exact integer downscale, so zoomed
 	// frames are as sharp as the base render. Costs ~4× render time and
@@ -317,12 +317,12 @@ type Options struct {
 	// falls back to $FOLEY_FONTS, then "fonts".
 	FontsDir string
 	// FontFamily selects a font family by NAME from foley's pinned
-	// catalog (ADR-015; `foley fonts` lists it) — NEVER from the
+	// catalog (`foley fonts` lists it) — NEVER from the
 	// system: an unknown name is a loud assembly warning and the
 	// default family renders. Asking for the default by name is a
 	// no-op. Ignored when FontFile or FontFiles is set.
 	FontFamily string
-	// FontFile loads ONE user font file as the primary face (ADR-015):
+	// FontFile loads ONE user font file as the primary face:
 	// a CWD-relative .ttf/.otf that drives the cell metrics, titles
 	// the window bar and serves all four style slots. The pinned pack
 	// stays for coverage fallback, emoji stay Noto, block sprites stay
@@ -368,9 +368,9 @@ type Recorder struct {
 	// assemblyWarnings surfaces raster findings (e.g. a proportional
 	// user font) — nothing in the pipeline is allowed to stay silent.
 	assemblyWarnings []string
-	// highlights is the ADR-018 track behind Highlight/ClearHighlights.
+	// highlights is the highlight track behind Highlight/ClearHighlights.
 	highlights *raster.HighlightTrack
-	// camera is the ADR-019 track behind Zoom/ZoomOff; nil unless
+	// camera is the camera track behind Zoom/ZoomOff; nil unless
 	// Options.Zoom reserved it. ras maps cells to master viewports.
 	camera *raster.CameraTrack
 	ras    *raster.Rasterizer
@@ -402,7 +402,7 @@ func (c *castLog) write(path string) error {
 	return encode.WriteCast(path, c.cols, c.rows, c.events)
 }
 
-// HighlightSpec selects what a highlight paints (ADR-018): a regex
+// HighlightSpec selects what a highlight paints: a regex
 // matched against each row's text, or a rectangle in CELLS
 // (Col,Row,W,H). Exactly one form should be set. With Pick, Occurrence
 // narrows a pattern to that match per frame — 0-based in screen order,
@@ -435,7 +435,7 @@ func (r *Recorder) ClearHighlight(name string) {
 }
 
 // DefaultZoomDur is the camera's house transition — the duration IS the
-// shot (ADR-019): one curve, one default, tuned to read as intent.
+// shot: one curve, one default, tuned to read as intent.
 const DefaultZoomDur = 600 * time.Millisecond
 
 // MaxZoomDur caps a camera transition: each second of transition
@@ -506,8 +506,8 @@ func (r *Recorder) ZoomCheck(col, row, w, h int) error {
 	return err
 }
 
-// AssemblyWarnings reports findings from recorder assembly (ADR-015:
-// e.g. a proportional user font). The caller decides how to print them;
+// AssemblyWarnings reports findings from recorder assembly (e.g. a
+// proportional user font). The caller decides how to print them;
 // the slice is a copy.
 func (r *Recorder) AssemblyWarnings() []string {
 	return append([]string(nil), r.assemblyWarnings...)
@@ -546,7 +546,10 @@ func applyDefaults(opts *Options) {
 	if opts.FontsDir == "" {
 		opts.FontsDir = os.Getenv("FOLEY_FONTS")
 	}
-	if opts.FontsDir == "" {
+	if opts.FontsDir == "" && !fontpack.Embedded {
+		// No dir, no env, and no baked-in fonts: the legacy default.
+		// A binary built with -tags embedfonts leaves this empty so
+		// fontpack.Load("") serves the embedded set.
 		opts.FontsDir = "fonts"
 	}
 }
@@ -567,7 +570,7 @@ const defaultWindowBarSize = 30
 // parseVHSHex parses VHS's accepted hex color forms: #RGB, RGB, #RRGGBB,
 // RRGGBB (draw.go parseHexColor of the pin) — but errors LOUDLY instead
 // of silently falling back to near-black.
-// keysStyleFor resolves the keys style knobs (ADR-016 v3) against the
+// keysStyleFor resolves the keys style knobs against the
 // recording's theme. Validation is loud even with the reel off — a
 // typo'd accent must never pass silently.
 func keysStyleFor(opts Options) (raster.KeysStyle, error) {
@@ -899,14 +902,14 @@ func copyFile(src, dst string) error {
 const DefaultFontFamily = fontpack.DefaultFamily
 
 // FontFamilies lists the pinned name catalog, sorted — the names
-// `Set FontFamily` resolves without touching the system (ADR-015).
+// `Set FontFamily` resolves without touching the system.
 func FontFamilies() []string { return fontpack.Families() }
 
 // KnownFontFamily reports whether a name resolves in the catalog
 // (case- and spacing-insensitive).
 func KnownFontFamily(name string) bool { return fontpack.HasFamily(name) }
 
-// FontFiles names a user font family, one file per style (ADR-015).
+// FontFiles names a user font family, one file per style.
 type FontFiles struct {
 	Regular, Bold, Italic, BoldItalic string
 }
@@ -1051,7 +1054,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	keysFontPx := 0
 	if opts.KeysOverlay && win.CanvasW > 0 {
 		// The reel EXTENDS the canvas below the declared size: a cue
-		// never eats grid rows and never covers footage (ADR-016). Its
+		// never eats grid rows and never covers footage. Its
 		// height follows the grid's cell scaled by the reel size.
 		num := 4
 		switch opts.KeysSize {
@@ -1125,13 +1128,13 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 		keysTrack = raster.NewKeysTrack(notation)
 	}
 	// The highlight track always exists — Recorder.Highlight is public
-	// API, tape or no tape (ADR-018).
+	// API, tape or no tape.
 	highlightTrack := raster.NewHighlightTrack()
 	selRGB := opts.Theme.Selection
 	ssample := 1
 	if opts.Zoom {
 		// The camera's master: render at 2× the output so a full 2×
-		// zoom is still a 1:1 crop — never an upscale (ADR-019).
+		// zoom is still a 1:1 crop — never an upscale.
 		ssample = 2
 	}
 	ras, err := raster.New(raster.Options{
@@ -1150,7 +1153,7 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	childEnv := opts.Env
 	var identityWarnings []string
 	if childEnv == nil {
-		// foley IS the terminal (ADR-021): inheritance passes through
+		// foley IS the terminal: inheritance passes through
 		// the identity layer, never raw.
 		childEnv, identityWarnings = TerminalIdentity(os.Environ())
 	}
@@ -1246,8 +1249,8 @@ func assembleRecorder(opts Options, eng vtengine.Engine) (*Recorder, error) {
 	}
 
 	// Overlay wiring: the driver sees ONE overlay; foley fans it out to
-	// the tracks that exist (keys ADR-016, highlights ADR-018, camera
-	// ADR-019) — the driver never learns how many there are.
+	// the tracks that exist (keys, highlights, camera) — the driver
+	// never learns how many there are.
 	var onKey func(k key.Key, at time.Duration, hidden bool)
 	mux := overlayMux{highlightTrack}
 	if keysTrack != nil {

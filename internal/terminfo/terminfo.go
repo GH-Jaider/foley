@@ -1,5 +1,5 @@
 // Package terminfo carries the compiled terminfo entry behind foley's
-// declared TERM (ADR-021): xterm-ghostty, emitted from the SAME
+// declared TERM: xterm-ghostty, emitted from the SAME
 // libghostty pin the engine is built from — the entry describes, by
 // construction, what the embedded engine actually implements. The world
 // detects terminal capabilities by identity (TERM allowlists), not by

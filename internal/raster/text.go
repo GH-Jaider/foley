@@ -23,7 +23,7 @@ type glyphMask struct {
 }
 
 // gridFace is the face the grid derives from: the user regular when one
-// is loaded (ADR-015 — metrics follow the primary), the pack otherwise.
+// is loaded (metrics follow the primary), the pack otherwise.
 // A primary without basic latin (no 'M') cannot drive cell metrics or
 // title shaping — the pack takes over and checkUserFont warns.
 func (r *Rasterizer) gridFace() *font.Face {
@@ -37,7 +37,7 @@ func (r *Rasterizer) gridFace() *font.Face {
 
 func (r *Rasterizer) computeMetrics() {
 	// Metrics derive at the BASE scale and multiply by the supersample
-	// (ADR-019): the master's geometry is EXACTLY SS× the output's, so
+	// — the master's geometry is EXACTLY SS× the output's, so
 	// the logical grid — the pty winsize, the footage — is identical
 	// with or without a camera. Shaping at the doubled size could
 	// round advances differently; deriving-then-multiplying cannot.
@@ -112,7 +112,7 @@ func (r *Rasterizer) pickFace(st vtengine.Style) *font.Face {
 // pickCellFace resolves the face a text cell draws with. With a user
 // font loaded it is the user face for the cell's style — unless that
 // face lacks the cell's base rune and the pack covers it: coverage
-// falls back per cell to the pinned faces (ADR-015), style kept.
+// falls back per cell to the pinned faces, style kept.
 func (r *Rasterizer) pickCellFace(c *vtengine.Cell) *font.Face {
 	if r.user[0] == nil {
 		return r.pickFace(c.Style)

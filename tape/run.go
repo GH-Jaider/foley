@@ -15,8 +15,8 @@ import (
 	"github.com/GH-Jaider/foley/key"
 )
 
-// KeysOverride is the CLI's replacement for the tape's keys layer
-// (ADR-016): the zero value defers to the tape's own cue; Off forces
+// KeysOverride is the CLI's replacement for the tape's keys layer:
+// the zero value defers to the tape's own cue; Off forces
 // the reel off; On replaces the whole layer with Cue — the -keys
 // tokens, ParseKeysArgs' grammar, defaults where unspecified (like
 // dress: a replacement, never a merge).
@@ -40,12 +40,12 @@ type RunOptions struct {
 	ModifyOtherKeys bool
 	// FontsDir forwards to foley.Options.FontsDir.
 	FontsDir string
-	// Dress REPLACES the tape's dress layer (ADR-014). Zero keeps the
+	// Dress REPLACES the tape's dress layer. Zero keeps the
 	// tape's own `# foley: dress` cue; DressRef{None: true} strips the
 	// layer. Explicit `Set`s in the tape always win over either. Build
 	// one from CLI-style input with ParseDressRef.
 	Dress DressRef
-	// Keys REPLACES the tape's keys layer (ADR-016): the zero value
+	// Keys REPLACES the tape's keys layer: the zero value
 	// keeps the tape's own `# foley: keys` cue; Off/On force the reel
 	// off or on with On's knobs (the CLI's -keys value).
 	Keys KeysOverride
@@ -73,7 +73,7 @@ type RunOptions struct {
 	// Dir runs the tape's command in this working directory (#320's
 	// ask, without touching the vendored grammar). Empty inherits.
 	Dir string
-	// Studio builds a closed set for the take (ADR-023): a fresh
+	// Studio builds a closed set for the take: a fresh
 	// directory becomes HOME, the working directory and every temp/XDG
 	// default, env identity reads foley@studio, and the set is struck
 	// when the run ends — nothing of the host's home on camera, nothing
@@ -143,7 +143,7 @@ const restlessWarnThreshold = 1
 // records every action against a foley Recorder, and encodes each
 // declared Output. Relative paths (outputs, screenshots) resolve against
 // the current working directory — run from the tape's directory, exactly
-// like VHS. Compatibility gaps follow ADR-008: parsed always, executed
+// like VHS. Compatibility gaps follow the compatibility doctrine: parsed always, executed
 // faithfully or warned LOUDLY, never silent.
 func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	rep := &Report{}
@@ -162,7 +162,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if err != nil {
 		return rep, err
 	}
-	// The studio (ADR-023) builds its OWN working directory; an explicit
+	// The studio builds its OWN working directory; an explicit
 	// Dir contradicts it and dies here, before anything records.
 	studio := opts.Studio || t.StudioCue()
 	if studio && opts.Dir != "" {
@@ -198,7 +198,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return rep, fmt.Errorf("tape: theme: %w", err)
 	}
 
-	// The studio layer (ADR-023): a fresh set the take lives in, struck
+	// The studio layer: a fresh set the take lives in, struck
 	// on the way out — after the recorder's own Close, so the child is
 	// gone before the set goes. Tape Env and -env still win by merge
 	// order: a tape may pin its own HOSTNAME on top of the set's.
@@ -218,7 +218,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		dir = set.stage()
 	}
 
-	// The base layer is foley's terminal identity (ADR-021): the host
+	// The base layer is foley's terminal identity: the host
 	// terminal's env scrubbed, foley's declared — a fastfetch inside
 	// the demo names foley, and the recording stops depending on which
 	// terminal it was launched from. Shell table, studio, tape Env and
@@ -229,7 +229,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	}
 	env := mergeEnv(identEnv, runEnv(sh, shPath), studioEnv, envPairs(t.Env), opts.ExtraEnv)
 
-	// A custom prompt (ADR-017): `Env PS1` was always legal grammar —
+	// A custom prompt: `Env PS1` was always legal grammar —
 	// mergeEnv above is what makes it actually WIN over the shell
 	// table. What remains is teaching bare `Wait` to expect the new
 	// prompt. Lint (already run above) voiced the findings; here we
@@ -240,8 +240,8 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 	if err != nil {
 		return rep, err
 	}
-	// One zoom cue anywhere reserves the camera for the whole run
-	// (ADR-019): the master is a per-recorder decision, made before the
+	// One zoom cue anywhere reserves the camera for the whole run:
+	// the master is a per-recorder decision, made before the
 	// first frame. Tapes without zoom cues never pay for it.
 	zoomWanted := false
 	for _, c := range t.Cues {
@@ -326,7 +326,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		return scale(d)
 	}
 
-	// Pre-flight every zoom cue (ADR-019): the rect against the sharp
+	// Pre-flight every zoom cue: the rect against the sharp
 	// cap, the SCALED duration against the frame-count cap (a slow
 	// PlaybackSpeed stretches transitions past what parse saw). A bad
 	// zoom fails HERE, at frame zero, never mid-take.
@@ -345,7 +345,7 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		}
 	}
 
-	// Positional cues (highlight ADR-018, zoom ADR-019) fire at their
+	// Positional cues (highlight, zoom) fire at their
 	// POSITION in the script: everything with AfterCommand <= i acts
 	// before command i runs, stamped with the current virtual instant,
 	// in tape order.
@@ -512,7 +512,7 @@ func declaredTotal(t *Tape, settings Settings) time.Duration {
 // layer) < the tape's explicit Sets — computed on a COPY, so Run never
 // mutates the caller's Tape (parse once, run many: light/dark pairs).
 // The keys band follows the same layering: the tape's cue turns it on,
-// opts.Keys replaces that switch (ADR-016).
+// opts.Keys replaces that switch.
 func effectiveSettings(t *Tape, opts RunOptions) (Settings, error) {
 	settings := t.Settings
 	settings.KeysOverlay, settings.Keys = t.KeysCue()
@@ -560,7 +560,7 @@ func ParseThemeRef(arg string) (ThemeRef, error) {
 }
 
 // fontFileFor maps the effective FontFamily to the recorder's FontFile:
-// the PATH form (ADR-015) loads that file.
+// the PATH form loads that file.
 func fontFileFor(family string) string {
 	if isFontPath(family) {
 		return family
@@ -578,14 +578,14 @@ func fontFamilyFor(family string) string {
 	return family
 }
 
-// warnStaged emits the ADR-008 tier-2/3 warnings — only for settings the
+// warnStaged emits the tier-2/3 warnings — only for settings the
 // tape explicitly asked for.
 func warnStaged(t *Tape, mode foley.Mode, warn func(string, ...any)) {
 	for _, name := range t.Explicit {
 		switch name {
 		// FontFamily no longer warns here: the PATH form loads that
 		// file and the NAME form resolves against the pinned catalog —
-		// an unknown name warns at assembly, catalog listed (ADR-015).
+		// an unknown name warns at assembly, catalog listed.
 		case "LetterSpacing", "LineHeight":
 			warn("Set %s: typographic metrics are staged raster work; the font's own metrics are used", name)
 		case "CursorBlink":

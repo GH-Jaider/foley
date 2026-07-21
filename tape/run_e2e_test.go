@@ -19,7 +19,7 @@ import (
 	"github.com/GH-Jaider/foley/tape"
 )
 
-// TestMigratedTapeEndToEnd is the ADR-008 promise executed: a tape
+// TestMigratedTapeEndToEnd is the compatibility promise executed: a tape
 // written in plain VHS — settings, typing, Ctrl chords, prompt Wait,
 // screenshot, multiple outputs — runs against a REAL bash on the real
 // engine and produces the artifacts. The staged WindowBar setting must
@@ -114,7 +114,7 @@ Screenshot captura.png
 	}
 }
 
-// TestCustomPromptEndToEnd proves ADR-017 against a real bash: the
+// TestCustomPromptEndToEnd proves the custom-prompt design against a real bash: the
 // tape's Env PS1 WINS over the shell table (the screen shows ❯, not
 // the pinned >), and a bare Wait succeeds because it now expects the
 // DERIVED pattern — a timeout here means either the env layering or
@@ -316,7 +316,7 @@ Sleep 400ms
 	}
 }
 
-// TestTerminalIdentityEndToEnd pins ADR-021 against a real recording
+// TestTerminalIdentityEndToEnd pins the terminal identity against a real recording
 // with a POLLUTED host environment: inside the tape, TERM_PROGRAM says
 // foley, the host terminal's kitty marker is gone, and the tape's own
 // explicit Env still wins over the identity layer.
@@ -506,7 +506,7 @@ Sleep 300ms
 	}
 }
 
-// TestZoomEndToEnd records a real tape through the camera (ADR-019):
+// TestZoomEndToEnd records a real tape through the camera:
 // the canvas keeps its DECLARED size while the master renders at 2×,
 // the transitions add their quantized frames — and, the constitutional
 // claim, two identical runs produce byte-identical output.
@@ -576,7 +576,7 @@ Sleep 500ms
 	}
 }
 
-// TestHighlightRealtimeEndToEnd smokes the wall clock (ADR-018): the
+// TestHighlightRealtimeEndToEnd smokes the wall clock: the
 // track mutates from the recording goroutine while the loop renders —
 // the mutex and the tick gating must hold on a REAL recording.
 func TestHighlightRealtimeEndToEnd(t *testing.T) {
@@ -622,8 +622,8 @@ Sleep 200ms
 	}
 }
 
-// TestZoomRealtimeEndToEnd smokes the camera on the wall clock
-// (ADR-019): the track mutates from the recording goroutine while the
+// TestZoomRealtimeEndToEnd smokes the camera on the wall clock:
+// the track mutates from the recording goroutine while the
 // loop composits at 2×; the tick gating must emit the transition frames
 // on a REAL recording.
 func TestZoomRealtimeEndToEnd(t *testing.T) {
@@ -686,7 +686,7 @@ Sleep 400ms
 	}
 }
 
-// TestStudioEndToEnd proves ADR-023 against a real bash: the take runs
+// TestStudioEndToEnd proves the studio against a real bash: the take runs
 // INSIDE the set (the working directory is the set's home, $USER is the
 // set's identity), the tape's own Env still wins over the studio layer
 // (HOSTNAME reads the tape's value, not the set's), and the set is

@@ -210,7 +210,7 @@ func TestRealtimePressWritesAndActionsAfterFinishFail(t *testing.T) {
 }
 
 // TestRealtimeOverlayTicksOnlyOnBreakpoints pins the keys wiring on the
-// wall clock (ADR-016): OnKey observes the press on the loop goroutine,
+// wall clock: OnKey observes the press on the loop goroutine,
 // and an overlay only forces tick renders at its breakpoints — an idle
 // overlay must NOT spam one frame per tick. Content and order asserts
 // only; no wall timings.

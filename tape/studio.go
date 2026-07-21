@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// The studio (ADR-023): a closed set for one take. Every tape that
+// The studio: a closed set for one take. Every tape that
 // wants a clean world today hand-rolls the same ritual — `export
 // HOME=$(mktemp -d)`, a private TMPDIR, `cd $(mktemp -d)` — and
 // forgetting it once puts the author's real home on camera. The studio

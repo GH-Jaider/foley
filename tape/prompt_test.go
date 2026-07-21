@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestDerivePromptPattern is the audit table (ADR-017): REAL, ugly
+// TestDerivePromptPattern is the audit table: REAL, ugly
 // prompts — colors, wrappers, newlines, powerline, substitutions — in
 // both tape-literal and raw-byte forms. The derivation's only job is
 // the trustworthy static tail; anything dynamic-to-the-end must FAIL
@@ -51,7 +51,7 @@ func TestDerivePromptPattern(t *testing.T) {
 	}
 }
 
-// TestMergeEnv pins the environment contract (ADR-017): later layers
+// TestMergeEnv pins the environment contract: later layers
 // truly win (independent of libc duplicate resolution) and the result
 // is sorted — deterministic byte for byte.
 func TestMergeEnv(t *testing.T) {

@@ -88,7 +88,7 @@ linters:
             - "**/internal/testassets/**"
           allow:
             - $gostd
-        # cmd/foley: la puerta. La ÚNICA zona con lipgloss (ADR-024) —
+        # cmd/foley: la puerta. La ÚNICA zona con lipgloss —
         # presentación del binario; la librería jamás lo importa. Sus
         # tests quedan en zona-general-tests (pinean texto, no ANSI).
         zona-cli:

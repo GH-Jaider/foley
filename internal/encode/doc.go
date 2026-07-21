@@ -1,5 +1,5 @@
 // Package encode turns the driver's (frame, duration) stream into final
-// outputs (ADR-013). PNGSink is the interchange: a directory of exact
+// outputs. PNGSink is the interchange: a directory of exact
 // frames plus an ffconcat manifest with their exact durations — it is a
 // driver.Sink, foley's native PNG output and ffmpeg's staging at once.
 // GIF/MP4/WebM assemble it with ffmpeg through execx (palettegen recipe

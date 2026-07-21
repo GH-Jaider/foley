@@ -127,7 +127,7 @@ func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 }
 
 // SetTitle sets the OSC-declared window title the next Snapshot reports
-// (ADR-022) and marks the frame dirty, like a real engine would.
+// and marks the frame dirty, like a real engine would.
 func (e *Engine) SetTitle(title string) {
 	e.title = title
 	e.dirty = true

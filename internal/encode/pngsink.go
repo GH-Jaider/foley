@@ -35,7 +35,7 @@ type PNGSinkOptions struct {
 	ZeroDuration time.Duration
 }
 
-// PNGSink is the encode interchange (ADR-013 D1): frame-%05d.png files
+// PNGSink is the encode interchange: frame-%05d.png files
 // plus an ffconcat manifest carrying the driver's exact durations.
 // Stills land next to them as still-<name>.png. It implements
 // driver.Sink; images are consumed synchronously (encoded to disk before

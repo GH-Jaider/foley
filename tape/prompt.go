@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// ADR-017: a custom prompt rides the grammar's own `Env` — foley's job
+// A custom prompt rides the grammar's own `Env` — foley's job
 // is (1) an environment where the tape's PS1 actually WINS, (2) bare
 // `Wait` expecting the new prompt, loudly when it cannot.
 
@@ -50,7 +50,7 @@ func envPairs(env map[string]string) []string {
 // promptVar names the environment variable that IS the prompt for the
 // shell, or "" for shells that define it with a function (fish, nu,
 // xonsh, powershell/pwsh) — those are out of scope, documented, never
-// faked (ADR-017).
+// faked.
 func promptVar(shellName string) string {
 	switch shellName {
 	case "bash", "osh":

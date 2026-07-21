@@ -8,7 +8,7 @@ import (
 	"github.com/GH-Jaider/foley/internal/terminfo"
 )
 
-// foley IS the terminal (ADR-021): a real emulator does not ask which
+// foley IS the terminal: a real emulator does not ask which
 // terminal it is running inside — it declares itself. TerminalEnv
 // takes an INHERITED environment, scrubs the host terminal's identity
 // out of it, and declares foley's own. Without this, the same tape
@@ -63,7 +63,7 @@ func TerminalEnv(inherited []string) []string {
 // graphics support fell back to cell art INSIDE the one terminal that
 // records the protocol natively. If the entry cannot be materialized,
 // the identity degrades to xterm-256color and says so in warnings —
-// degraded, never silent (ADR-008).
+// degraded, never silent.
 func TerminalIdentity(inherited []string) (env, warnings []string) {
 	out := make([]string, 0, len(inherited)+5)
 	for _, kv := range inherited {

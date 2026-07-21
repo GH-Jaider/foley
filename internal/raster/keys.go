@@ -10,7 +10,7 @@ import (
 	"github.com/GH-Jaider/foley/key"
 )
 
-// The keys band (ADR-016, v3 geometry and vocabulary): keycap chips on
+// The keys band: keycap chips on
 // a film strip UNDER the window — one cap per keystroke, repeats
 // coalesce ("j ×4"), chords are one cap ("^C"). foley is the one
 // typing, so the input track is emitted, not captured — exact virtual
@@ -70,7 +70,7 @@ func KeysBandFor(capCell int) int {
 	return keysBandPadTop + capCell + 6 + 2*(keysSprocketH+2*keysSprocketPad) + keysBandPadBot
 }
 
-// KeysNotation is the cap vocabulary (ADR-016 v3).
+// KeysNotation is the cap vocabulary.
 type KeysNotation uint8
 
 const (
@@ -82,7 +82,7 @@ const (
 	KeysIcons
 )
 
-// KeysStyle is the band's styling knobs (ADR-016 v3): notation, accent
+// KeysStyle is the band's styling knobs: notation, accent
 // override, and the plain (stripless) variant.
 type KeysStyle struct {
 	// Notation picks the cap vocabulary.
@@ -97,7 +97,7 @@ type KeysStyle struct {
 
 // keyCap is one keycap: a keystroke, or a coalesced run of the same
 // keystroke. Its face is either a text label (the grid font), a drawn
-// icon, or the blank spacebar — never a mix (ADR-016 v3).
+// icon, or the blank spacebar — never a mix.
 type keyCap struct {
 	label string
 	icon  keyIcon
@@ -329,7 +329,7 @@ func (kt *KeysTrack) Breakpoints(from, to time.Duration) []time.Duration {
 	return dedup
 }
 
-// keyCapFor renders a key as a cap face (ADR-016 v3): what a real
+// keyCapFor renders a key as a cap face: what a real
 // keycap prints. Lowercase words in the grid font for named keys —
 // ASCII, so coverage never gambles on a cmap — and drawn sprites only
 // where keyboards draw: the arrows (plus enter/tab/bksp/del under
@@ -337,7 +337,7 @@ func (kt *KeysTrack) Breakpoints(from, to time.Duration) []time.Duration {
 // always TEXT (`^E`, `alt+b`, `shift+tab`): a cap never mixes an icon
 // with a prefix. ok=false drops the keystroke (nothing to show).
 func keyCapFor(k key.Key, notation KeysNotation) (keyCap, bool) {
-	// Notation for modifiers (ADR-016): CARET for control — the way
+	// Notation for modifiers: CARET for control — the way
 	// the terminal itself echoes it — and lowercase words for the rest.
 	var prefix string
 	if k.Mods&key.ModCtrl != 0 {

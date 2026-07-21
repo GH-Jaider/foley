@@ -17,7 +17,7 @@ func Lint(t *Tape, opts RunOptions) []string {
 	if !opts.ModifyOtherKeys {
 		warnDegradedChords(t, warn)
 	}
-	// A custom prompt's wait coordination (ADR-017) belongs in the
+	// A custom prompt's wait coordination belongs in the
 	// spotting session too: validate must say what record will do.
 	if settings, err := effectiveSettings(t, opts); err == nil {
 		_ = promptWaitPattern(t, settings, warn)

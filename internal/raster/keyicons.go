@@ -2,7 +2,7 @@ package raster
 
 import "image"
 
-// The keys band's drawn key faces (ADR-016 v3). A font's dingbats are
+// The keys band's drawn key faces. A font's dingbats are
 // not an icon set — coverage gambles per family and the weights that
 // do exist disagree (JetBrains' ⌫ is a filled mass next to a hairline
 // ↩). So, exactly like box-drawing in sprites.go, foley draws its own:

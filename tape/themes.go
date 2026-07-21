@@ -19,7 +19,7 @@ var themesJSON []byte
 
 // vhsTheme mirrors VHS's theme JSON shape (themes.go of the pinned
 // release): flat hex strings. Selection feeds the highlight cue
-// (ADR-018 — the zombie field, revived). CursorAccent is parsed for
+// (the zombie field, revived). CursorAccent is parsed for
 // theme-JSON compatibility but has no renderer yet (staged, not a
 // typo-trap for strict dress palettes).
 type vhsTheme struct {

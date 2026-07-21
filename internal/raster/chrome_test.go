@@ -229,7 +229,7 @@ func TestGoldenChromeTitleAndControls(t *testing.T) {
 	}
 }
 
-// TestTitleFollow pins the reactive bar title (ADR-022): with follow ON
+// TestTitleFollow pins the reactive bar title: with follow ON
 // the bar tracks Frame.Title and falls back to the static text until
 // the app declares one; with follow OFF the frame title never leaks in.
 func TestTitleFollow(t *testing.T) {

@@ -1,4 +1,4 @@
-// Package execx is the single seam for external binaries (ADR-013): a
+// Package execx is the single seam for external binaries: a
 // typed tool table with minimum versions, verified BEFORE first use, and
 // context-aware execution whose failures carry the output tail. os/exec
 // is forbidden outside this package (depguard); `foley doctor` will read
@@ -30,7 +30,7 @@ var (
 // Tool identifies an external binary from the table.
 type Tool string
 
-// The v1 tool table (ADR-013). gifski joins if an ADR brings it in.
+// The v1 tool table. gifski joins when a design decision brings it in.
 const (
 	FFmpeg Tool = "ffmpeg"
 )

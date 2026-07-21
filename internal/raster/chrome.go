@@ -77,10 +77,10 @@ type Window struct {
 	TitleAlign TitleAlign
 	// TitleFollow lets the bar follow the title the APPLICATION
 	// declares via OSC 0/2 (Frame.Title), falling back to Title while
-	// none is set (ADR-022). Footage, not host state: deterministic.
+	// none is set. Footage, not host state: deterministic.
 	TitleFollow bool
 	// KeysBand is the height of the input-caption band under the
-	// window (ADR-016); zero = no band. The canvas GROWS by it — a cue
+	// window; zero = no band. The canvas GROWS by it — a cue
 	// never eats grid rows and the footage is never covered.
 	KeysBand int
 	// Radius rounds the window block's corners, revealing MarginFill.
@@ -144,7 +144,7 @@ func (r *Rasterizer) drawChrome(dst *image.RGBA, bg, fg color.RGBA) {
 	}
 	fillRect(dst, image.Rect(m, winTop, cw-m, ch-kb-m), bg)
 	if kb > 0 {
-		// The input reel (ADR-016 v3): the band is the MARGIN running
+		// The input reel: the band is the MARGIN running
 		// under the window — the dress is the desk, the theme the film
 		// (the stage died: three near-blacks read as mud) — with the
 		// strip square edge to edge and its perforations PUNCHED
@@ -173,7 +173,7 @@ func (r *Rasterizer) drawChrome(dst *image.RGBA, bg, fg color.RGBA) {
 // punchHole paints one sprocket perforation with the margin fill
 // behind the strip — the fill's color, or the image fill's own pixels
 // (the same cached buffer the corner reveals sample). A hole is a
-// hole (ADR-016 v3).
+// hole.
 func (r *Rasterizer) punchHole(dst *image.RGBA, rect image.Rectangle) {
 	rad := keysSprocketRad * r.s
 	if r.marginBuf == nil {
@@ -311,7 +311,7 @@ func (r *Rasterizer) drawBar(dst *image.RGBA, rect image.Rectangle, contentBG co
 
 // drawBarTitle blits the window title into the bar. The rendered strip
 // is cached per string: static titles shape once for the whole
-// recording; a followed title (ADR-022) re-shapes only when the app
+// recording; a followed title re-shapes only when the app
 // actually changes it.
 func (r *Rasterizer) drawBarTitle(dst *image.RGBA, rect image.Rectangle, barBG color.RGBA) {
 	w := r.opts.Window
@@ -588,7 +588,7 @@ func (r *Rasterizer) roundCorners(dst *image.RGBA) {
 	for _, c := range corners {
 		// The block's bottom corners reveal the margin too: with the
 		// reel below, the margin RUNS under the window into the band
-		// (ADR-016 v3 — the stage died).
+		// (the stage died).
 		for y := c.y; y < c.y+rad; y++ {
 			for x := c.x; x < c.x+rad; x++ {
 				if x < 0 || y < 0 || x >= cw || y >= ch {

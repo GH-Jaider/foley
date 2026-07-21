@@ -1,5 +1,5 @@
 // Package tape parses VHS .tape scripts into a typed AST and executes
-// them against a foley Recorder (ADR-008). Parsing is done by the REAL
+// them against a foley Recorder. Parsing is done by the REAL
 // VHS grammar, vendored and pinned in internal/vhsgrammar — fidelity
 // bug-for-bug; this package is where its stringly commands die: past
 // Parse everything is durations, keys, enums and compiled regexps.
@@ -79,11 +79,11 @@ type Settings struct {
 	Shell      string
 	FontFamily string
 	// FontFiles is a per-style user font family (foley-only: reachable
-	// through a dress, no VHS Set exists — ADR-015).
+	// through a dress, no VHS Set exists).
 	FontFiles FontFiles
 	// KeysOverlay turns on the input reel, Keys carries its knobs —
 	// size, notation, accent, plain (foley-only: the `# foley: keys`
-	// cue or the CLI override — ADR-016).
+	// cue or the CLI override).
 	KeysOverlay   bool
 	Keys          KeysCue
 	FontSize      int
@@ -105,7 +105,7 @@ type Settings struct {
 	// WindowTitle, TitleAlign, WindowTitleFollow and WindowBarColor are
 	// foley-only (no VHS Set exists); they flow exclusively from a
 	// dress. Empty bar color means theme-derived AUTO shading; follow
-	// makes the bar track the app's OSC title (ADR-022).
+	// makes the bar track the app's OSC title.
 	WindowTitle       string
 	TitleAlign        string
 	WindowTitleFollow bool
@@ -142,7 +142,7 @@ type Tape struct {
 	// they are applied anyway (last wins) but the executor warns: VHS
 	// applies settings before recording starts.
 	LateSets []string
-	// Cues is the tape's `# foley:` cue sheet (ADR-014), in source order.
+	// Cues is the tape's `# foley:` cue sheet, in source order.
 	Cues []Cue
 }
 
@@ -157,7 +157,7 @@ func (t *Tape) DressCue() DressRef {
 	return DressRef{}
 }
 
-// KeysCue reports whether the tape asks for the input reel (ADR-016)
+// KeysCue reports whether the tape asks for the input reel
 // and with which knobs. Parse guarantees at most one keys cue.
 func (t *Tape) KeysCue() (bool, KeysCue) {
 	for _, c := range t.Cues {
@@ -168,7 +168,7 @@ func (t *Tape) KeysCue() (bool, KeysCue) {
 	return false, KeysCue{}
 }
 
-// StudioCue reports whether the tape asks for a closed set (ADR-023).
+// StudioCue reports whether the tape asks for a closed set.
 // Parse guarantees at most one studio cue.
 func (t *Tape) StudioCue() bool {
 	for _, c := range t.Cues {
@@ -231,7 +231,7 @@ func Parse(src string) (*Tape, error) {
 		case CueStudio:
 			studioLines = append(studioLines, strconv.Itoa(c.Line))
 		case CueHighlight:
-			// Any number of highlights may coexist (ADR-018). A
+			// Any number of highlights may coexist. A
 			// targeted off must name a highlight declared BEFORE it —
 			// a typo dies here, in validate, not as a silent no-op.
 			switch {
@@ -242,7 +242,7 @@ func Parse(src string) (*Tape, error) {
 				hlNames[c.Highlight.Name] = true
 			}
 		case CueZoom:
-			// Any number of camera moves may coexist (ADR-019), but an
+			// Any number of camera moves may coexist, but an
 			// `off` before any zoom is an authoring mistake — the
 			// camera is already at the full frame — and dies here, in
 			// validate. (The sharp-cap check needs real geometry and

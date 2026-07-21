@@ -1,6 +1,6 @@
 package raster_test
 
-// ADR-011 evaluation: can the pure-Go text stack (go-text/typesetting +
+// Evaluation: can the pure-Go text stack (go-text/typesetting +
 // x/image/vector) deliver ligatures and glyph rasterization of the quality
 // foley needs? This test is the executable half of that decision — it
 // shapes a ligature-heavy string with the pinned JetBrains Mono, asserts

@@ -10,7 +10,7 @@ import (
 	"github.com/GH-Jaider/foley/internal/vtengine"
 )
 
-// The highlight cue (ADR-018): paint the theme's Selection color under
+// The highlight cue: paint the theme's Selection color under
 // chosen text — a director's hand pointing at the frame. Pure paint:
 // the grid content never changes, the fg never changes, only the cell
 // background under the match, exactly like a real selection.

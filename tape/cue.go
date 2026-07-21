@@ -14,7 +14,7 @@ import (
 	"github.com/GH-Jaider/foley"
 )
 
-// Cue is one `# foley:` post-production line (ADR-014). VHS ignores
+// Cue is one `# foley:` post-production line. VHS ignores
 // comment lines, so a tape with cues still records everywhere — cues
 // only ever ADD. The set of cues in a tape is its cue sheet.
 type Cue struct {
@@ -22,7 +22,7 @@ type Cue struct {
 	Line int
 	Kind CueKind
 	// AfterCommand is how many COMMAND lines precede the cue — its
-	// position in the timeline (ADR-018: a highlight acts from between
+	// position in the timeline (a highlight acts from between
 	// the previous and next command). Counted by the scanner with the
 	// inverted keyword list; review on every grammar re-vendor.
 	AfterCommand int
@@ -41,8 +41,7 @@ type Cue struct {
 // CueKind identifies a cue type.
 type CueKind uint8
 
-// The cue types: dress (ADR-014), keys (ADR-016), highlight (ADR-018),
-// zoom (ADR-019) and studio (ADR-023).
+// The cue types: dress, keys, highlight, zoom and studio.
 const (
 	CueDress CueKind = iota
 	CueKeys
@@ -51,7 +50,7 @@ const (
 	CueStudio
 )
 
-// ZoomCue is one camera direction (ADR-019): frame a CELL rect
+// ZoomCue is one camera direction: frame a CELL rect
 // (0-based, the house standard) or return to the full frame. Dur zero
 // means the house default transition.
 type ZoomCue struct {
@@ -163,7 +162,7 @@ func scanCues(src string) ([]Cue, error) {
 			}
 			cues = append(cues, Cue{Line: i + 1, Kind: CueZoom, AfterCommand: commands, Zoom: z})
 		case "studio":
-			// The studio (ADR-023) is a switch, not a knob: anything
+			// The studio is a switch, not a knob: anything
 			// after the word is a mistake and dies here, in validate.
 			if rest != "" {
 				return nil, fmt.Errorf("tape: %d: studio: unexpected %q — the cue takes no arguments", i+1, rest)
@@ -176,7 +175,7 @@ func scanCues(src string) ([]Cue, error) {
 	return cues, nil
 }
 
-// KeysCue is the keys layer's payload (ADR-016 v3): reel size, cap
+// KeysCue is the keys layer's payload: reel size, cap
 // notation, accent override and the plain (stripless) variant.
 type KeysCue struct {
 	Size     foley.KeysSize
@@ -401,10 +400,10 @@ func validateDressFont(f DressFont) error {
 }
 
 // isCommandLine reports whether a tape line is a COMMAND (advances the
-// timeline) — the positional anchor for cues (ADR-018). INVERTED list:
+// timeline) — the positional anchor for cues. INVERTED list:
 // anything that is not blank, a comment, or one of the grammar's five
 // non-command keywords IS a command. Those five are stable in the
-// pinned grammar; review this list on every re-vendor (ADR-008).
+// pinned grammar; review this list on every re-vendor.
 func isCommandLine(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
@@ -455,7 +454,7 @@ func parseCellRect(colRow, size string) (col, row, w, h int, ok bool) {
 	return col, row, w, h, true
 }
 
-// parseHighlight classifies a highlight argument (ADR-018):
+// parseHighlight classifies a highlight argument:
 //
 //	off [NAME]
 //	/regex/ [first|last|N] [as NAME]
@@ -543,7 +542,7 @@ func parseHighlightMods(rest string, pattern bool) (occ int, pick bool, name str
 	return occ, pick, name, nil
 }
 
-// parseZoom classifies a zoom argument (ADR-019):
+// parseZoom classifies a zoom argument:
 //
 //	COL,ROW WxH [duration]
 //	off [duration]
@@ -611,7 +610,7 @@ func parseZoomDur(s string) (time.Duration, error) {
 	return d, nil
 }
 
-// isFontPath spots the FontFamily PATH form (ADR-015): a font FILE the
+// isFontPath spots the FontFamily PATH form: a font FILE the
 // repo pins (deterministic input), vs a bare NAME resolved against the
 // pinned catalog (system fonts are refused).
 func isFontPath(s string) bool {

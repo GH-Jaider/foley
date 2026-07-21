@@ -1,4 +1,4 @@
-// Extractor de libghostty-vt.a pineada (ADR-010).
+// Extractor de libghostty-vt.a pineada.
 //
 // Este paquete no compila código propio: declara ghostty como dependencia
 // por URL+hash (el pin) y instala su artefacto estático para el target
@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
 
     // simd=false: build autocontenido (sin el componente C++ ghostty_simd
     // aparte). Costo de perf en paths calientes de parsing — se re-evalúa
-    // con benchmark en ADR-010 si el throughput de VT lo pide.
+    // con benchmark propio si el throughput de VT lo pide.
     if (b.lazyDependency("ghostty", .{
         .target = target,
         .optimize = optimize,

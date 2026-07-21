@@ -29,7 +29,7 @@ type RealtimeOptions struct {
 	OnOutput func(data []byte, at time.Duration)
 }
 
-// Realtime is the wall-clock timeline (ADR-012 D7): recording starts at
+// Realtime is the wall-clock timeline: recording starts at
 // NewRealtime, application output is consumed as it arrives, and frames
 // are sampled at FPS with dirty-skip — an unchanged screen extends the
 // current frame for free. Durations are real elapsed time between emitted

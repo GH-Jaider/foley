@@ -13,7 +13,7 @@ import (
 )
 
 // TestVHSCorpusConformance parses every tape of the vendored upstream
-// corpus with the vendored grammar — the whole point of ADR-008: if VHS
+// corpus with the vendored grammar — the whole point of the design: if VHS
 // ships it as an example, foley parses it identically. Each tape parses
 // from its own directory (Source resolves CWD-relative, exactly like
 // VHS's evaluator). Failures are only legal on the explicit list below.
