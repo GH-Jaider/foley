@@ -63,6 +63,11 @@ type Engine struct {
 	// qf answers the queries the lib will not (queries.go); its state
 	// carries partial sequences across Write boundaries.
 	qf queryFilter
+	// viewportMoved forces Dirty on the next Snapshot after a
+	// ScrollViewport: the lib's damage tracking follows cells, but a
+	// moved viewport is a visible change with zero cell damage — same
+	// doctrine as lastTitle and lastGfxGen.
+	viewportMoved bool
 	// lastTitle detects OSC 0/2 title changes between snapshots: a pure
 	// title change carries no dirty cells, but the frame must not be
 	// skipped.
@@ -217,6 +222,26 @@ func (e *Engine) Resize(g vtengine.Geometry) error {
 	return e.applyGeometry(g)
 }
 
+// ScrollViewport shifts the viewport through the scrollback by delta
+// lines (up is negative) — the same call ghostty's own UI makes for a
+// wheel or scrollbar drag. The lib clamps at both ends and no-ops on
+// the alternate screen; the render state follows the moved viewport on
+// the next Snapshot.
+func (e *Engine) ScrollViewport(delta int) error {
+	if e.closed {
+		return vtengine.ErrClosed
+	}
+	if delta == 0 {
+		return nil
+	}
+	var b C.GhosttyTerminalScrollViewport
+	b.tag = C.GHOSTTY_SCROLL_VIEWPORT_DELTA
+	*(*C.intptr_t)(unsafe.Pointer(&b.value)) = C.intptr_t(delta)
+	C.ghostty_terminal_scroll_viewport(e.term, b)
+	e.viewportMoved = true
+	return nil
+}
+
 // Snapshot fills dst from the current render state.
 func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 	if e.closed {
@@ -242,6 +267,11 @@ func (e *Engine) Snapshot(dst *vtengine.Frame) error {
 	dst.Dirty = dirty != C.GHOSTTY_RENDER_STATE_DIRTY_FALSE
 	clean := C.GhosttyRenderStateDirty(C.GHOSTTY_RENDER_STATE_DIRTY_FALSE)
 	C.ghostty_render_state_set(e.rstate, C.GHOSTTY_RENDER_STATE_OPTION_DIRTY, unsafe.Pointer(&clean))
+	if e.viewportMoved {
+		// A scrolled viewport is a visible change with zero cell damage.
+		e.viewportMoved = false
+		dst.Dirty = true
+	}
 
 	// Colors.
 	var colors C.GhosttyRenderStateColors

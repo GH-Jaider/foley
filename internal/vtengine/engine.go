@@ -111,6 +111,16 @@ type Engine interface {
 	// error wrapping ErrCannotEncode — never silent empty bytes.
 	EncodeKey(ev KeyEvent) ([]byte, error)
 
+	// ScrollViewport shifts the visible viewport through the scrollback
+	// by delta lines — negative is up (into history), positive down
+	// (toward the active area), clamped at both ends. This is the VHS
+	// ScrollUp/ScrollDown semantic (xterm.js term.scrollLines): a view
+	// change, not input — the application never sees it. On the
+	// alternate screen there is no scrollback and the call is a no-op,
+	// exactly like a real terminal. The next Snapshot after a scroll is
+	// always Dirty: a moved viewport is a visible change.
+	ScrollViewport(delta int) error
+
 	// Close releases the engine. Further calls return ErrClosed; Close
 	// itself is idempotent.
 	Close() error

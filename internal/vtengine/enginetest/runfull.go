@@ -551,6 +551,50 @@ func RunFull(t *testing.T, factory Factory) {
 			t.Fatalf("14t after resize = %q, want %q", got, "\x1b[4;40;100t")
 		}
 	})
+
+	t.Run("scroll_viewport", func(t *testing.T) {
+		// The VHS ScrollUp/ScrollDown semantic: the viewport moves
+		// through the scrollback, the app sees nothing, and the next
+		// Snapshot is Dirty even with zero cell damage.
+		e := factory(t, defaultOpts()) // 20×4
+		defer func() { _ = e.Close() }()
+		for i := 0; i < 10; i++ {
+			mustWrite(t, e, fmt.Sprintf("L%d\r\n", i))
+		}
+		f := snapshot(t, e)
+		if got := f.RowText(0); got != "L7" {
+			t.Fatalf("bottom viewport row 0 = %q, want L7", got)
+		}
+		if err := e.ScrollViewport(-3); err != nil {
+			t.Fatalf("scroll up: %v", err)
+		}
+		f = snapshot(t, e)
+		if !f.Dirty {
+			t.Fatal("a scrolled viewport must dirty the frame")
+		}
+		if got := f.RowText(0); got != "L4" {
+			t.Fatalf("after -3, row 0 = %q, want L4", got)
+		}
+		// Down past the end clamps at the active area.
+		if err := e.ScrollViewport(999); err != nil {
+			t.Fatalf("scroll down: %v", err)
+		}
+		f = snapshot(t, e)
+		if got := f.RowText(0); got != "L7" {
+			t.Fatalf("after clamped down, row 0 = %q, want L7", got)
+		}
+		// The alternate screen has no scrollback: scrolling there is a
+		// no-op, like a real terminal.
+		mustWrite(t, e, "\x1b[?1049h\x1b[Halt")
+		snapshot(t, e) // drain dirty
+		if err := e.ScrollViewport(-2); err != nil {
+			t.Fatalf("alt-screen scroll: %v", err)
+		}
+		f = snapshot(t, e)
+		if got := f.RowText(0); got != "alt" {
+			t.Fatalf("alt screen scrolled: row 0 = %q, want alt", got)
+		}
+	})
 }
 
 // writeKitty wraps a kitty graphics command in an APC sequence.

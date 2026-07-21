@@ -34,9 +34,9 @@ const (
 	KindScreenshot
 	KindCopy
 	KindPaste
-	// KindScrollUp / KindScrollDown are parsed faithfully but staged in
-	// execution (mouse-wheel input is pending raster/input work); the
-	// executor warns and skips them.
+	// KindScrollUp / KindScrollDown shift the viewport through the
+	// scrollback — VHS's term.scrollLines semantic: a view change the
+	// application never sees; no-op on the alternate screen.
 	KindScrollUp
 	KindScrollDown
 )

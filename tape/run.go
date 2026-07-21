@@ -438,7 +438,21 @@ func Run(ctx context.Context, t *Tape, opts RunOptions) (*Report, error) {
 		case KindPaste:
 			err = rec.Type(ctx, clipboard, 0)
 		case KindScrollUp, KindScrollDown:
-			warn("Scroll: mouse-wheel input is staged; the command was skipped (PageUp/PageDown work today)")
+			// VHS semantics (xterm.js term.scrollLines): the VIEWPORT
+			// scrolls through the scrollback, line by line; the app
+			// never sees input. A @speed spends time between lines so
+			// the scroll animates; without it the lines collapse into
+			// the next declared hold, like any zero-time state change.
+			delta := -1
+			if cmd.Kind == KindScrollDown {
+				delta = 1
+			}
+			for i := 0; i < cmd.Count && err == nil; i++ {
+				err = rec.Scroll(delta)
+				if err == nil && cmd.SpeedSet {
+					err = rec.Sleep(ctx, scale(cmd.Speed))
+				}
+			}
 		}
 		if err != nil {
 			return rep, err
@@ -500,7 +514,13 @@ func declaredTotal(t *Tape, settings Settings) time.Duration {
 			total += time.Duration(cmd.Count) * perKeyDur(settings, cmd)
 		case KindSleep:
 			total += scaleDur(settings, cmd.Speed)
-		case KindWait, KindHide, KindShow, KindScreenshot, KindCopy, KindPaste, KindScrollUp, KindScrollDown:
+		case KindScrollUp, KindScrollDown:
+			// A @speed animates the scroll line by line; without it
+			// the scroll spends no declared time.
+			if cmd.SpeedSet {
+				total += time.Duration(cmd.Count) * scaleDur(settings, cmd.Speed)
+			}
+		case KindWait, KindHide, KindShow, KindScreenshot, KindCopy, KindPaste:
 			// Paste types at 0ms; the rest spend no declared time.
 		}
 	}

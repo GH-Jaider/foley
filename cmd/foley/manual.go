@@ -51,8 +51,6 @@ var tapeCommands = []manItem{
 	{"", "Down", " [repeat]"},
 	{"", "Left", " [repeat]"},
 	{"", "Right", " [repeat]"},
-	{"", "Home", ""},
-	{"", "End", ""},
 	{"", "PageUp", " [repeat]"},
 	{"", "PageDown", " [repeat]"},
 	{"", "ScrollUp", " [repeat]"},

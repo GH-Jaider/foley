@@ -239,6 +239,14 @@ func (r *Realtime) Show() error {
 	return r.do(context.Background(), func() error { return r.lp.show() })
 }
 
+// Scroll shifts the viewport through the scrollback (negative is up);
+// the next tick snapshots the moved — and therefore dirty — viewport.
+func (r *Realtime) Scroll(delta int) error {
+	return r.do(context.Background(), func() error {
+		return r.opts.Engine.ScrollViewport(delta)
+	})
+}
+
 // Screenshot renders the current state as a named still; works hidden.
 func (r *Realtime) Screenshot(name string) error {
 	return r.do(context.Background(), func() error { return r.lp.screenshot(name) })

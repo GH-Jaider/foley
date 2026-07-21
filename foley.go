@@ -671,6 +671,18 @@ func (r *Recorder) Press(ctx context.Context, k key.Key, dur time.Duration) erro
 	return r.timeline.Press(ctx, k, dur)
 }
 
+// Scroll shifts the terminal viewport through the scrollback by delta
+// lines — negative is up, into history — the way a reader scrolls a
+// real terminal window. It is a view change, not input: the recorded
+// application never sees it, and on the alternate screen (no
+// scrollback) it is a no-op, exactly like a real terminal.
+func (r *Recorder) Scroll(delta int) error {
+	if r.finished {
+		return ErrFinished
+	}
+	return r.timeline.Scroll(delta)
+}
+
 // Sleep advances the timeline.
 func (r *Recorder) Sleep(ctx context.Context, d time.Duration) error {
 	if r.finished {

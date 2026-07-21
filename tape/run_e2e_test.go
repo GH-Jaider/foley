@@ -778,3 +778,55 @@ Sleep 400ms
 		t.Fatalf("the host home %q is on camera:\n%s", home, text)
 	}
 }
+
+// TestScrollEndToEnd: ScrollUp is VHS's viewport scroll — the take's
+// final screen shows HISTORY scrolled back into view, and the recorded
+// application never saw a single key for it.
+func TestScrollEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	fonts, err := filepath.Abs(filepath.Join("..", "internal", "fontpack", "fonts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fonts, "JetBrainsMono-Regular.ttf")); err != nil {
+		testassets.Require(t, err, "make fonts")
+	}
+	if _, err := execx.LookPath("bash"); err != nil {
+		testassets.Require(t, err, "bash on PATH")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	src := `Output demo.txt
+Require bash
+Set Shell bash
+Set Width 640
+Set Height 220
+Type@0ms "for i in $(seq 1 60); do printf 'L%03d\n' $i; done"
+Enter
+Sleep 300ms
+ScrollUp 30
+Sleep 200ms
+`
+	tp, err := tape.Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tape.Run(ctx, tp, tape.RunOptions{FontsDir: fonts}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out, err := os.ReadFile(filepath.Join(dir, "demo.txt")) //nolint:gosec // TempDir path
+	if err != nil {
+		t.Fatal(err)
+	}
+	txt := string(out)
+	// Before the scroll the bottom view ends at L060 + the prompt; 30
+	// lines up, the window's BOTTOM edge is exactly L031 whatever the
+	// grid height — deep history on screen, the tail gone.
+	if !strings.Contains(txt, "L031") {
+		t.Fatalf("scrolled view lacks history (want L031 at the bottom edge):\n%s", txt)
+	}
+	if strings.Contains(txt, "L060") {
+		t.Fatalf("scrolled view still shows the tail (L060):\n%s", txt)
+	}
+}

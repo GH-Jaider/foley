@@ -28,6 +28,10 @@ type Engine struct {
 	// Written records every byte fed via Write, for input-path tests.
 	Written []byte
 
+	// Scrolled records every ScrollViewport delta, for driver tests —
+	// the puppet has no scrollback, so the call only marks dirty.
+	Scrolled []int
+
 	// EncodeKeyFunc overrides key encoding when set; the default encodes
 	// printable runes as themselves and named keys as legacy sequences.
 	EncodeKeyFunc func(vtengine.KeyEvent) ([]byte, error)
@@ -143,6 +147,18 @@ func (e *Engine) ImagePixels(id uint32) (vtengine.ImageData, error) {
 		return vtengine.ImageData{}, vtengine.ErrNoImage
 	}
 	return img, nil
+}
+
+// ScrollViewport records the delta and marks the frame dirty (the
+// contract: a moved viewport is a visible change). The puppet keeps no
+// scrollback — real scroll behavior is enginetest.RunFull territory.
+func (e *Engine) ScrollViewport(delta int) error {
+	if e.closed {
+		return vtengine.ErrClosed
+	}
+	e.Scrolled = append(e.Scrolled, delta)
+	e.dirty = true
+	return nil
 }
 
 // EncodeKey encodes taps with a trivial legacy scheme (overridable via

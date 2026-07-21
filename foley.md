@@ -66,7 +66,9 @@ Ctrl[+Alt][+Shift]+<char>  # chords: Ctrl+C, Ctrl+Shift+P, Alt+Enter, Shift+Tab
 Enter/Backspace/Delete/Insert/Tab/Space/Escape [n]
 Up/Down/Left/Right [n]     # arrows — modifiers do NOT combine with them
 PageUp/PageDown [n]        # (no Home/End in the grammar)
-ScrollUp/ScrollDown [n]    # terminal viewport scroll
+ScrollUp/ScrollDown[@<time>] [n]   # scroll the viewport through the scrollback — view only, the
+                           # app sees no input; alt-screen TUIs have no scrollback (use the
+                           # app's own keys there); @time animates it line by line
 Hide / Show                # stop/resume emitting frames (the pty keeps running)
 Screenshot <path>.png      # one frame, here
 Copy "<string>" / Paste    # internal clipboard

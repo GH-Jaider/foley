@@ -20,6 +20,11 @@ type Timeline interface {
 	WaitText(ctx context.Context, re *regexp.Regexp, timeout time.Duration) error
 	Hide() error
 	Show() error
+	// Scroll shifts the viewport through the scrollback (negative is
+	// up) — a view change on the render side; the application never
+	// sees it. The scrolled state lands on the timeline like any other
+	// visible change: the next advance renders it.
+	Scroll(delta int) error
 	Screenshot(name string) error
 	// ScreenText returns the current visible screen text (the surface
 	// waits match against) — the tape DSL's .txt output and debugging.

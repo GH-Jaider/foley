@@ -287,6 +287,13 @@ func (d *Driver) Show() error {
 	return nil
 }
 
+// Scroll shifts the viewport through the scrollback (negative is up).
+// The engine marks the moved viewport dirty, so the next advance emits
+// the scrolled frame with its declared duration — no time passes here.
+func (d *Driver) Scroll(delta int) error {
+	return d.opts.Engine.ScrollViewport(delta)
+}
+
 // Screenshot renders the current settled state and hands it to the sink
 // as a named still. It works while hidden and advances no time.
 func (d *Driver) Screenshot(name string) error {

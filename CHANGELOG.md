@@ -19,6 +19,30 @@ pre-release on GitHub.
 
 ## Unreleased
 
+### Added
+
+- **`ScrollUp` / `ScrollDown` record for real** — the last staged VHS
+  commands come alive. The viewport scrolls through the scrollback
+  exactly like VHS's `term.scrollLines`: a view change the recorded
+  application never sees, clamped at both ends, a no-op on the
+  alternate screen (a TUI scrolls with its own keys). `ScrollUp@50ms 5`
+  animates line by line; without a speed the scrolled view lands on
+  the next hold. The library grows `Recorder.Scroll(delta)`, the
+  engine contract `ScrollViewport`, and the conformance suite pins the
+  semantics.
+- **`foley validate` signs off out loud.** A clean session used to end
+  in silence — indistinguishable from "did nothing" for humans and
+  agents alike. Every validated tape now closes with one line:
+  `demo.tape: ok — commands: 14 · cues: 2 · outputs: demo.gif`.
+
+### Fixed
+
+- **The manual no longer teaches phantom keys.** `foley manual` listed
+  `Home`/`End`, but neither is a command in the pinned VHS grammar:
+  `End` is a parse error, and `Home` — worse — lexes as a bare string
+  and glues itself into the preceding `Type` as literal text. Both
+  rows are gone.
+
 ### Changed
 
 - **`make engine-lib` builds only your platform's engine.** It used to
