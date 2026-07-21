@@ -148,12 +148,16 @@ jobs:
           fi
           CGO_ENABLED=1 go build -tags "ghosttyvt embedfonts" \
             -ldflags "$LD" -o foley ./cmd/foley
-      # doctor honestly exits 1 without ffmpeg, and macOS runner images
-      # ship without it (the ubuntu images include it). Install it so
-      # the smoke tests foley, not the runner's pantry.
-      - name: ffmpeg for the smoke (macos images ship without it)
-        if: startsWith(matrix.target, 'darwin')
-        run: brew install ffmpeg
+      # doctor honestly exits 1 without ffmpeg, and the runner images —
+      # ubuntu AND macos, rehearsed live — ship without it. Install it
+      # so the smoke tests foley, not the runner's pantry.
+      - name: ffmpeg for the smoke (runner images ship without it)
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install ffmpeg
+          else
+            sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          fi
       - name: self-contained smoke (no FOLEY_FONTS)
         run: env -u FOLEY_FONTS ./foley doctor
       - name: package
