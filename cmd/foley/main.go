@@ -204,6 +204,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runSew(args[1:], stdout, stderr)
 		case "play":
 			return runPlay(args[1:], stdin, stdout, stderr)
+		case "skill":
+			return runSkill(args[1:], stdout, stderr)
 		case "completion":
 			return runCompletion(args[1:], stdout, stderr)
 		}
@@ -258,6 +260,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"       foley doctor [-fonts dir]\n" +
 		"       foley themes | fonts | wardrobe [name]\n" +
 		"       foley manual\n" +
+		"       foley skill\n" +
 		"       foley completion bash|zsh|fish\n"
 	welcome := func(w io.Writer) {
 		showLogo(w)
@@ -272,6 +275,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			{"foley validate demo.tape", "the spotting session: lint + cue sheet"},
 			{"foley doctor", "check fonts, engine and ffmpeg"},
 			{"foley manual", "the manual, right here in the terminal"},
+			{"foley skill", "the same knowledge for an AI agent, as one file"},
 		} {
 			b.WriteString("  " + st.accent.Render(fmt.Sprintf("%-25s", c.cmd)) + "  " + c.what + "\n")
 		}
@@ -391,7 +395,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "foley: %v\n", err)
 			switch tapeArg {
-			case "play", "validate", "themes", "doctor", "manual", "new", "sew", "fonts", "wardrobe", "completion":
+			case "play", "validate", "themes", "doctor", "manual", "skill", "new", "sew", "fonts", "wardrobe", "completion":
 				_, _ = fmt.Fprintf(stderr, "foley: (did you mean `foley %s …`? subcommands go before flags)\n", tapeArg)
 			}
 			return watchPaths, 1
@@ -709,7 +713,7 @@ Sleep 2s
 
 // userDressDir is the CLI-side wardrobe (~/.config/foley/dresses). It
 // resolves NAMES only for CLI flags — tapes stay self-contained (their
-// dresses are built-ins, ./paths or inline; ADR-014).
+// dresses are built-ins, ./paths or inline).
 func userDressDir() string {
 	cfg, err := os.UserConfigDir()
 	if err != nil {
@@ -909,7 +913,7 @@ func runSew(args []string, stdout, stderr io.Writer) int {
 
 // runFonts lists the pinned font family catalog — the names a
 // `Set FontFamily` (or a dress `font`) resolves without touching the
-// system (ADR-015). Your own fonts travel as ./file.ttf paths.
+// system. Your own fonts travel as ./file.ttf paths.
 func runFonts(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 0 {
 		_, _ = fmt.Fprintln(stderr, "usage: foley fonts")

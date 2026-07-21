@@ -19,7 +19,7 @@ _foley() {
 	local cur prev
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
-	local subs="play validate new sew doctor manual themes fonts wardrobe completion"
+	local subs="play validate new sew doctor manual skill themes fonts wardrobe completion"
 	local flags="-mode -studio -dir -env -cols -rows -dress -keys -theme -o -output-scale -gif-loop -watch -fonts -modify-other-keys -version -h"
 
 	case "$prev" in
@@ -42,7 +42,7 @@ _foley() {
 	wardrobe) COMPREPLY=($(compgen -W "$(foley wardrobe 2>/dev/null | cut -d' ' -f1)" -- "$cur")); return ;;
 	sew) case "$cur" in -*) COMPREPLY=($(compgen -W "-from" -- "$cur"));; esac; return ;;
 	doctor) COMPREPLY=($(compgen -W "-fonts" -- "$cur")); return ;;
-	themes|fonts|manual) return ;;
+	themes|fonts|manual|skill) return ;;
 	esac
 	case "$cur" in
 	-*) COMPREPLY=($(compgen -W "$flags" -- "$cur")) ;;
@@ -73,6 +73,7 @@ _foley() {
 		'sew:make a dress to edit'
 		'doctor:check fonts, engine and ffmpeg'
 		'manual:the manual, right here in the terminal'
+		'skill:the manual for AI agents, as one loadable file'
 		'themes:list the theme catalog'
 		'fonts:list the pinned font families'
 		'wardrobe:list dresses, or expand one'
@@ -87,7 +88,7 @@ _foley() {
 	completion) _values 'shell' bash zsh fish ;;
 	wardrobe) _foley_dresses ;;
 	new) _files -g '*.tape' ;;
-	themes|fonts|manual) ;;
+	themes|fonts|manual|skill) ;;
 	sew)
 		_arguments \
 			'-from[start from an existing dress]:dress:_foley_dresses' \
@@ -140,6 +141,7 @@ complete -c foley -n '__fish_use_subcommand' -a 'new' -d 'write a starter tape'
 complete -c foley -n '__fish_use_subcommand' -a 'sew' -d 'make a dress to edit'
 complete -c foley -n '__fish_use_subcommand' -a 'doctor' -d 'check fonts, engine and ffmpeg'
 complete -c foley -n '__fish_use_subcommand' -a 'manual' -d 'the manual, right here in the terminal'
+complete -c foley -n '__fish_use_subcommand' -a 'skill' -d 'the manual for AI agents, as one loadable file'
 complete -c foley -n '__fish_use_subcommand' -a 'themes' -d 'list the theme catalog'
 complete -c foley -n '__fish_use_subcommand' -a 'fonts' -d 'list the pinned font families'
 complete -c foley -n '__fish_use_subcommand' -a 'wardrobe' -d 'list dresses, or expand one'
