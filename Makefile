@@ -1,6 +1,6 @@
 GOLANGCI_VERSION := 2.12.2
 
-.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures fonts examples e2e-linux e2e-darwin lint-version engine-lib engine-clean terminfo
+.PHONY: build test test-race lint lint-sh fmt vuln codemap fixtures fonts examples e2e-linux e2e-darwin lint-version engine-lib engine-lib-all engine-clean terminfo
 
 build:
 	go build ./...
@@ -54,7 +54,15 @@ fixtures:
 e2e-linux e2e-darwin:
 	@echo "$@: pendiente — aún no cableado"; exit 1
 
+# Solo el target del HOST: es lo que un build from source o una sesión de
+# desarrollo necesita (un usuario en linux esperaba minutos compilando .a
+# de macOS que jamás usaría). Los 4 targets de v1: engine-lib-all.
+ENGINE_HOST := $(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+
 engine-lib:
+	scripts/engine-lib.sh $(ENGINE_HOST)
+
+engine-lib-all:
 	scripts/engine-lib.sh
 
 # Retira los artefactos Docker de engine-lib (volumen-cache de zig + imagen).

@@ -19,6 +19,14 @@ pre-release on GitHub.
 
 ## Unreleased
 
+### Changed
+
+- **`make engine-lib` builds only your platform's engine.** It used to
+  build all four release targets — a from-source build on linux spent
+  minutes compiling macOS libraries it would never link. The full set
+  moved to `make engine-lib-all`; CI and the release workflow always
+  named their targets explicitly and are unaffected.
+
 ## v0.1.0
 
 The first public release: record VHS-style `.tape` scripts to
