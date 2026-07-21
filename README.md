@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://pkg.go.dev/github.com/GH-Jaider/foley"><img src="https://pkg.go.dev/badge/github.com/GH-Jaider/foley.svg" alt="Go Reference"></a>
   <a href="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml"><img src="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/GH-Jaider/foley/releases/latest"><img src="https://img.shields.io/github/v/release/GH-Jaider/foley" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FF4F45.svg" alt="MIT license"></a>
 </p>
 
@@ -45,10 +46,9 @@ foley needs one thing at runtime: `ffmpeg`. The binary itself is
 self-contained: the terminal engine and the fonts are baked in, so
 there is no `$FOLEY_FONTS` to set and no fonts to fetch.
 
-**Homebrew** (macOS and Linux):
+**Homebrew** (macOS and Linux — brings ffmpeg with it):
 
 ```sh
-brew install ffmpeg
 brew install GH-Jaider/foley/foley
 ```
 
@@ -61,15 +61,16 @@ sudo mv foley /usr/local/bin/          # or anywhere on your PATH
 ```
 
 **From source.** Needs Go 1.26+ and Docker for the one-time engine
-build. This is also how you develop foley:
+build — a few minutes while zig compiles the pinned terminal for your
+platform. This is also how you develop foley:
 
 ```sh
 git clone https://github.com/GH-Jaider/foley && cd foley
-make engine-lib fonts                  # pinned libghostty-vt + pinned fonts
+make engine-lib fonts                  # pinned libghostty-vt (your platform) + pinned fonts
 go install -tags "ghosttyvt embedfonts" ./cmd/foley   # embedfonts bakes the fonts in
 ```
 
-<sub>Without <code>-tags embedfonts</code> the source build reads fonts from a directory: set <code>FOLEY_FONTS=$PWD/internal/fontpack/fonts</code>, or pass <code>-fonts</code>.</sub>
+<sub>Without <code>-tags embedfonts</code> the source build reads fonts from a directory: set <code>FOLEY_FONTS=$PWD/internal/fontpack/fonts</code>, or pass <code>-fonts</code>. Distro-packaged Go often ships <code>GOTOOLCHAIN=local</code>; if <code>go install</code> complains about the Go version, <code>GOTOOLCHAIN=auto go install …</code> fetches the pinned toolchain — upstream Go's default behavior.</sub>
 
 When in doubt, `foley doctor` checks fonts, engine and ffmpeg.
 
