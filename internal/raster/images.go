@@ -16,7 +16,19 @@ import (
 const maxKittyCacheEntries = 64
 
 // drawPlacements composites kitty-graphics placements of one layer.
-func (r *Rasterizer) drawPlacements(dst *image.RGBA, src ImageSource, ps []vtengine.Placement) error {
+func (r *Rasterizer) drawPlacements(dst *image.RGBA, grid image.Rectangle, src ImageSource, ps []vtengine.Placement) error {
+	if len(ps) == 0 {
+		return nil
+	}
+	// Placements clip to the grid viewport — a real terminal never paints
+	// an image over its own padding or chrome. The engine reports
+	// negative rows for partially scrolled-out placements (contract in
+	// vtengine.Placement); the SubImage shares dst's coordinate space, so
+	// the scaler's own bounds check does the clipping.
+	clipped, ok := dst.SubImage(grid).(*image.RGBA)
+	if !ok || clipped.Bounds().Empty() {
+		return nil
+	}
 	for _, p := range ps {
 		img, err := r.kittyImage(src, p)
 		if err != nil {
@@ -48,7 +60,7 @@ func (r *Rasterizer) drawPlacements(dst *image.RGBA, src ImageSource, ps []vteng
 			fx*sr.Dx() == dr.Dx() && fy*sr.Dy() == dr.Dy() {
 			scaler = xdraw.NearestNeighbor
 		}
-		scaler.Scale(dst, dr, img, sr, xdraw.Over, nil)
+		scaler.Scale(clipped, dr, img, sr, xdraw.Over, nil)
 	}
 	return nil
 }

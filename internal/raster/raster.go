@@ -20,7 +20,7 @@ type ImageSource interface {
 	ImagePixels(id uint32) (vtengine.ImageData, error)
 }
 
-// UserFonts is a user-supplied primary font (ADR-015). A single file
+// UserFonts is a user-supplied primary font. A single file
 // fills Regular and serves every style; a family gives styles their
 // own files — absent styles fall back to the Regular face, keeping the
 // grid metrics whole. The primary drives cell metrics and titles the
@@ -41,14 +41,14 @@ func (u UserFonts) empty() bool {
 // Options configures a Rasterizer.
 type Options struct {
 	Pack *fontpack.Pack
-	// UserFonts loads a user primary font over the pack (ADR-015).
+	// UserFonts loads a user primary font over the pack.
 	UserFonts UserFonts
 	// FontSizePx is the glyph size in pixels at Scale 1.
 	FontSizePx int
 	// Scale multiplies every metric (2 = native supersampling).
 	Scale int
 	// SuperSample renders the frame at N× the output for the camera's
-	// master (ADR-019); 0/1 = none. Cell METRICS still derive at the
+	// master; 0/1 = none. Cell METRICS still derive at the
 	// base Scale and multiply exactly — the logical grid (and so the
 	// footage) is identical with or without a camera.
 	SuperSample int
@@ -56,17 +56,17 @@ type Options struct {
 	// window bar, padding, rounded corners). Zero value = no chrome, the
 	// canvas is exactly the grid.
 	Window Window
-	// Keys is the injected input track for the keys band (ADR-016);
+	// Keys is the injected input track for the keys band;
 	// nil = no chips. Window.KeysBand sizes the band itself.
 	Keys *KeysTrack
 	// KeysFontPx is the cap label size in logical px (the reel's
 	// small/medium/large); zero = FontSizePx.
 	KeysFontPx int
-	// KeysStyle tunes the band's look and vocabulary (ADR-016 v3):
+	// KeysStyle tunes the band's look and vocabulary:
 	// accent override and the plain (stripless) variant. The notation
 	// lives on the KeysTrack — cap faces derive as keys arrive.
 	KeysStyle KeysStyle
-	// Highlights is the highlight track (ADR-018); nil = none.
+	// Highlights is the highlight track; nil = none.
 	// SelectionColor paints the matches — the theme's Selection.
 	Highlights     *HighlightTrack
 	SelectionColor color.RGBA
@@ -117,7 +117,7 @@ type Rasterizer struct {
 	titleStr   string
 	titleFG    color.RGBA
 	frameTitle string
-	// The keys band (ADR-016): the track feeding the frames, the film
+	// The keys band: the track feeding the frames, the film
 	// strip's rect (set by drawChrome), the style knobs, the cap font
 	// size, and the label/icon strip caches.
 	keys      *KeysTrack
@@ -128,7 +128,7 @@ type Rasterizer struct {
 	keyIcons  map[keyIconKey]textStrip
 	keysMult  string
 	// highlights paints the Selection color under matched cells
-	// (ADR-018), between cell backgrounds and text.
+	// between cell backgrounds and text.
 	highlights *HighlightTrack
 }
 
@@ -231,7 +231,7 @@ func New(opts Options) (*Rasterizer, error) {
 	ox, oy := opts.Window.contentOrigin()
 	r.orgX, r.orgY = ox*r.s, oy*r.s
 	if opts.Keys != nil && opts.Window.KeysBand > 0 {
-		// The width cut measures REAL caps (ADR-016 v3): the strip
+		// The width cut measures REAL caps: the strip
 		// fills to its edge, then splices — same inputs, same widths,
 		// same cuts. The usable width mirrors drawKeyChips' geometry:
 		// first cap at the prompt column, strip ending at the margin.
@@ -252,7 +252,7 @@ func (r *Rasterizer) Warnings() []string {
 var styleNames = [4]string{"regular", "bold", "italic", "bold-italic"} //nolint:gochecknoglobals // immutable label table
 
 // checkUserFont warns — never errors — on user fonts that will not
-// look like the user expects (ADR-015): missing basic latin (the grid
+// look like the user expects: missing basic latin (the grid
 // falls back to the pack for metrics and coverage), proportional
 // advances, or a family style whose advance disagrees with regular
 // (both make a ragged grid — almost always an accident, possibly an
@@ -324,6 +324,8 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 	}
 
 	placements := splitLayers(f.Graphics.Placements)
+	grid := image.Rect(r.orgX, r.orgY,
+		r.orgX+f.Geometry.Cols*r.cellW, r.orgY+f.Geometry.Rows*r.cellH)
 
 	// 1. Theme background — or the full window chrome (margin fill, bar,
 	// terminal background incl. the visual padding) when configured.
@@ -334,19 +336,19 @@ func (r *Rasterizer) Render(f *vtengine.Frame, src ImageSource, dst *image.RGBA)
 		fillRect(dst, dst.Bounds(), rgba(f.Colors.BG))
 	}
 	// 2. Below-background placements, then explicit cell backgrounds.
-	if err := r.drawPlacements(dst, src, placements[vtengine.LayerBelowBG]); err != nil {
+	if err := r.drawPlacements(dst, grid, src, placements[vtengine.LayerBelowBG]); err != nil {
 		return nil, err
 	}
 	r.drawCellBackgrounds(dst, f)
-	// 2b. Highlights (ADR-018): Selection under the matches, so the
+	// 2b. Highlights: Selection under the matches, so the
 	// text draws crisp on top — exactly like a real selection.
 	r.drawHighlights(dst, f)
 	// 3. Below-text placements, text and decorations, above-text.
-	if err := r.drawPlacements(dst, src, placements[vtengine.LayerBelowText]); err != nil {
+	if err := r.drawPlacements(dst, grid, src, placements[vtengine.LayerBelowText]); err != nil {
 		return nil, err
 	}
 	r.drawText(dst, f)
-	if err := r.drawPlacements(dst, src, placements[vtengine.LayerAboveText]); err != nil {
+	if err := r.drawPlacements(dst, grid, src, placements[vtengine.LayerAboveText]); err != nil {
 		return nil, err
 	}
 	// 4. Cursor on top; the keys band's chips (they animate per frame,
