@@ -23,8 +23,9 @@ faithfully or warned, never silent.
 The examples in this directory showcase foley-only ground. Most run
 inside the **studio** (`# foley: studio`): a closed set per take —
 fresh HOME, working directory and temp defaults, struck when the
-recording ends — so nothing of the author's machine lands on camera.
-Regenerate everything with `make examples`.
+recording ends — so nothing of the author's machine lands on camera
+(it moves the defaults; it forbids nothing — absolute host paths
+still work). Regenerate everything with `make examples`.
 
 - **`fetch/`** — the hero shot: real fastfetch, the film-chip logo,
   and a `Terminal: foley` line that is GENUINE — foley IS the

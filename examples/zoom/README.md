@@ -34,6 +34,26 @@ new zoom issued mid-transition departs from wherever the lens is at
 that instant, and a move to where it already rests (an `off` at rest,
 re-zooming the same rect) emits nothing at all.
 
+## Aiming the rect
+
+Cells are 0-based: `0,0` is the window's top-left character. Don't
+count pixels to find your rect — probe the take as text:
+
+1. Record once with a text output: `foley -o probe.txt demo.tape`
+   (replaces the tape's `Output` lines — the `.txt` is the final
+   screen, character-exact, and no gif gets encoded).
+2. Open `probe.txt` and count: the line number your target sits on is
+   its **ROW**, the character offset where it starts is the **COL**,
+   and the characters it spans are the **W** (all 0-based).
+3. Write the rect from that — e.g. `# foley: zoom 40,0 56x13 700ms`.
+
+Two caveats: the `.txt` is the *final* screen, so if your moment
+scrolls away before the end, park the probe take there with a long
+`Sleep`; and re-measure whenever `Set Width` / `Height` / `FontSize`
+change — the grid moves with them. Aim slightly tight around the thing
+you want: the camera grows the rect to the output's aspect on its own
+(next section).
+
 ## What the rect becomes
 
 The rect is a *region of interest*, not the literal frame: it grows to

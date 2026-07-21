@@ -5,7 +5,7 @@
 coverage.out
 .DS_Store
 
-# libghostty-vt: artefactos reproducibles via make engine-lib (ADR-010)
+# libghostty-vt: artefactos reproducibles via make engine-lib
 internal/vtengine/ghostty/lib/
 internal/vtengine/ghostty/libbuild/zig-out/
 internal/vtengine/ghostty/libbuild/.zig-cache/
@@ -23,3 +23,7 @@ examples/**/*.webm
 assets/logo/logo-f*.png
 assets/logo/logo-raw.gif
 examples/**/*.png
+# ...pero pfp.png es un PROP de ENTRADA del showcase (la foto de los
+# créditos, ya visible en showcase.gif), no una salida — versionarlo
+# deja `make examples` reproducible desde un clon limpio.
+!examples/showcase/props/pfp.png

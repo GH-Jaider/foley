@@ -222,6 +222,11 @@ func manualDoc(st styles) string {
 		"working directory and every temp default, struck when the",
 		"recording ends. Your machine stays off camera.",
 	)
+	para(
+		"Set hygiene, not sandboxing: the defaults move, nothing is",
+		"forbidden — absolute host paths still work, and kernel identity",
+		"(hostname) still shows the host. Hard boundary: the container.",
+	)
 
 	section("BUGS")
 	b.WriteString("  See GitHub Issues: " + st.link.Render(issuesURL) + "\n\n")

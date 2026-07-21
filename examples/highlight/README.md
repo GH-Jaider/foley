@@ -41,6 +41,19 @@ Sleep 2s
 
 Several highlights can be active at once; a bare `off` clears them all.
 
+## Aiming a rect
+
+The rect form uses the same 0-based grid as zoom: `0,0` is the
+window's top-left character. To find the cells without counting
+pixels, probe the take as text — `foley -o probe.txt demo.tape`, then
+count in `probe.txt`: the line number your target sits on is its
+**ROW**, the character offset where it starts is the **COL**, the span
+is the **W**. The `.txt` is the *final* screen, so if your moment
+scrolls away, probe with a long `Sleep` parked at that moment — and
+re-measure whenever `Set Width` / `Height` / `FontSize` change. If you
+find yourself re-measuring often, that's the sign the regex form fits
+better: it re-matches every frame and follows the text.
+
 ## Matching exactly what you mean
 
 The pattern runs against each row's text, so a loose regex can catch
