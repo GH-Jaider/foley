@@ -1,0 +1,15 @@
+# foley
+
+> foley renders terminal demos from VHS-compatible `.tape` scripts without opening a terminal window: the demo command runs on a real pty, an embedded terminal engine (libghostty-vt, Ghostty's) keeps the screen, and foley rasterizes every frame itself — byte-identical gif/mp4/webm/webp/asciicast/text output on any machine, kitty graphics included, zero screen-capture permissions.
+
+foley ships its own manual for AI agents inside the binary: `foley skill > SKILL.md` emits the complete authoring guide (grammar, cues, CLI, the validate → record → inspect loop). If you are an agent writing tapes, that file is the fastest path.
+
+## Docs
+
+- [Agent manual (foley.md)](https://raw.githubusercontent.com/GH-Jaider/foley/main/foley.md): the complete `.tape` grammar, `# foley:` post-production cues, CLI reference and the authoring loop — written to be loaded as a skill
+- [README](https://github.com/GH-Jaider/foley/blob/main/README.md): the full tour, from install to post-production
+- [CHANGELOG](https://github.com/GH-Jaider/foley/blob/main/CHANGELOG.md): released changes and the v0.x stability policy
+
+## Examples
+
+- [examples/](https://github.com/GH-Jaider/foley/tree/main/examples): one directory per feature — keys reel, zoom, highlight, dresses, prompts, kitty graphics — each with the tape that shot its gif

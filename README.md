@@ -1,13 +1,19 @@
 <p align="center">
-  <img src="assets/logo/banner.gif" alt="foley" width="520">
+  <img src="assets/logo/banner.gif" alt="foley — terminal demo recorder" width="520">
 </p>
 
 # foley
 
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/GH-Jaider/foley"><img src="https://pkg.go.dev/badge/github.com/GH-Jaider/foley.svg" alt="Go Reference"></a>
+  <a href="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml"><img src="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FF4F45.svg" alt="MIT license"></a>
+</p>
+
 > In film, a foley artist recreates sound in the studio, with real objects instead of set recordings.
 > Foley recreates the terminal in the studio, with your real app instead of a screen recording.
 
-foley renders terminal demos from VHS-style `.tape` scripts without opening a terminal window. Your app runs on a real pty, an embedded terminal engine (libghostty-vt, the brain of [Ghostty](https://ghostty.org)) keeps the screen, and foley draws every frame itself.
+foley renders terminal demos from VHS-style `.tape` scripts without opening a terminal window. Your app runs on a real pty, an embedded terminal engine (libghostty-vt, the brain of [Ghostty](https://ghostty.org)) keeps the screen, and foley draws every frame itself — straight to gif, mp4, webm, webp or asciicast.
 
 <p align="center">
   <img src="examples/showcase/showcase.gif" alt="the showcase — a trailer shot entirely inside foley" width="720">
