@@ -650,11 +650,11 @@ Set Width 640
 Set Height 220
 Type@0ms "echo vivo"
 Enter
-Sleep 300ms
-# foley: zoom 0,0 30x6 300ms
-Sleep 500ms
-# foley: zoom off 300ms
-Sleep 400ms
+Sleep 600ms
+# foley: zoom 0,0 30x6 800ms
+Sleep 1s
+# foley: zoom off 800ms
+Sleep 900ms
 `
 	tp, err := tape.Parse(src)
 	if err != nil {
@@ -681,6 +681,13 @@ Sleep 400ms
 	// tick gating). Structural bound, not a count: under load (-race,
 	// busy CI) the wall-clock loop legitimately coalesces ticks — the
 	// exact quantization is pinned by the deterministic e2e instead.
+	// The take spans ~4s because the slowest runner observed live (CI
+	// under -race, first release day) ticked at ~1.2 fps and starved a
+	// 1.5s take down to 3 frames. If this bound EVER fires again, the
+	// durable fix is not more margin: it is a driver seam that renders
+	// camera-phase boundaries (cue arrival, transition end) regardless
+	// of ticker starvation — ADR territory, deliberately not patched
+	// into the realtime loop overnight.
 	if len(g.Image) < 4 {
 		t.Fatalf("gif has %d frames, want the zoom transitions captured", len(g.Image))
 	}
