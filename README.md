@@ -8,6 +8,7 @@
   <a href="https://pkg.go.dev/github.com/GH-Jaider/foley"><img src="https://pkg.go.dev/badge/github.com/GH-Jaider/foley.svg" alt="Go Reference"></a>
   <a href="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml"><img src="https://github.com/GH-Jaider/foley/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/GH-Jaider/foley/releases"><img src="https://img.shields.io/github/v/release/GH-Jaider/foley?include_prereleases&sort=semver" alt="latest release"></a>
+  <a href="https://gh-jaider.github.io/foley/"><img src="https://img.shields.io/badge/website-gh--jaider.github.io%2Ffoley-191514.svg" alt="website"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FF4F45.svg" alt="MIT license"></a>
 </p>
 
