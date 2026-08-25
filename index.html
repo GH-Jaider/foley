@@ -202,18 +202,34 @@
   }
   .inv p { font-size: 17px; line-height: 1.55; color: var(--muted); max-width: 21em; margin: 0; }
 
-  /* ── SC 02: the editing table ── */
-  .table { position: relative; height: 1280px; margin: 64px 0 0; }
-  .cue-card {
-    position: absolute; width: 570px; background: var(--film);
-    border: 1px solid rgba(236, 230, 223, 0.1); border-radius: 4px; padding: 14px 14px 16px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  /* ── SC 02: the moviola ── */
+  .moviola { display: flex; gap: 44px; margin: 48px 0 0; }
+  .mov-screen-col { flex: 1; min-width: 0; }
+  .mov-screen { background: var(--film); border: 1px solid rgba(236, 230, 223, 0.1); border-radius: 6px; padding: 14px; }
+  .mov-take { display: none; width: 100%; height: auto; border: 1px solid rgba(236, 230, 223, 0.07); border-radius: 3px; background: var(--screen); }
+  .mov-take.is-on { display: block; }
+  .mov-cap { display: none; font-size: 16px; line-height: 1.5; color: var(--muted); margin: 18px 4px 0; }
+  .mov-cap.is-on { display: block; }
+  .mov-sheet { width: 360px; flex: none; }
+  .mov-sheet-label {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin: 4px 0 12px;
   }
-  .cue-tape {
-    position: absolute; top: -11px; left: 50%; width: 92px; height: 22px;
-    background: rgba(236, 230, 223, 0.09); transform: translateX(-50%) rotate(-2deg); border-radius: 1px;
+  .mov-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; height: 56px; padding: 0 18px;
+    background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer; text-align: left;
   }
-  .cue-head { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 2px 10px; }
+  .mov-row:hover { background: var(--film); }
+  .mov-row.is-on { border-color: rgba(236, 230, 223, 0.45); background: var(--film); }
+  .mov-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); display: none; }
+  .mov-row.is-on .mov-dot { display: inline-block; }
+  .mov-name {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
+  }
+  .mov-idx { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+  .mov-note { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: 20px 4px 0; }
+  .mov-note code { font-family: var(--mono); font-size: 0.85em; color: var(--ink); }
   .cue-label {
     font-family: var(--mono); font-size: 11px; font-weight: 700;
     letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink);
@@ -221,16 +237,6 @@
   .cue-index { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; color: var(--muted); }
   .cue-fact { font-size: 14.5px; line-height: 1.45; color: var(--muted); margin: 10px 2px 0; }
   .cue-fact code { font-family: var(--mono); font-size: 0.9em; }
-  .cue-img, .cue-svg {
-    display: block; width: 100%; height: auto;
-    border: 1px solid rgba(236, 230, 223, 0.07); border-radius: 3px; background: var(--screen);
-  }
-  .cc1 { left: 12px;  top: 0;     transform: rotate(-1.6deg); z-index: 1; }
-  .cc2 { left: 652px; top: 96px;  transform: rotate(1.4deg);  z-index: 2; }
-  .cc3 { left: 92px;  top: 372px; transform: rotate(0.9deg);  z-index: 3; }
-  .cc4 { left: 668px; top: 508px; transform: rotate(-1.3deg); z-index: 4; }
-  .cc5 { left: 32px;  top: 790px; transform: rotate(1.7deg);  z-index: 5; }
-  .cc6 { left: 640px; top: 918px; transform: rotate(-0.9deg); z-index: 6; }
 
   /* ── SC 03: the studio ── */
   .pipeline { display: flex; align-items: center; gap: 14px; margin: 48px 0 0; }
@@ -290,16 +296,10 @@
   /* ── responsive ── */
   .sec { padding: 96px calc(var(--rail) + 56px); }
   .sec-tight { padding: 96px calc(var(--rail) + 32px) 80px; }
-  @media (max-width: 1360px) {
-    .cc2, .cc4, .cc6 { left: auto; right: 0; }
-  }
-  @media (max-width: 1240px) {
-    .table { height: auto; display: flex; flex-direction: column; gap: 40px; }
-    .cue-card { position: static; width: 100%; max-width: 640px; }
-    .cue-card:nth-child(odd) { transform: rotate(-0.8deg); }
-    .cue-card:nth-child(even) { transform: rotate(0.8deg); align-self: flex-end; }
-  }
   @media (max-width: 1100px) {
+    .moviola { flex-direction: column; }
+    .mov-sheet { width: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .mov-sheet-label, .mov-note { grid-column: 1 / -1; }
     .inv, .inv.rev { flex-direction: column; align-items: flex-start; gap: 16px; }
     .invariants { gap: 64px; }
     .pipeline { flex-wrap: wrap; }
@@ -521,56 +521,38 @@
   <!-- SC 02 · post-production -->
   <section class="sec-tight" id="post" aria-labelledby="sc02">
     <div class="slate"><span class="slate-stripes"></span><span class="slate-label" id="sc02">SC 02 · Post-production</span></div>
-    <h2>Direction rides as <code># foley:</code> cues in the tape.
-    The pty, the timing and the terminal state stay exactly as recorded.</h2>
-    <p class="lede">Every take on this table is real output from the engine: not an illustration
-    of the product, the product.</p>
-    <div class="table">
-      <article class="cue-card cc1">
-        <div class="cue-tape" aria-hidden="true"></div>
-        <div class="cue-head"><span class="cue-label">Titles</span><span class="cue-index">CUE 01</span></div>
-        <img class="cue-img" src="assets/title.gif" alt="A title card and lower third composited over a terminal take" loading="lazy" width="1280" height="400">
-        <p class="cue-fact">Title cards and lower thirds, composited on frame.</p>
-      </article>
-      <article class="cue-card cc2">
-        <div class="cue-tape" aria-hidden="true"></div>
-        <div class="cue-head"><span class="cue-label">Highlight</span><span class="cue-index">CUE 02</span></div>
-        <img class="cue-img" src="assets/highlight.gif" alt="A region of terminal output highlighted while the frame dims around it" loading="lazy" width="1280" height="460">
-        <p class="cue-fact">Point at the output; the frame dims around it.</p>
-      </article>
-      <article class="cue-card cc3">
-        <div class="cue-tape" aria-hidden="true"></div>
-        <div class="cue-head"><span class="cue-label">Input reel</span><span class="cue-index">CUE 03</span></div>
-        <img class="cue-img" src="assets/keys.gif" alt="A reel of keystrokes rendered under the terminal window" loading="lazy" width="1280" height="604">
-        <p class="cue-fact">foley presses the keys, so the track is emitted with exact timing, not
-        captured and guessed at.</p>
-      </article>
-      <article class="cue-card cc4">
-        <div class="cue-tape" aria-hidden="true"></div>
-        <div class="cue-head"><span class="cue-label">Closed set</span><span class="cue-index">CUE 04</span></div>
-        <img class="cue-img" src="assets/studio.gif" alt="A take recorded inside a studio: fresh HOME, fresh paths" loading="lazy" width="1280" height="440">
-        <p class="cue-fact">One cue builds a fresh <code>HOME</code> per take. Your machine stays off camera.</p>
-      </article>
-      <article class="cue-card cc5">
-        <div class="cue-tape" aria-hidden="true"></div>
-        <div class="cue-head"><span class="cue-label">Window dress</span><span class="cue-index">CUE 05</span></div>
-        <img class="cue-img" src="assets/dress-noir.gif" alt="The take framed in a noir window chrome" loading="lazy" width="1280" height="400">
-        <p class="cue-fact">Chrome for the take: macOS, noir, or none at all.</p>
-      </article>
-      <article class="cue-card cc6">
-        <div class="cue-tape" aria-hidden="true"></div>
-        <div class="cue-head"><span class="cue-label">Camera</span><span class="cue-index">CUE 06</span></div>
-        <svg class="cue-svg" viewBox="0 0 584 200" role="img" aria-label="Camera diagram: a zoom is a one-to-one crop from the supersampled master frame">
-          <rect x="52" y="24" width="480" height="152" rx="3" fill="none" stroke="rgba(236,230,223,0.25)" stroke-width="1.5"></rect>
-          <text x="60" y="44" font-size="11" fill="#98908A" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">master · supersampled</text>
-          <rect x="210" y="72" width="200" height="76" rx="2" fill="none" stroke="#FF4F45" stroke-width="1.5"></rect>
-          <text x="218" y="90" font-size="11" fill="#FF4F45" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">zoom · 1:1 crop</text>
-          <path d="M210 72 L52 24 M410 72 L532 24 M210 148 L52 176 M410 148 L532 176" stroke="rgba(236,230,223,0.15)" stroke-width="1"></path>
-        </svg>
-        <p class="cue-fact">Push onto a region, hold, pull back, easing included. Arithmetic, not
-        pixels stretched after the fact.</p>
-      </article>
+    <h2>Six cues, one screen.</h2>
+    <p class="lede">Direction rides as <code># foley:</code> cues in the tape; the pty, the timing
+    and the terminal state stay exactly as recorded. Pick a cue; the screening room plays it.</p>
+    <div class="moviola">
+      <div class="mov-screen-col">
+        <div class="mov-screen">
+          <img class="mov-take is-on" data-cue="0" src="assets/title.gif" alt="Title cards and lower thirds composited over a terminal take" width="1280" height="520">
+          <img class="mov-take" data-cue="1" src="assets/highlight.gif" alt="A region of terminal output highlighted while the frame dims around it" width="1280" height="520">
+          <img class="mov-take" data-cue="2" src="assets/keys.gif" alt="A reel of keystrokes rendered under the terminal window" width="1280" height="520">
+          <img class="mov-take" data-cue="3" src="assets/studio.gif" alt="A take recorded inside a studio with a fresh HOME" width="1280" height="520">
+          <img class="mov-take" data-cue="4" src="assets/dress-noir.gif" alt="The take framed in a noir window chrome" width="1280" height="520">
+          <img class="mov-take" data-cue="5" src="assets/zoom.gif" alt="The camera pushing onto a region of the terminal and pulling back" width="1280" height="520">
+        </div>
+        <p class="mov-cap is-on" data-cue="0">Title cards and lower thirds, composited on frame. The bar can't tell it isn't vim.</p>
+        <p class="mov-cap" data-cue="1">Point at the output; the frame dims around it.</p>
+        <p class="mov-cap" data-cue="2">foley presses the keys, so the track is emitted with exact timing, not captured and guessed at.</p>
+        <p class="mov-cap" data-cue="3">One cue builds a fresh HOME per take. Your machine stays off camera.</p>
+        <p class="mov-cap" data-cue="4">Chrome for the take: macOS, noir, or none at all. Same take, only the flag changed.</p>
+        <p class="mov-cap" data-cue="5">Push onto a region, hold, pull back. The push-in is a 1:1 crop of the supersampled master, which is why the hold stays crisp.</p>
+      </div>
+      <div class="mov-sheet">
+        <div class="mov-sheet-label">Cue sheet</div>
+        <button class="mov-row is-on" type="button" data-cue="0"><span class="mov-dot"></span><span class="mov-name">Titles</span><span class="mov-idx">CUE 01</span></button>
+        <button class="mov-row" type="button" data-cue="1"><span class="mov-dot"></span><span class="mov-name">Highlight</span><span class="mov-idx">CUE 02</span></button>
+        <button class="mov-row" type="button" data-cue="2"><span class="mov-dot"></span><span class="mov-name">Input reel</span><span class="mov-idx">CUE 03</span></button>
+        <button class="mov-row" type="button" data-cue="3"><span class="mov-dot"></span><span class="mov-name">Closed set</span><span class="mov-idx">CUE 04</span></button>
+        <button class="mov-row" type="button" data-cue="4"><span class="mov-dot"></span><span class="mov-name">Window dress</span><span class="mov-idx">CUE 05</span></button>
+        <button class="mov-row" type="button" data-cue="5"><span class="mov-dot"></span><span class="mov-name">Camera</span><span class="mov-idx">CUE 06</span></button>
+        <p class="mov-note">Direction rides as <code># foley:</code> comments in the tape. The footage is never touched. Every take is real output from the engine.</p>
+      </div>
     </div>
+
   </section>
 
   <!-- SC 03 · the studio -->
@@ -726,6 +708,18 @@ foley demo.tape</pre>
     navigator.clipboard.writeText("brew install GH-Jaider/foley/foley").then(function () {
       cmd.setAttribute("data-copied", "");
       setTimeout(function () { cmd.removeAttribute("data-copied"); }, 1600);
+    });
+  });
+
+  // ── the moviola: one screen, six cues ──
+  var rows = document.querySelectorAll(".mov-row");
+  rows.forEach(function (r) {
+    r.addEventListener("click", function () {
+      var n = r.getAttribute("data-cue");
+      rows.forEach(function (b) { b.classList.toggle("is-on", b.getAttribute("data-cue") === n); });
+      document.querySelectorAll(".mov-take, .mov-cap").forEach(function (el) {
+        el.classList.toggle("is-on", el.getAttribute("data-cue") === n);
+      });
     });
   });
 })();
