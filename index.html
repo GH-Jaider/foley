@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>foley — terminal demos, rendered not captured</title>
+<meta name="description" content="A foley artist recreates sound in the studio. foley recreates the terminal: demos rendered from VHS-compatible .tape scripts — no window, no screen capture, kitty graphics native — byte-identical takes in gif, mp4, webm or asciicast.">
+<meta name="theme-color" content="#0D0B0A">
+<link rel="canonical" href="https://gh-jaider.github.io/foley/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="foley — terminal demos, rendered not captured">
+<meta property="og:description" content="The tape is the recording. foley adds the post-production: camera, titles, sound. The footage is never touched.">
+<meta property="og:url" content="https://gh-jaider.github.io/foley/">
+<meta property="og:image" content="https://gh-jaider.github.io/foley/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --film: #191514;
+    --screen: #0D0B0A;
+    --ink: #ECE6DF;
+    --muted: #98908A;
+    --rec: #FF4F45;
+    --line: rgba(236, 230, 223, 0.08);
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: Charter, "Iowan Old Style", Georgia, "Times New Roman", serif;
+    --rail: 64px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--screen);
+    color: var(--ink);
+    font-family: var(--serif);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: var(--ink); text-decoration: none; }
+  a:hover { color: #fff; text-decoration: underline; }
+  img { max-width: 100%; }
+  .mono { font-family: var(--mono); }
+
+  .skip {
+    position: absolute; left: -9999px; top: 0; z-index: 200;
+    background: var(--film); color: var(--ink); padding: 10px 16px;
+    font-family: var(--mono); font-size: 13px;
+  }
+  .skip:focus { left: 8px; top: 8px; }
+
+  /* ── the film edges: the page runs through the gate ── */
+  .rail { position: fixed; top: 0; bottom: 0; width: var(--rail); z-index: 40; pointer-events: none; }
+  .rail-l { left: 0; }
+  .rail-r { right: 0; }
+  .rail svg { display: block; width: 100%; height: 100%; }
+  .keycode {
+    position: absolute; left: calc(var(--rail) + 4px); z-index: 41;
+    writing-mode: vertical-rl;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.32em;
+    color: var(--ink); opacity: 0.3; pointer-events: none;
+  }
+
+  .wrap { padding: 0 calc(var(--rail) + 32px); }
+
+  /* ── nav ── */
+  .nav {
+    position: absolute; top: 0; left: var(--rail); right: var(--rail); z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 76px; padding: 0 36px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand span { font-family: var(--mono); font-size: 17px; font-weight: 700; }
+  .navlinks { display: flex; align-items: center; gap: 36px; }
+  .navlink {
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+  }
+  .navlink:hover { color: var(--ink); text-decoration: none; }
+
+  /* ── HUD ── */
+  .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); display: inline-block; }
+  .hud {
+    position: absolute; display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  }
+  .corner { position: absolute; width: 26px; height: 26px; border: 0 solid rgba(236, 230, 223, 0.4); }
+
+  /* ── hero ── */
+  .hero {
+    position: relative; min-height: 100vh; min-height: 100svh;
+    background: radial-gradient(ellipse at 50% 42%, rgba(25, 21, 20, 0.6) 0%, rgba(13, 11, 10, 1) 68%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .grain {
+    position: absolute; inset: 0; opacity: 0.06; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  }
+  .hud-tl { top: 118px; left: 148px; }
+  .hud-tr { top: 118px; right: 148px; }
+  .hud-bl { bottom: 78px; left: 148px; }
+  .hud-br { bottom: 78px; right: 148px; }
+  .c-tl { top: 100px; left: 104px; border-top-width: 1.5px; border-left-width: 1.5px; }
+  .c-tr { top: 100px; right: 104px; border-top-width: 1.5px; border-right-width: 1.5px; }
+  .c-bl { bottom: 60px; left: 104px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+  .c-br { bottom: 60px; right: 104px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+
+  .take { text-align: center; max-width: 1200px; padding: 0 24px; }
+  .wordmark { display: flex; align-items: center; justify-content: center; gap: 0.085em; font-size: clamp(88px, 18vw, 264px); margin: 0; }
+  .wordmark b {
+    font-family: var(--mono); font-weight: 800; font-size: 1em;
+    letter-spacing: -0.05em; line-height: 1; color: var(--ink);
+  }
+  .cursor { display: inline-block; width: 0.56em; height: 0.96em; background: var(--rec); }
+  .tagline { font-size: clamp(17px, 1.8vw, 25px); line-height: 1.5; color: var(--muted); margin: 34px 0 0; }
+  .cta { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; margin: 40px 0 0; }
+  .cmd {
+    display: flex; align-items: center; gap: 12px; position: relative;
+    background: var(--film); border: 1px solid rgba(236, 230, 223, 0.16); border-radius: 6px;
+    height: 52px; padding: 0 22px; cursor: pointer;
+    font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--ink);
+  }
+  .cmd:hover { border-color: rgba(236, 230, 223, 0.34); }
+  .cmd .p { color: var(--muted); }
+  .cmd::after {
+    content: "copied"; position: absolute; right: 14px; top: -26px;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .cmd[data-copied]::after { opacity: 1; }
+  .ghost {
+    display: flex; align-items: center; height: 52px; padding: 0 20px;
+    border: 1px solid rgba(236, 230, 223, 0.14); border-radius: 6px;
+    font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.04em; color: var(--muted);
+  }
+
+  /* ── the countdown leader ── */
+  .leader {
+    position: fixed; inset: 0; z-index: 90; background: var(--screen);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    animation: leaderout 3.3s steps(1) forwards;
+  }
+  @keyframes leaderout { 0%, 96% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+  .leader.off { display: none; }
+  .sweep { transform-origin: 210px 210px; animation: sweep 1s linear 3; }
+  @keyframes sweep { to { transform: rotate(360deg); } }
+  .n3 { animation: show3 3.3s steps(1) forwards; }
+  @keyframes show3 { 0% { opacity: 1; } 30% { opacity: 0; } 100% { opacity: 0; } }
+  .n2 { opacity: 0; animation: show2 3.3s steps(1) forwards; }
+  @keyframes show2 { 0% { opacity: 0; } 30% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
+  .n1 { opacity: 0; animation: show1 3.3s steps(1) forwards; }
+  @keyframes show1 { 0% { opacity: 0; } 60% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
+  .leader-hint {
+    position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); opacity: 0.6;
+  }
+
+  .blink { animation: blink 1.15s steps(1) infinite; }
+  @keyframes blink { 0%, 54% { opacity: 1; } 55%, 100% { opacity: 0; } }
+
+  /* ── the reel ── */
+  .reelband { overflow: hidden; padding: 44px 0 56px; }
+  .reelband > div { transform: rotate(-1.8deg) scale(1.06); transform-origin: 50% 50%; }
+  .reelband svg { display: block; width: 100%; height: auto; }
+  .reel { animation: advance 4.9s steps(7, end) infinite; }
+  @keyframes advance { to { transform: translateX(-504px); } }
+
+  /* ── slates and sections ── */
+  section { position: relative; }
+  .slate { display: flex; align-items: center; gap: 16px; }
+  .slate-stripes {
+    width: 46px; height: 26px; flex: none;
+    background: repeating-linear-gradient(45deg, var(--ink) 0 7px, transparent 7px 14px);
+    opacity: 0.85;
+  }
+  .slate-label {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+  }
+  h2 {
+    font-family: var(--serif); font-size: clamp(30px, 3.2vw, 46px);
+    line-height: 1.12; font-weight: 700; letter-spacing: -0.01em; margin: 26px 0 0;
+  }
+  .lede { font-size: 17px; line-height: 1.6; color: var(--muted); max-width: 44em; margin: 18px 0 0; }
+  .lede code, h2 code { font-family: var(--mono); font-size: 0.82em; color: var(--ink); }
+
+  /* ── SC 01: the invariants ── */
+  .invariants { display: flex; flex-direction: column; gap: 84px; margin: 72px 0 0; }
+  .inv { display: flex; align-items: baseline; justify-content: space-between; gap: 48px; }
+  .inv.rev { flex-direction: row-reverse; }
+  .bigline {
+    font-family: var(--mono); font-size: clamp(34px, 7.5vw, 108px); font-weight: 800;
+    letter-spacing: -0.03em; line-height: 1; color: var(--ink); white-space: nowrap; flex: none;
+  }
+  @supports (-webkit-text-stroke: 1px black) {
+    .ghost-line { color: transparent; -webkit-text-stroke: 1.5px rgba(236, 230, 223, 0.55); }
+  }
+  .inv p { font-size: 17px; line-height: 1.55; color: var(--muted); max-width: 21em; margin: 0; }
+
+  /* ── SC 02: the editing table ── */
+  .table { position: relative; height: 1280px; margin: 64px 0 0; }
+  .cue-card {
+    position: absolute; width: 570px; background: var(--film);
+    border: 1px solid rgba(236, 230, 223, 0.1); border-radius: 4px; padding: 14px 14px 16px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  }
+  .cue-tape {
+    position: absolute; top: -11px; left: 50%; width: 92px; height: 22px;
+    background: rgba(236, 230, 223, 0.09); transform: translateX(-50%) rotate(-2deg); border-radius: 1px;
+  }
+  .cue-head { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 2px 10px; }
+  .cue-label {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink);
+  }
+  .cue-index { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; color: var(--muted); }
+  .cue-fact { font-size: 14.5px; line-height: 1.45; color: var(--muted); margin: 10px 2px 0; }
+  .cue-fact code { font-family: var(--mono); font-size: 0.9em; }
+  .cue-img, .cue-svg {
+    display: block; width: 100%; height: auto;
+    border: 1px solid rgba(236, 230, 223, 0.07); border-radius: 3px; background: var(--screen);
+  }
+  .cc1 { left: 12px;  top: 0;     transform: rotate(-1.6deg); z-index: 1; }
+  .cc2 { left: 652px; top: 96px;  transform: rotate(1.4deg);  z-index: 2; }
+  .cc3 { left: 92px;  top: 372px; transform: rotate(0.9deg);  z-index: 3; }
+  .cc4 { left: 668px; top: 508px; transform: rotate(-1.3deg); z-index: 4; }
+  .cc5 { left: 32px;  top: 790px; transform: rotate(1.7deg);  z-index: 5; }
+  .cc6 { left: 640px; top: 918px; transform: rotate(-0.9deg); z-index: 6; }
+
+  /* ── SC 03: the studio ── */
+  .pipeline { display: flex; align-items: center; gap: 14px; margin: 48px 0 0; }
+  .stage-chip {
+    background: var(--film); border: 1px solid rgba(236, 230, 223, 0.1); border-radius: 4px;
+    padding: 14px 18px; text-align: center;
+  }
+  .stage-chip b { font-family: var(--mono); font-size: 13px; font-weight: 700; display: block; }
+  .stage-chip small { font-family: var(--mono); font-size: 10.5px; color: var(--muted); display: block; margin-top: 5px; }
+  .arrow { flex: none; }
+  .reels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin: 44px 0 0; }
+  .reelcard { border: 1px solid rgba(236, 230, 223, 0.1); border-radius: 6px; padding: 26px 28px; }
+  .reelcard h3 {
+    display: flex; align-items: center; gap: 10px; margin: 0;
+    font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .reelcard h3 small { color: var(--muted); font-weight: 500; }
+  .reelcard p { font-size: 16.5px; line-height: 1.6; color: var(--muted); margin: 14px 0 0; }
+
+  /* ── SC 04: install ── */
+  .installs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin: 48px 0 0; }
+  .code-card { background: var(--film); border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; }
+  .code-card .cue-label { display: block; margin-bottom: 12px; }
+  pre {
+    font-family: var(--mono); font-size: 13px; line-height: 1.75; color: var(--ink);
+    white-space: pre; overflow-x: auto; margin: 0;
+  }
+  pre .c { color: var(--muted); }
+  .agents {
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    background: var(--film); border: 1px solid var(--line); border-radius: 6px;
+    padding: 20px 24px; margin: 28px 0 0;
+  }
+  .agents pre { flex: 1; min-width: 280px; }
+
+  /* ── credits ── */
+  footer { border-top: 1px solid var(--line); }
+  .marquee { overflow: hidden; padding: 14px 0; border-bottom: 1px solid rgba(236, 230, 223, 0.06); }
+  .marquee-track {
+    display: inline-block; white-space: nowrap;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; color: var(--muted); opacity: 0.7;
+    animation: crawl 36s linear infinite;
+  }
+  @keyframes crawl { to { transform: translateX(-50%); } }
+  .credits { text-align: center; padding: 56px 24px 72px; }
+  .prod { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 0.34em; text-transform: uppercase; }
+  .credits em { font-size: 15px; color: var(--muted); }
+  .credits nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 32px; margin: 26px 0 0; }
+  .sig { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 30px 0 0; }
+  .sig b { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .sig .cursor { width: 7px; height: 13px; }
+
+  /* ── scrub bar ── */
+  .scrub { position: fixed; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(236, 230, 223, 0.08); z-index: 60; }
+  .scrub-head { height: 3px; background: var(--ink); transform-origin: left; transform: scaleX(0); }
+
+  /* ── responsive ── */
+  .sec { padding: 96px calc(var(--rail) + 56px); }
+  .sec-tight { padding: 96px calc(var(--rail) + 32px) 80px; }
+  @media (max-width: 1360px) {
+    .cc2, .cc4, .cc6 { left: auto; right: 0; }
+  }
+  @media (max-width: 1240px) {
+    .table { height: auto; display: flex; flex-direction: column; gap: 40px; }
+    .cue-card { position: static; width: 100%; max-width: 640px; }
+    .cue-card:nth-child(odd) { transform: rotate(-0.8deg); }
+    .cue-card:nth-child(even) { transform: rotate(0.8deg); align-self: flex-end; }
+  }
+  @media (max-width: 1100px) {
+    .inv, .inv.rev { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .invariants { gap: 64px; }
+    .pipeline { flex-wrap: wrap; }
+    .arrow { display: none; }
+    .stage-chip { flex: 1 1 40% !important; }
+    .installs { grid-template-columns: 1fr; }
+    .reels { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 900px) {
+    :root { --rail: 0px; }
+    .rail, .keycode { display: none; }
+    .nav { left: 0; right: 0; padding: 0 20px; }
+    .navlinks { gap: 18px; }
+    .navlinks .navlink:nth-child(2) { display: none; }
+    .sec, .sec-tight { padding-left: 24px; padding-right: 24px; }
+    .hud-tl { top: 88px; left: 40px; }
+    .hud-tr { top: 88px; right: 40px; }
+    .hud-bl { bottom: 60px; left: 40px; }
+    .hud-br { bottom: 60px; right: 40px; }
+    .c-tl { top: 76px; left: 16px; }
+    .c-tr { top: 76px; right: 16px; }
+    .c-bl { bottom: 48px; left: 16px; }
+    .c-br { bottom: 48px; right: 16px; }
+    .hud { font-size: 10px; gap: 7px; }
+    .tagline br { display: none; }
+    .cmd { font-size: 11.5px; height: 48px; padding: 0 16px; }
+    .ghost { height: 46px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reel, .blink, .marquee-track, .sweep { animation: none; }
+    .leader { display: none; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- the film edges -->
+<div class="rail rail-l" aria-hidden="true">
+  <svg preserveAspectRatio="none">
+    <defs>
+      <pattern id="lperf" width="64" height="36" patternUnits="userSpaceOnUse">
+        <rect width="64" height="36" fill="#191514"></rect>
+        <rect x="26" y="13" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#lperf)"></rect>
+  </svg>
+</div>
+<div class="rail rail-r" aria-hidden="true">
+  <svg preserveAspectRatio="none">
+    <defs>
+      <pattern id="rperf" width="64" height="72" patternUnits="userSpaceOnUse">
+        <rect width="64" height="72" fill="#191514"></rect>
+        <rect x="30" y="13" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+        <rect x="30" y="49" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+        <g fill="#ECE6DF" fill-opacity="0.32">
+          <rect x="4" y="2" width="8" height="3"></rect><rect x="4" y="8" width="12" height="3"></rect>
+          <rect x="4" y="14" width="5" height="3"></rect><rect x="4" y="20" width="10" height="3"></rect>
+          <rect x="4" y="26" width="14" height="3"></rect><rect x="4" y="32" width="6" height="3"></rect>
+          <rect x="4" y="38" width="11" height="3"></rect><rect x="4" y="44" width="4" height="3"></rect>
+          <rect x="4" y="50" width="13" height="3"></rect><rect x="4" y="56" width="7" height="3"></rect>
+          <rect x="4" y="62" width="9" height="3"></rect><rect x="4" y="68" width="12" height="3"></rect>
+        </g>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#rperf)"></rect>
+  </svg>
+</div>
+<div class="keycode" style="top: 1100px" aria-hidden="true">FOLEY · SAFETY STOCK · KC 19-1514 △ 0064+02</div>
+<div class="keycode" style="top: 3100px" aria-hidden="true">FOLEY · SAFETY STOCK · KC 19-1514 △ 0128+04</div>
+<div class="keycode" style="top: 5100px" aria-hidden="true">FOLEY · SAFETY STOCK · KC 19-1514 △ 0192+06</div>
+
+<!-- the countdown leader -->
+<div class="leader" id="leader" aria-hidden="true">
+  <svg width="420" height="420" viewBox="0 0 420 420" style="max-width: 76vw; max-height: 76vw">
+    <line x1="0" y1="210" x2="420" y2="210" stroke="rgba(236,230,223,0.25)" stroke-width="1"></line>
+    <line x1="210" y1="0" x2="210" y2="420" stroke="rgba(236,230,223,0.25)" stroke-width="1"></line>
+    <circle cx="210" cy="210" r="168" fill="none" stroke="rgba(236,230,223,0.5)" stroke-width="1.5"></circle>
+    <circle cx="210" cy="210" r="126" fill="none" stroke="rgba(236,230,223,0.35)" stroke-width="1"></circle>
+    <g class="sweep"><line x1="210" y1="210" x2="210" y2="42" stroke="rgba(236,230,223,0.6)" stroke-width="2"></line></g>
+    <text class="n3" x="210" y="258" text-anchor="middle" font-size="140" font-weight="800" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">3</text>
+    <text class="n2" x="210" y="258" text-anchor="middle" font-size="140" font-weight="800" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">2</text>
+    <text class="n1" x="210" y="258" text-anchor="middle" font-size="140" font-weight="800" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">1</text>
+  </svg>
+  <span class="leader-hint">click to skip</span>
+</div>
+
+<header class="nav">
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 96 96" aria-hidden="true">
+      <rect x="4" y="4" width="88" height="88" rx="10" fill="#191514"></rect>
+      <rect x="26" y="14" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="58" y="14" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="26" y="73" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="58" y="73" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="16" y="30" width="64" height="36" rx="2" fill="#0D0B0A"></rect>
+      <text x="24" y="53" font-size="14" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">&gt;</text>
+      <rect class="blink" x="36" y="41" width="9" height="16" fill="#FF4F45"></rect>
+    </svg>
+    <span>foley</span>
+  </div>
+  <nav class="navlinks" aria-label="Site">
+    <a class="navlink" href="#post">Post-production</a>
+    <a class="navlink" href="#studio">The studio</a>
+    <a class="navlink" href="#install">Install</a>
+    <a class="navlink" href="https://github.com/GH-Jaider/foley">GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+
+  <!-- SC 00 · the opening -->
+  <section class="hero" aria-label="foley — terminal demos, rendered not captured">
+    <div class="grain"></div>
+    <div class="corner c-tl" aria-hidden="true"></div>
+    <div class="corner c-tr" aria-hidden="true"></div>
+    <div class="corner c-bl" aria-hidden="true"></div>
+    <div class="corner c-br" aria-hidden="true"></div>
+    <div class="hud hud-tl"><span class="rec-dot blink"></span> REC</div>
+    <div class="hud hud-tr">TC <span id="tc">00:00:00:00</span></div>
+    <div class="hud hud-bl">TAKE 08 · SC 01 — YOUR DEMO</div>
+    <div class="hud hud-br">60 FPS · BYTE-IDENTICAL</div>
+
+    <div class="take">
+      <h1 class="wordmark"><b>foley</b><span class="cursor blink" aria-hidden="true"></span></h1>
+      <p class="tagline">
+        The tape is the recording. foley adds the post-production —<br>
+        camera, titles, sound. The footage is never touched.
+      </p>
+      <div class="cta">
+        <button class="cmd" id="copy" type="button" aria-label="Copy the install command">
+          <span class="p">$</span> brew install GH-Jaider/foley/foley
+        </button>
+        <a class="ghost" href="https://github.com/GH-Jaider/foley#readme">Read the manual</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- the reel -->
+  <div class="reelband" role="img" aria-label="Film strip: the prompt types foley frame by frame, red REC cursor advancing">
+    <div>
+      <svg viewBox="0 0 1008 100">
+        <defs>
+          <g id="p4">
+            <rect x="3.75" y="0" width="10.5" height="5.5" rx="1.8" fill="#0D0B0A"></rect>
+            <rect x="21.75" y="0" width="10.5" height="5.5" rx="1.8" fill="#0D0B0A"></rect>
+            <rect x="39.75" y="0" width="10.5" height="5.5" rx="1.8" fill="#0D0B0A"></rect>
+            <rect x="57.75" y="0" width="10.5" height="5.5" rx="1.8" fill="#0D0B0A"></rect>
+          </g>
+          <g id="seq">
+            <rect x="0" y="0" width="504" height="100" fill="#191514"></rect>
+            <use href="#p4" x="0" y="6"></use><use href="#p4" x="72" y="6"></use><use href="#p4" x="144" y="6"></use><use href="#p4" x="216" y="6"></use><use href="#p4" x="288" y="6"></use><use href="#p4" x="360" y="6"></use><use href="#p4" x="432" y="6"></use>
+            <use href="#p4" x="0" y="86"></use><use href="#p4" x="72" y="86"></use><use href="#p4" x="144" y="86"></use><use href="#p4" x="216" y="86"></use><use href="#p4" x="288" y="86"></use><use href="#p4" x="360" y="86"></use><use href="#p4" x="432" y="86"></use>
+            <rect x="4" y="17" width="64" height="54" rx="2" fill="#0D0B0A" stroke="rgba(236,230,223,0.09)" stroke-width="0.75"></rect>
+            <rect x="76" y="17" width="64" height="54" rx="2" fill="#0D0B0A" stroke="rgba(236,230,223,0.09)" stroke-width="0.75"></rect>
+            <rect x="148" y="17" width="64" height="54" rx="2" fill="#0D0B0A" stroke="rgba(236,230,223,0.09)" stroke-width="0.75"></rect>
+            <rect x="220" y="17" width="64" height="54" rx="2" fill="#0D0B0A" stroke="rgba(236,230,223,0.09)" stroke-width="0.75"></rect>
+            <rect x="292" y="17" width="64" height="54" rx="2" fill="#0D0B0A" stroke="rgba(236,230,223,0.09)" stroke-width="0.75"></rect>
+            <rect x="364" y="17" width="64" height="54" rx="2" fill="#0D0B0A" stroke="rgba(236,230,223,0.09)" stroke-width="0.75"></rect>
+            <rect x="436" y="17" width="64" height="54" rx="2" fill="#0D0B0A" stroke="rgba(236,230,223,0.09)" stroke-width="0.75"></rect>
+            <text x="11" y="48" font-size="13" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" textLength="8" lengthAdjust="spacingAndGlyphs">&gt;</text>
+            <text x="83" y="48" font-size="13" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" textLength="16" lengthAdjust="spacingAndGlyphs">&gt;f</text>
+            <text x="155" y="48" font-size="13" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" textLength="23" lengthAdjust="spacingAndGlyphs">&gt;fo</text>
+            <text x="227" y="48" font-size="13" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" textLength="31" lengthAdjust="spacingAndGlyphs">&gt;fol</text>
+            <text x="299" y="48" font-size="13" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" textLength="39" lengthAdjust="spacingAndGlyphs">&gt;fole</text>
+            <text x="371" y="48" font-size="13" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" textLength="47" lengthAdjust="spacingAndGlyphs">&gt;foley</text>
+            <rect x="20" y="36" width="8" height="16" fill="#FF4F45"></rect>
+            <rect x="100" y="36" width="8" height="16" fill="#FF4F45"></rect>
+            <rect x="179" y="36" width="8" height="16" fill="#FF4F45"></rect>
+            <rect x="259" y="36" width="8" height="16" fill="#FF4F45"></rect>
+            <rect x="339" y="36" width="8" height="16" fill="#FF4F45"></rect>
+            <rect x="419" y="36" width="8" height="16" fill="#FF4F45"></rect>
+            <path d="M2 77.5 v3 M16 76 v6 M30 77 v4 M44 75 v8 M58 76.5 v5 M72 75.5 v7 M86 77.5 v3 M100 75 v8 M114 77 v4 M128 76 v6 M142 78 v2 M156 75.5 v7 M170 76.5 v5 M184 77.5 v3 M198 75 v8 M212 77 v4 M226 76 v6 M240 77.5 v3 M254 75.5 v7 M268 78 v2 M282 76.5 v5 M296 75 v8 M310 77.5 v3 M324 76 v6 M338 77 v4 M352 75.5 v7 M366 78 v2 M380 75 v8 M394 76.5 v5 M408 77.5 v3 M422 76 v6 M436 77 v4 M450 75.5 v7 M464 77.5 v3 M478 76.5 v5 M492 75 v8" stroke="#ECE6DF" stroke-opacity="0.32" stroke-width="4" fill="none"></path>
+            <text x="4" y="97.5" font-size="5" letter-spacing="1.4" fill="#ECE6DF" opacity="0.3" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE</text>
+          </g>
+        </defs>
+        <g class="reel">
+          <use href="#seq"></use>
+          <use href="#seq" x="504"></use>
+          <use href="#seq" x="1008"></use>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- SC 01 · the invariants -->
+  <section class="sec" aria-labelledby="sc01">
+    <div class="slate"><span class="slate-stripes"></span><span class="slate-label" id="sc01">SC 01 · What rendering buys you</span></div>
+    <div class="invariants">
+      <div class="inv">
+        <div class="bigline">NO WINDOW.</div>
+        <p>The terminal exists only inside the renderer. Nothing asks for a screen-recording
+        permission; no stray notification ever walks through a shot.</p>
+      </div>
+      <div class="inv rev">
+        <div class="bigline ghost-line">NO CAPTURE.</div>
+        <p>Your app runs on a real pty, an embedded terminal engine — libghostty-vt, the brain of
+        Ghostty — keeps the screen, and foley draws every frame itself. Kitty graphics render
+        byte-exactly, because the engine underneath is a real terminal's.</p>
+      </div>
+      <div class="inv">
+        <div class="bigline">NEVER BLURRY.</div>
+        <p>Every take renders from a supersampled master, so a camera is just arithmetic:
+        the zoom is a 1:1 crop.</p>
+      </div>
+      <div class="inv rev">
+        <div class="bigline ghost-line">BYTE-IDENTICAL.</div>
+        <p>The clock is virtual: the same tape produces identical bytes on any machine, and renders
+        faster than real time — a ~32-second script exports in under 5. Demos double as visual
+        regression tests.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SC 02 · post-production -->
+  <section class="sec-tight" id="post" aria-labelledby="sc02">
+    <div class="slate"><span class="slate-stripes"></span><span class="slate-label" id="sc02">SC 02 · Post-production</span></div>
+    <h2>Direction rides as <code># foley:</code> cues in the tape.
+    The pty, the timing and the terminal state stay exactly as recorded.</h2>
+    <p class="lede">Every take on this table is real output from the engine — not an illustration
+    of the product, the product.</p>
+    <div class="table">
+      <article class="cue-card cc1">
+        <div class="cue-tape" aria-hidden="true"></div>
+        <div class="cue-head"><span class="cue-label">Titles</span><span class="cue-index">CUE 01</span></div>
+        <img class="cue-img" src="assets/title.gif" alt="A title card and lower third composited over a terminal take" loading="lazy" width="1280" height="400">
+        <p class="cue-fact">Title cards and lower thirds, composited on frame.</p>
+      </article>
+      <article class="cue-card cc2">
+        <div class="cue-tape" aria-hidden="true"></div>
+        <div class="cue-head"><span class="cue-label">Highlight</span><span class="cue-index">CUE 02</span></div>
+        <img class="cue-img" src="assets/highlight.gif" alt="A region of terminal output highlighted while the frame dims around it" loading="lazy" width="1280" height="460">
+        <p class="cue-fact">Point at the output; the frame dims around it.</p>
+      </article>
+      <article class="cue-card cc3">
+        <div class="cue-tape" aria-hidden="true"></div>
+        <div class="cue-head"><span class="cue-label">Input reel</span><span class="cue-index">CUE 03</span></div>
+        <img class="cue-img" src="assets/keys.gif" alt="A reel of keystrokes rendered under the terminal window" loading="lazy" width="1280" height="604">
+        <p class="cue-fact">foley presses the keys, so the track is emitted with exact timing — not
+        captured and guessed at.</p>
+      </article>
+      <article class="cue-card cc4">
+        <div class="cue-tape" aria-hidden="true"></div>
+        <div class="cue-head"><span class="cue-label">Closed set</span><span class="cue-index">CUE 04</span></div>
+        <img class="cue-img" src="assets/studio.gif" alt="A take recorded inside a studio: fresh HOME, fresh paths" loading="lazy" width="1280" height="440">
+        <p class="cue-fact">One cue builds a fresh <code>HOME</code> per take. Your machine stays off camera.</p>
+      </article>
+      <article class="cue-card cc5">
+        <div class="cue-tape" aria-hidden="true"></div>
+        <div class="cue-head"><span class="cue-label">Window dress</span><span class="cue-index">CUE 05</span></div>
+        <img class="cue-img" src="assets/dress-noir.gif" alt="The take framed in a noir window chrome" loading="lazy" width="1280" height="400">
+        <p class="cue-fact">Chrome for the take — macOS, noir, or none at all.</p>
+      </article>
+      <article class="cue-card cc6">
+        <div class="cue-tape" aria-hidden="true"></div>
+        <div class="cue-head"><span class="cue-label">Camera</span><span class="cue-index">CUE 06</span></div>
+        <svg class="cue-svg" viewBox="0 0 584 200" role="img" aria-label="Camera diagram: a zoom is a one-to-one crop from the supersampled master frame">
+          <rect x="52" y="24" width="480" height="152" rx="3" fill="none" stroke="rgba(236,230,223,0.25)" stroke-width="1.5"></rect>
+          <text x="60" y="44" font-size="11" fill="#98908A" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">master · supersampled</text>
+          <rect x="210" y="72" width="200" height="76" rx="2" fill="none" stroke="#FF4F45" stroke-width="1.5"></rect>
+          <text x="218" y="90" font-size="11" fill="#FF4F45" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">zoom · 1:1 crop</text>
+          <path d="M210 72 L52 24 M410 72 L532 24 M210 148 L52 176 M410 148 L532 176" stroke="rgba(236,230,223,0.15)" stroke-width="1"></path>
+        </svg>
+        <p class="cue-fact">Push onto a region, hold, pull back — easing included. Arithmetic, not
+        pixels stretched after the fact.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- SC 03 · the studio -->
+  <section class="sec" id="studio" style="border-top: 1px solid var(--line)" aria-labelledby="sc03">
+    <div class="slate"><span class="slate-stripes"></span><span class="slate-label" id="sc03">SC 03 · The studio</span></div>
+    <h2>No browser offstage. No display server on set.</h2>
+    <p class="lede">Takes render headless anywhere CI runs, and the whole studio builds into a
+    small container.</p>
+    <div class="pipeline">
+      <div class="stage-chip" style="flex: 1"><b>.tape</b><small>the script</small></div>
+      <svg class="arrow" width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 6 H26 M21 1 L27 6 L21 11" stroke="rgba(236,230,223,0.35)" stroke-width="1.5" fill="none"></path></svg>
+      <div class="stage-chip" style="flex: 1"><b>pty</b><small>your real app</small></div>
+      <svg class="arrow" width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 6 H26 M21 1 L27 6 L21 11" stroke="rgba(236,230,223,0.35)" stroke-width="1.5" fill="none"></path></svg>
+      <div class="stage-chip" style="flex: 1.2"><b>libghostty-vt</b><small>the screen · kitty graphics native</small></div>
+      <svg class="arrow" width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 6 H26 M21 1 L27 6 L21 11" stroke="rgba(236,230,223,0.35)" stroke-width="1.5" fill="none"></path></svg>
+      <div class="stage-chip" style="flex: 1"><b>raster</b><small>pinned fonts, baked in</small></div>
+      <svg class="arrow" width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M0 6 H26 M21 1 L27 6 L21 11" stroke="rgba(236,230,223,0.35)" stroke-width="1.5" fill="none"></path></svg>
+      <div class="stage-chip" style="flex: 1.4"><b>gif · mp4 · webm · webp · cast</b><small>every Output the tape declares</small></div>
+    </div>
+    <div class="reels">
+      <div class="reelcard">
+        <h3><span class="rec-dot"></span> Reel A — Deterministic <small>· default</small></h3>
+        <p>A virtual clock. Output is attributed to the step that caused it, every run of a tape
+        produces identical bytes, and rendering runs faster than real time.</p>
+      </div>
+      <div class="reelcard">
+        <h3>Reel B — Realtime <small>· -mode realtime</small></h3>
+        <p>The wall clock, every byte captured as it happened — the clock a continuously animating
+        TUI needs. Honest limits either way: waits synchronize against the real app, so they spend
+        the time they spend.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SC 04 · install -->
+  <section class="sec" id="install" style="border-top: 1px solid var(--line)" aria-labelledby="sc04">
+    <div class="slate"><span class="slate-stripes"></span><span class="slate-label" id="sc04">SC 04 · Roll your own</span></div>
+    <h2>Every VHS tape is a foley tape.</h2>
+    <p class="lede">The grammar is VHS's own, vendored from the pinned release. The upstream example
+    corpus — all 106 tapes — parses and runs under conformance tests; where foley differs on
+    purpose, it says so loudly at run time instead of silently drifting.</p>
+    <div class="installs">
+      <div class="code-card">
+        <span class="cue-label">Homebrew <span class="cue-index" style="font-weight: 500">· macOS + Linux</span></span>
+        <pre>brew install GH-Jaider/foley/foley</pre>
+        <p class="cue-fact">Brings ffmpeg with it — the one thing foley needs at runtime.</p>
+      </div>
+      <div class="code-card">
+        <span class="cue-label">Prebuilt binary</span>
+        <pre>tar xzf foley_*.tar.gz
+sudo mv foley /usr/local/bin/</pre>
+        <p class="cue-fact">Self-contained: engine and fonts baked in. Grab the tarball from the
+        <a href="https://github.com/GH-Jaider/foley/releases">latest release</a>.</p>
+      </div>
+      <div class="code-card">
+        <span class="cue-label">First take</span>
+        <pre>foley new demo.tape
+foley validate demo.tape
+foley demo.tape</pre>
+        <p class="cue-fact">A starter tape, the spotting session, and the take. When in doubt,
+        <code class="mono" style="font-size: 0.9em">foley doctor</code>.</p>
+      </div>
+    </div>
+    <div class="agents">
+      <span class="cue-label">Agents write tapes too</span>
+      <pre>foley skill &gt; .claude/skills/foley/SKILL.md   <span class="c"># the whole grammar, in one file the binary carries</span></pre>
+    </div>
+  </section>
+</main>
+
+<!-- end credits -->
+<footer>
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;</div>
+  </div>
+  <div class="credits">
+    <div class="prod">A foley production</div>
+    <p><em>Every demo on this page was shot entirely inside foley.</em></p>
+    <nav aria-label="Project links">
+      <a class="navlink" href="https://github.com/GH-Jaider/foley">GitHub</a>
+      <a class="navlink" href="https://github.com/GH-Jaider/foley/releases">Releases</a>
+      <a class="navlink" href="https://pkg.go.dev/github.com/GH-Jaider/foley">pkg.go.dev</a>
+      <a class="navlink" href="https://github.com/GH-Jaider/foley/blob/main/LICENSE">MIT license</a>
+    </nav>
+    <div class="sig"><b>foley</b><span class="cursor blink" aria-hidden="true"></span></div>
+  </div>
+</footer>
+
+<div class="scrub" aria-hidden="true"><div class="scrub-head" id="scrubhead"></div></div>
+
+<script>
+(function () {
+  "use strict";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ── the leader: once per session, click or Escape to skip ──
+  var leader = document.getElementById("leader");
+  var seen = false;
+  try { seen = sessionStorage.getItem("foley-leader") === "1"; } catch (e) { /* private mode */ }
+  function remember() { try { sessionStorage.setItem("foley-leader", "1"); } catch (e) { /* ok */ } }
+  if (seen || reduced) {
+    leader.classList.add("off");
+  } else {
+    leader.addEventListener("click", function () { leader.classList.add("off"); remember(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { leader.classList.add("off"); remember(); }
+    });
+    setTimeout(remember, 3300);
+  }
+
+  // ── the timecode: the page is being recorded at 60 fps ──
+  var tc = document.getElementById("tc");
+  if (tc && !reduced) {
+    var t0 = performance.now();
+    var pad = function (n) { return n < 10 ? "0" + n : "" + n; };
+    var last = -1;
+    var tick = function (now) {
+      var f = Math.floor((now - t0) * 0.06); // 60 frames per 1000 ms
+      if (f !== last) {
+        last = f;
+        var ff = f % 60;
+        var s = Math.floor(f / 60);
+        var m = Math.floor(s / 60);
+        var h = Math.floor(m / 60);
+        tc.textContent = pad(h) + ":" + pad(m % 60) + ":" + pad(s % 60) + ":" + pad(ff);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  } else if (tc) {
+    tc.textContent = "00:00:04:12";
+  }
+
+  // ── the scrub bar: scroll position on the tape ──
+  var head = document.getElementById("scrubhead");
+  var scrubbing = false;
+  function scrub() {
+    scrubbing = false;
+    var doc = document.documentElement;
+    var max = doc.scrollHeight - doc.clientHeight;
+    head.style.transform = "scaleX(" + (max > 0 ? doc.scrollTop / max : 0) + ")";
+  }
+  window.addEventListener("scroll", function () {
+    if (!scrubbing) { scrubbing = true; requestAnimationFrame(scrub); }
+  }, { passive: true });
+  scrub();
+
+  // ── the install command: click to copy ──
+  var cmd = document.getElementById("copy");
+  cmd.addEventListener("click", function () {
+    if (!navigator.clipboard) { return; }
+    navigator.clipboard.writeText("brew install GH-Jaider/foley/foley").then(function () {
+      cmd.setAttribute("data-copied", "");
+      setTimeout(function () { cmd.removeAttribute("data-copied"); }, 1600);
+    });
+  });
+})();
+</script>
+</body>
+</html>
