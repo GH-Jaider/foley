@@ -15,7 +15,7 @@ Type "cal 8 2026"
 Enter
 Wait
 Sleep 500ms
-# foley: zoom 0,1 40x9 350ms
+# foley: zoom 0,0 43x11 350ms
 Sleep 1100ms
 # foley: zoom off 350ms
 Sleep 500ms
