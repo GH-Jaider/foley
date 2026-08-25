@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>foley — terminal demos, rendered not captured</title>
-<meta name="description" content="A foley artist recreates sound in the studio. foley recreates the terminal: demos rendered from VHS-compatible .tape scripts — no window, no screen capture, kitty graphics native — byte-identical takes in gif, mp4, webm or asciicast.">
+<title>foley · terminal demos, rendered not captured</title>
+<meta name="description" content="A foley artist recreates sound in the studio. foley recreates the terminal: demos rendered from VHS-compatible .tape scripts. No window, no screen capture, kitty graphics native. Byte-identical takes in gif, mp4, webm or asciicast.">
 <meta name="theme-color" content="#0D0B0A">
 <link rel="canonical" href="https://gh-jaider.github.io/foley/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="foley — terminal demos, rendered not captured">
+<meta property="og:title" content="foley · terminal demos, rendered not captured">
 <meta property="og:description" content="The tape is the recording. foley adds the post-production: camera, titles, sound. The footage is never touched.">
 <meta property="og:url" content="https://gh-jaider.github.io/foley/">
 <meta property="og:image" content="https://gh-jaider.github.io/foley/assets/og.png">
@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="assets/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --film: #191514;
@@ -27,7 +27,7 @@
     --rec: #FF4F45;
     --line: rgba(236, 230, 223, 0.08);
     --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    --serif: Charter, "Iowan Old Style", Georgia, "Times New Roman", serif;
+    --sans: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
     --rail: 64px;
   }
   * { box-sizing: border-box; }
@@ -36,7 +36,7 @@
     margin: 0;
     background: var(--screen);
     color: var(--ink);
-    font-family: var(--serif);
+    font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
@@ -183,8 +183,8 @@
     letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
   }
   h2 {
-    font-family: var(--serif); font-size: clamp(30px, 3.2vw, 46px);
-    line-height: 1.12; font-weight: 700; letter-spacing: -0.01em; margin: 26px 0 0;
+    font-family: var(--sans); font-size: clamp(30px, 3.2vw, 46px);
+    line-height: 1.12; font-weight: 600; letter-spacing: -0.02em; margin: 26px 0 0;
   }
   .lede { font-size: 17px; line-height: 1.6; color: var(--muted); max-width: 44em; margin: 18px 0 0; }
   .lede code, h2 code { font-family: var(--mono); font-size: 0.82em; color: var(--ink); }
@@ -277,7 +277,7 @@
   @keyframes crawl { to { transform: translateX(-50%); } }
   .credits { text-align: center; padding: 56px 24px 72px; }
   .prod { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 0.34em; text-transform: uppercase; }
-  .credits em { font-size: 15px; color: var(--muted); }
+  .credits em { font-size: 15px; color: var(--muted); font-style: normal; }
   .credits nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 32px; margin: 26px 0 0; }
   .sig { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 30px 0 0; }
   .sig b { font-family: var(--mono); font-size: 13px; font-weight: 700; }
@@ -415,7 +415,7 @@
 <main id="main">
 
   <!-- SC 00 · the opening -->
-  <section class="hero" aria-label="foley — terminal demos, rendered not captured">
+  <section class="hero" aria-label="foley · terminal demos, rendered not captured">
     <div class="grain"></div>
     <div class="corner c-tl" aria-hidden="true"></div>
     <div class="corner c-tr" aria-hidden="true"></div>
@@ -423,13 +423,13 @@
     <div class="corner c-br" aria-hidden="true"></div>
     <div class="hud hud-tl"><span class="rec-dot blink"></span> REC</div>
     <div class="hud hud-tr">TC <span id="tc">00:00:00:00</span></div>
-    <div class="hud hud-bl">TAKE 08 · SC 01 — YOUR DEMO</div>
+    <div class="hud hud-bl">TAKE 08 · SC 01 · YOUR DEMO</div>
     <div class="hud hud-br">60 FPS · BYTE-IDENTICAL</div>
 
     <div class="take">
       <h1 class="wordmark"><b>foley</b><span class="cursor blink" aria-hidden="true"></span></h1>
       <p class="tagline">
-        The tape is the recording. foley adds the post-production —<br>
+        The tape is the recording. foley adds the post-production:<br>
         camera, titles, sound. The footage is never touched.
       </p>
       <div class="cta">
@@ -499,8 +499,8 @@
       </div>
       <div class="inv rev">
         <div class="bigline ghost-line">NO CAPTURE.</div>
-        <p>Your app runs on a real pty, an embedded terminal engine — libghostty-vt, the brain of
-        Ghostty — keeps the screen, and foley draws every frame itself. Kitty graphics render
+        <p>Your app runs on a real pty, an embedded terminal engine (libghostty-vt, the brain of
+        Ghostty) keeps the screen, and foley draws every frame itself. Kitty graphics render
         byte-exactly, because the engine underneath is a real terminal's.</p>
       </div>
       <div class="inv">
@@ -511,7 +511,7 @@
       <div class="inv rev">
         <div class="bigline ghost-line">BYTE-IDENTICAL.</div>
         <p>The clock is virtual: the same tape produces identical bytes on any machine, and renders
-        faster than real time — a ~32-second script exports in under 5. Demos double as visual
+        faster than real time. A ~32-second script exports in under 5, and demos double as visual
         regression tests.</p>
       </div>
     </div>
@@ -522,7 +522,7 @@
     <div class="slate"><span class="slate-stripes"></span><span class="slate-label" id="sc02">SC 02 · Post-production</span></div>
     <h2>Direction rides as <code># foley:</code> cues in the tape.
     The pty, the timing and the terminal state stay exactly as recorded.</h2>
-    <p class="lede">Every take on this table is real output from the engine — not an illustration
+    <p class="lede">Every take on this table is real output from the engine: not an illustration
     of the product, the product.</p>
     <div class="table">
       <article class="cue-card cc1">
@@ -541,7 +541,7 @@
         <div class="cue-tape" aria-hidden="true"></div>
         <div class="cue-head"><span class="cue-label">Input reel</span><span class="cue-index">CUE 03</span></div>
         <img class="cue-img" src="assets/keys.gif" alt="A reel of keystrokes rendered under the terminal window" loading="lazy" width="1280" height="604">
-        <p class="cue-fact">foley presses the keys, so the track is emitted with exact timing — not
+        <p class="cue-fact">foley presses the keys, so the track is emitted with exact timing, not
         captured and guessed at.</p>
       </article>
       <article class="cue-card cc4">
@@ -554,7 +554,7 @@
         <div class="cue-tape" aria-hidden="true"></div>
         <div class="cue-head"><span class="cue-label">Window dress</span><span class="cue-index">CUE 05</span></div>
         <img class="cue-img" src="assets/dress-noir.gif" alt="The take framed in a noir window chrome" loading="lazy" width="1280" height="400">
-        <p class="cue-fact">Chrome for the take — macOS, noir, or none at all.</p>
+        <p class="cue-fact">Chrome for the take: macOS, noir, or none at all.</p>
       </article>
       <article class="cue-card cc6">
         <div class="cue-tape" aria-hidden="true"></div>
@@ -566,7 +566,7 @@
           <text x="218" y="90" font-size="11" fill="#FF4F45" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">zoom · 1:1 crop</text>
           <path d="M210 72 L52 24 M410 72 L532 24 M210 148 L52 176 M410 148 L532 176" stroke="rgba(236,230,223,0.15)" stroke-width="1"></path>
         </svg>
-        <p class="cue-fact">Push onto a region, hold, pull back — easing included. Arithmetic, not
+        <p class="cue-fact">Push onto a region, hold, pull back, easing included. Arithmetic, not
         pixels stretched after the fact.</p>
       </article>
     </div>
@@ -591,13 +591,13 @@
     </div>
     <div class="reels">
       <div class="reelcard">
-        <h3><span class="rec-dot"></span> Reel A — Deterministic <small>· default</small></h3>
+        <h3><span class="rec-dot"></span> Reel A · Deterministic <small>· default</small></h3>
         <p>A virtual clock. Output is attributed to the step that caused it, every run of a tape
         produces identical bytes, and rendering runs faster than real time.</p>
       </div>
       <div class="reelcard">
-        <h3>Reel B — Realtime <small>· -mode realtime</small></h3>
-        <p>The wall clock, every byte captured as it happened — the clock a continuously animating
+        <h3>Reel B · Realtime <small>· -mode realtime</small></h3>
+        <p>The wall clock, every byte captured as it happened: the clock a continuously animating
         TUI needs. Honest limits either way: waits synchronize against the real app, so they spend
         the time they spend.</p>
       </div>
@@ -609,13 +609,13 @@
     <div class="slate"><span class="slate-stripes"></span><span class="slate-label" id="sc04">SC 04 · Roll your own</span></div>
     <h2>Every VHS tape is a foley tape.</h2>
     <p class="lede">The grammar is VHS's own, vendored from the pinned release. The upstream example
-    corpus — all 106 tapes — parses and runs under conformance tests; where foley differs on
+    corpus, all 106 tapes, parses and runs under conformance tests; where foley differs on
     purpose, it says so loudly at run time instead of silently drifting.</p>
     <div class="installs">
       <div class="code-card">
         <span class="cue-label">Homebrew <span class="cue-index" style="font-weight: 500">· macOS + Linux</span></span>
         <pre>brew install GH-Jaider/foley/foley</pre>
-        <p class="cue-fact">Brings ffmpeg with it — the one thing foley needs at runtime.</p>
+        <p class="cue-fact">Brings ffmpeg with it, the one thing foley needs at runtime.</p>
       </div>
       <div class="code-card">
         <span class="cue-label">Prebuilt binary</span>
