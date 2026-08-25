@@ -101,4 +101,20 @@ if want "$@"; then
 	foley zoom.tape
 fi
 
+# The website's moviola (assets/site): the same six cues on one
+# uniform 16:9 gate (1280x720), so the screening room never jumps
+# between takes. The gifs are gitignored here; they ship on the
+# gh-pages branch under assets/.
+current=site
+if want "$@"; then
+	printf '>> assets/site\n'
+	cd "$root/assets/site"
+	foley title.tape
+	foley highlight.tape
+	foley keys.tape
+	foley studio.tape
+	foley dress-noir.tape
+	foley zoom.tape
+fi
+
 printf 'examples: done\n'
