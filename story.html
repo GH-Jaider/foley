@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>foley · the story</title>
+<meta name="description" content="Why foley renders the terminal instead of recording it: one demo that couldn't be recorded, and the architecture that fell out of fixing it.">
+<meta name="theme-color" content="#0D0B0A">
+<link rel="canonical" href="https://gh-jaider.github.io/foley/story.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="foley · the story">
+<meta property="og:description" content="Why foley renders the terminal instead of recording it.">
+<meta property="og:url" content="https://gh-jaider.github.io/foley/story.html">
+<meta property="og:image" content="https://gh-jaider.github.io/foley/assets/og.png">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --film: #191514;
+    --screen: #0D0B0A;
+    --ink: #ECE6DF;
+    --muted: #98908A;
+    --rec: #FF4F45;
+    --line: rgba(236, 230, 223, 0.08);
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --rail: 64px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--screen); color: var(--ink);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  a { color: var(--ink); text-decoration: none; }
+  a:hover { color: #fff; text-decoration: underline; }
+  .mono { font-family: var(--mono); }
+
+  .rail { position: fixed; top: 0; bottom: 0; width: var(--rail); z-index: 40; pointer-events: none; }
+  .rail-l { left: 0; }
+  .rail-r { right: 0; }
+  .rail svg { display: block; width: 100%; height: 100%; }
+
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 76px; padding: 0 36px; margin: 0 var(--rail);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand span { font-family: var(--mono); font-size: 17px; font-weight: 700; }
+  .navlinks { display: flex; align-items: center; gap: 36px; }
+  .navlink {
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+  }
+  .navlink:hover { color: var(--ink); text-decoration: none; }
+
+  .slate { display: flex; align-items: center; gap: 16px; }
+  .slate-stripes {
+    width: 46px; height: 26px; flex: none;
+    background: repeating-linear-gradient(45deg, var(--ink) 0 7px, transparent 7px 14px);
+    opacity: 0.85;
+  }
+  .slate-label {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+  }
+
+  main { max-width: 760px; margin: 0 auto; padding: 72px 24px 96px; }
+  h1 {
+    font-family: var(--sans); font-size: clamp(38px, 5vw, 64px); font-weight: 600;
+    letter-spacing: -0.02em; line-height: 1.08; margin: 28px 0 0;
+  }
+  .prose p { font-size: 18px; line-height: 1.7; color: var(--muted); margin: 26px 0 0; }
+  .prose p strong { color: var(--ink); font-weight: 600; }
+  .prose code { font-family: var(--mono); font-size: 0.85em; color: var(--ink); }
+  .pull {
+    font-family: var(--sans); font-size: clamp(24px, 3vw, 34px); font-weight: 600;
+    letter-spacing: -0.015em; line-height: 1.25; color: var(--ink);
+    border-left: 3px solid var(--rec); padding: 4px 0 4px 26px; margin: 48px 0;
+  }
+  .consequences { list-style: none; padding: 0; margin: 36px 0 0; display: grid; gap: 22px; }
+  .consequences li {
+    position: relative; padding-left: 34px;
+    font-size: 17px; line-height: 1.6; color: var(--muted);
+  }
+  .consequences li::before {
+    content: ""; position: absolute; left: 0; top: 7px;
+    width: 14px; height: 11px; border-radius: 3px; background: var(--film);
+    box-shadow: inset 0 0 0 1.5px rgba(236, 230, 223, 0.35);
+  }
+  .consequences b { color: var(--ink); font-weight: 600; }
+  .cta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin: 56px 0 0; }
+  .cmd {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--film); border: 1px solid rgba(236, 230, 223, 0.16); border-radius: 6px;
+    height: 52px; padding: 0 22px;
+    font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--ink);
+  }
+  .cmd .p { color: var(--muted); }
+  .ghost {
+    display: flex; align-items: center; height: 52px; padding: 0 20px;
+    border: 1px solid rgba(236, 230, 223, 0.14); border-radius: 6px;
+    font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.04em; color: var(--muted);
+  }
+
+  footer { border-top: 1px solid var(--line); }
+  .marquee { overflow: hidden; padding: 14px 0; }
+  .marquee-track {
+    display: inline-block; white-space: nowrap;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; color: var(--muted); opacity: 0.7;
+    animation: crawl 36s linear infinite;
+  }
+  @keyframes crawl { to { transform: translateX(-50%); } }
+  .blink { animation: blink 1.15s steps(1) infinite; }
+  @keyframes blink { 0%, 54% { opacity: 1; } 55%, 100% { opacity: 0; } }
+
+  @media (max-width: 900px) {
+    :root { --rail: 0px; }
+    .rail { display: none; }
+    .nav { margin: 0; padding: 0 20px; }
+    .navlinks { gap: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .marquee-track, .blink { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="rail rail-l" aria-hidden="true">
+  <svg preserveAspectRatio="none">
+    <defs>
+      <pattern id="lperf" width="64" height="36" patternUnits="userSpaceOnUse">
+        <rect width="64" height="36" fill="#191514"></rect>
+        <rect x="26" y="13" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#lperf)"></rect>
+  </svg>
+</div>
+<div class="rail rail-r" aria-hidden="true">
+  <svg preserveAspectRatio="none">
+    <defs>
+      <pattern id="rperf" width="64" height="72" patternUnits="userSpaceOnUse">
+        <rect width="64" height="72" fill="#191514"></rect>
+        <rect x="30" y="13" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+        <rect x="30" y="49" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+        <g fill="#ECE6DF" fill-opacity="0.32">
+          <rect x="4" y="2" width="8" height="3"></rect><rect x="4" y="8" width="12" height="3"></rect>
+          <rect x="4" y="14" width="5" height="3"></rect><rect x="4" y="20" width="10" height="3"></rect>
+          <rect x="4" y="26" width="14" height="3"></rect><rect x="4" y="32" width="6" height="3"></rect>
+          <rect x="4" y="38" width="11" height="3"></rect><rect x="4" y="44" width="4" height="3"></rect>
+          <rect x="4" y="50" width="13" height="3"></rect><rect x="4" y="56" width="7" height="3"></rect>
+          <rect x="4" y="62" width="9" height="3"></rect><rect x="4" y="68" width="12" height="3"></rect>
+        </g>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#rperf)"></rect>
+  </svg>
+</div>
+
+<header class="nav">
+  <a class="brand" href="./" style="text-decoration: none">
+    <svg width="28" height="28" viewBox="0 0 96 96" aria-hidden="true">
+      <rect x="4" y="4" width="88" height="88" rx="10" fill="#191514"></rect>
+      <rect x="26" y="14" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="58" y="14" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="26" y="73" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="58" y="73" width="12" height="9" rx="3" fill="#0D0B0A"></rect>
+      <rect x="16" y="30" width="64" height="36" rx="2" fill="#0D0B0A"></rect>
+      <text x="24" y="53" font-size="14" font-weight="700" fill="#ECE6DF" font-family="JetBrains Mono, ui-monospace, Menlo, monospace">&gt;</text>
+      <rect class="blink" x="36" y="41" width="9" height="16" fill="#FF4F45"></rect>
+    </svg>
+    <span>foley</span>
+  </a>
+  <nav class="navlinks" aria-label="Site">
+    <a class="navlink" href="./#post">Post-production</a>
+    <a class="navlink" href="./#install">Install</a>
+    <a class="navlink" href="https://github.com/GH-Jaider/foley">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <div class="slate"><span class="slate-stripes"></span><span class="slate-label">The story</span></div>
+  <h1>One demo I couldn't record.</h1>
+
+  <div class="prose">
+    <p>
+      foley started as one demo. I was building a TUI that draws pixel art straight into the
+      terminal, went looking for a recorder, and found <a href="https://github.com/charmbracelet/vhs">VHS</a>,
+      which won me over on sight: write the demo as code, a <code>.tape</code> script instead of a
+      shaky screen recording. I still think that model is exactly right. But my app speaks the
+      kitty graphics protocol, and those pixels never arrived on the recording, because the screen
+      being filmed didn't speak it.
+    </p>
+    <p>
+      I loved the workflow and couldn't use it, so my first move was to fix it at the source:
+      teach VHS the kitty graphics protocol. But VHS films an <a href="https://xtermjs.org">xterm.js</a>
+      terminal, and xterm.js doesn't render kitty graphics. Getting it there is a long road through
+      a project that hasn't chosen to walk it, and waiting on that meant shelving the tape workflow
+      indefinitely. The only route that kept both the authoring model <strong>and</strong> the
+      pixels was to render the terminal myself.
+    </p>
+  </div>
+
+  <div class="pull">That one decision turned out to carry the whole project.</div>
+
+  <div class="prose">
+    <p>
+      When the frame is yours from the pty up, things stop being features you bolt on and start
+      being consequences of the architecture:
+    </p>
+  </div>
+
+  <ul class="consequences">
+    <li><b>The input reel is almost free.</b> foley is the one pressing the keys, so the track is
+    emitted with exact timing, not captured and guessed at.</li>
+    <li><b>A camera is just arithmetic.</b> Every take renders from a supersampled master: push
+    onto a region, hold, pull back, and the zoom is a 1:1 crop that is never blurry.</li>
+    <li><b>The clock is virtual.</b> The same tape produces byte-identical output on any machine,
+    demos double as visual regression tests, and a ~32-second script exports in under 5.</li>
+    <li><b>The set is closed.</b> The recording never touches your real session: one cue builds a
+    fresh HOME per take, and your machine stays off camera.</li>
+    <li><b>Nobody else draws the screen.</b> No browser offstage, no display server on set, so
+    takes render headless anywhere CI runs, and the whole studio builds into a small container.</li>
+    <li><b>A finished take is just frames.</b> It screens anywhere: a gif in a README, an
+    asciicast, golden text for CI, or live in your own terminal.</li>
+    <li><b>And the kitty graphics that started all this render byte-exactly</b>, because the
+    engine underneath is a real terminal's.</li>
+  </ul>
+
+  <div class="prose">
+    <p>
+      So that's foley: VHS's authoring model, kept whole, plus the post-production that a rendered
+      terminal makes possible.
+    </p>
+  </div>
+
+  <div class="cta">
+    <div class="cmd"><span class="p">$</span> brew install GH-Jaider/foley/foley</div>
+    <a class="ghost" href="./">Back to the projection room</a>
+  </div>
+</main>
+
+<footer>
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;FOLEY · SAFETY STOCK · 60 FPS · BYTE-IDENTICAL · NO WINDOW · NO CAPTURE&nbsp;&nbsp;·&nbsp;&nbsp;</div>
+  </div>
+</footer>
+
+</body>
+</html>
