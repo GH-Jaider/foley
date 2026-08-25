@@ -15,7 +15,7 @@
 > In film, a foley artist recreates sound in the studio, with real objects instead of set recordings.
 > foley recreates the terminal in the studio, with your real app instead of a screen recording.
 
-foley renders terminal demos from VHS-compatible `.tape` scripts, with no terminal window and no screen capture. Your app runs on a real pty, an embedded terminal engine ([libghostty-vt](https://ghostty.org), the brain of Ghostty) keeps the screen, and foley draws every frame itself: gif, mp4, webm, webp or asciicast, byte-identical on any machine.
+foley is a command line tool and Go library that renders terminal demos of your real CLI or TUI, written as code: a VHS-compatible `.tape` script of settings, keystrokes and waits, with no terminal window and no screen capture. Your app runs on a real pty, an embedded terminal engine ([libghostty-vt](https://ghostty.org), the brain of Ghostty) keeps the screen, and foley draws every frame itself: gif, mp4, webm, webp or asciicast, byte-identical on any machine.
 
 <p align="center">
   <img src="examples/showcase/showcase.gif" alt="the showcase, a trailer shot entirely inside foley" width="720">
